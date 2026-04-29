@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ds-internal-skills/stool-entry.schema.json",
+  "title": "Stool Entry",
+  "description": "Schema for a stool observation entry with color and duration tracking",
+  "type": "object",
+  "required": ["color", "durationMinutes"],
+  "properties": {
+    "color": {
+      "enum": ["brown", "yellow", "green", "black", "red", "pale", "other"],
+      "description": "Observed stool color from predefined set"
+    },
+    "durationMinutes": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Bowel movement duration in whole minutes (positive integer)"
+    }
+  },
+  "additionalProperties": false
+}

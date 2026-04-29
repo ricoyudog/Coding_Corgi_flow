@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ds-internal-skills/skill-meta.schema.json",
+  "title": "Skill Metadata",
+  "description": "Schema for skill.meta.json files in ds-internal-skills",
+  "type": "object",
+  "required": ["slug", "tier", "version", "description", "depends_on", "platform", "installation"],
+  "additionalProperties": false,
+  "properties": {
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "Unique kebab-case identifier"
+    },
+    "tier": {
+      "enum": ["atom", "molecule", "compound"],
+      "description": "Hierarchy tier"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Semantic version"
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 200,
+      "description": "One-line description"
+    },
+    "depends_on": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+      "uniqueItems": true,
+      "description": "Dependency slugs"
+    },
+    "platform": {
+      "enum": ["universal", "github", "gitlab"],
+      "description": "Platform scope"
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true,
+      "description": "Classification tags"
+    },
+    "installation": {
+      "type": "object",
+      "required": ["targets", "base_path"],
+      "additionalProperties": false,
+      "properties": {
+        "targets": {
+          "type": "array",
+          "items": { "enum": ["opencode", "claude", "codex"] },
+          "minItems": 1
+        },
+        "base_path": {
+          "type": "string",
+          "description": "Path relative to skills root"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "slug": "openspec-apply-change",
+  "tier": "molecule",
+  "version": "1.0.0",
+  "description": "Execute one Task Group checkpoint with closeout and issue sync (GitLab)",
+  "depends_on": [],
+  "platform": "gitlab",
+  "tags": [
+    "lifecycle",
+    "apply"
+  ],
+  "installation": {
+    "targets": [
+      "opencode",
+      "claude",
+      "codex"
+    ],
+    "base_path": "openspec-apply-change"
+  }
+}

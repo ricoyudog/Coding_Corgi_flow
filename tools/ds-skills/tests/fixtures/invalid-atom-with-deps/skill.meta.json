@@ -1,0 +1,12 @@
+{
+  "slug": "bad-atom",
+  "tier": "atom",
+  "version": "1.0.0",
+  "description": "This atom incorrectly has dependencies",
+  "depends_on": ["resolve-config"],
+  "platform": "universal",
+  "installation": {
+    "targets": ["opencode"],
+    "base_path": "atoms/bad-atom"
+  }
+}

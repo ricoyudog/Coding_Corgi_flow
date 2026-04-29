@@ -1,0 +1,13 @@
+{
+  "slug": "opsx-propose",
+  "tier": "molecule",
+  "version": "1.0.0",
+  "description": "Generate planning artifacts and create tracked issues",
+  "depends_on": ["resolve-config", "resolve-worktree", "openspec-cli-runner", "parse-tasks", "sync-issue-gh", "sync-issue-gl"],
+  "platform": "universal",
+  "tags": ["lifecycle", "propose"],
+  "installation": {
+    "targets": ["opencode", "claude", "codex"],
+    "base_path": "molecules/opsx-propose"
+  }
+}

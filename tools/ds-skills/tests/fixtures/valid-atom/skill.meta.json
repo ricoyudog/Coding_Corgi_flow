@@ -1,0 +1,13 @@
+{
+  "slug": "resolve-config",
+  "tier": "atom",
+  "version": "1.0.0",
+  "description": "Read openspec/config.yaml and return schema, platform, isolation config",
+  "depends_on": [],
+  "platform": "universal",
+  "tags": ["config", "core"],
+  "installation": {
+    "targets": ["opencode", "claude", "codex"],
+    "base_path": "atoms/resolve-config"
+  }
+}

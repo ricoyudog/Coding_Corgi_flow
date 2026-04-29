@@ -1,0 +1,20 @@
+{
+  "name": "ds-skills",
+  "version": "0.1.0",
+  "description": "CLI tool for validating, graphing, and installing ds-internal-skills",
+  "type": "module",
+  "bin": {
+    "ds-skills": "./bin/ds-skills.js"
+  },
+  "scripts": {
+    "test": "node --test tests/**/*.test.js"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "commander": "^13.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}

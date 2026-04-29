@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Orchestration state
+.omx/
+
+# Playwright MCP
+.playwright-mcp/
+
+# Test artifacts
+testfile.txt
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Local settings (Claude Code permissions)
+.claude/settings.local.json

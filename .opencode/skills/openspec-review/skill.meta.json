@@ -1,0 +1,20 @@
+{
+  "slug": "openspec-review",
+  "tier": "molecule",
+  "version": "1.0.0",
+  "description": "Quality checks and human review gate for completed Task Groups (GitLab)",
+  "depends_on": [],
+  "platform": "gitlab",
+  "tags": [
+    "lifecycle",
+    "review"
+  ],
+  "installation": {
+    "targets": [
+      "opencode",
+      "claude",
+      "codex"
+    ],
+    "base_path": "openspec-review"
+  }
+}

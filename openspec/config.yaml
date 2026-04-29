@@ -1,0 +1,31 @@
+schema: gitlab-tracked
+
+# Worktree isolation (optional)
+# When enabled, each change gets its own git worktree + feature branch
+# for parallel development. All propose/apply/review work happens
+# inside the dedicated worktree. Archive cleans up the worktree
+# but preserves the branch for merging via MR.
+# Example:
+#   isolation:
+#     mode: worktree       # worktree | none (default: none)
+#     root: .worktrees     # worktree root directory (default: .worktrees)
+#     branch_prefix: feat/ # feature branch prefix (default: feat/)
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+# Add your tech stack, conventions, style guides, domain knowledge, etc.
+# Example:
+#   context: |
+#     Tech stack: TypeScript, React, Node.js
+#     We use conventional commits
+#     Domain: e-commerce platform
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours

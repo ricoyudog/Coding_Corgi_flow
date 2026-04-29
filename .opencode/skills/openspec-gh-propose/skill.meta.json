@@ -1,0 +1,20 @@
+{
+  "slug": "openspec-gh-propose",
+  "tier": "molecule",
+  "version": "1.0.0",
+  "description": "Generate planning artifacts and create tracked GitHub issues",
+  "depends_on": [],
+  "platform": "github",
+  "tags": [
+    "lifecycle",
+    "propose"
+  ],
+  "installation": {
+    "targets": [
+      "opencode",
+      "claude",
+      "codex"
+    ],
+    "base_path": "openspec-gh-propose"
+  }
+}

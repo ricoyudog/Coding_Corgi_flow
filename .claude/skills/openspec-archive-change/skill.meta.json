@@ -1,0 +1,20 @@
+{
+  "slug": "openspec-archive-change",
+  "tier": "molecule",
+  "version": "1.0.0",
+  "description": "Close issues, sync delta specs, and archive completed change (GitLab)",
+  "depends_on": [],
+  "platform": "gitlab",
+  "tags": [
+    "lifecycle",
+    "archive"
+  ],
+  "installation": {
+    "targets": [
+      "opencode",
+      "claude",
+      "codex"
+    ],
+    "base_path": "openspec-archive-change"
+  }
+}

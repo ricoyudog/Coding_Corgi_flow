@@ -1,0 +1,20 @@
+{
+  "slug": "openspec-gh-archive",
+  "tier": "molecule",
+  "version": "1.0.0",
+  "description": "Close issues, sync delta specs, and archive completed change (GitHub)",
+  "depends_on": [],
+  "platform": "github",
+  "tags": [
+    "lifecycle",
+    "archive"
+  ],
+  "installation": {
+    "targets": [
+      "opencode",
+      "claude",
+      "codex"
+    ],
+    "base_path": "openspec-gh-archive"
+  }
+}
