@@ -13,11 +13,11 @@
 
 ## 2. Config & Schema Infrastructure
 
-- [ ] 2.1 Create `src/lib/config.ts` — reads and validates `openspec/config.yaml` (schema field required, isolation/context/rules optional)
-- [ ] 2.2 Create `src/lib/schemas.ts` — loads JSON schemas from bundled `assets/schemas/`, validates with ajv
-- [ ] 2.3 Create `src/lib/platform.ts` — detects available AI platforms (Claude Code, OpenCode, Codex) by checking directory existence
-- [ ] 2.4 Write unit tests for config parsing (valid, invalid, missing file cases)
-- [ ] 2.5 Write unit tests for schema loading and validation
+- [x] 2.1 Create `src/lib/config.ts` — reads and validates `openspec/config.yaml` (schema field required, isolation/context/rules optional)
+- [x] 2.2 Create `src/lib/schemas.ts` — loads JSON schemas from bundled `assets/schemas/`, validates with ajv
+- [x] 2.3 Create `src/lib/platform.ts` — detects available AI platforms (Claude Code, OpenCode, Codex) by checking directory existence
+- [x] 2.4 Write unit tests for config parsing (valid, invalid, missing file cases)
+- [x] 2.5 Write unit tests for schema loading and validation
 
 ## 3. Skill Management Commands (install, validate, list, graph)
 
