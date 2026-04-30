@@ -77,6 +77,14 @@ Archive a completed change in the experimental workflow.
 
    If glab is unavailable or `.gitlab.yaml` is missing, skip silently.
 
+4.7 **Extract long-term memory (if memory structure exists)**
+
+   If `memory/` and `wiki/` directories exist in the project root:
+   - Invoke the **openspec-memory-extract** skill against the current change
+   - This extracts reusable patterns to `wiki/patterns/`, creates a session summary at `wiki/sessions/<name>.md`, updates `wiki/hot.md` lifecycle, resets `memory/session-bridge.md`, and updates `wiki/index.md`
+   - If memory-extract reports issues (e.g., session summary already exists), note them in the archive summary but do not block
+   - If `memory/` or `wiki/` do not exist, skip this step silently (project may not use memory layer)
+
 5. **Perform the archive**
 
    Create `openspec/changes/archive/` if it does not exist and move the change to `openspec/changes/archive/YYYY-MM-DD-<name>`.

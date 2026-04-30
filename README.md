@@ -260,8 +260,12 @@ For the full agent-executable validation scenarios covering fresh install, manag
 | OpenCode `/opsx-propose` / Claude `/opsx:propose` | Generate planning artifacts, then close out into tracked handoff state |
 | OpenCode `/opsx-apply` / Claude `/opsx:apply` | Execute one Task Group, sync closeout state, then stop for review |
 | OpenCode `/opsx-review` / Claude `/opsx:review` | Gather evidence, ask for an explicit decision, then apply the transition the user approved |
-| OpenCode `/opsx-archive` / Claude `/opsx:archive` | Close all issues, sync delta specs, clean up |
+| OpenCode `/opsx-archive` / Claude `/opsx:archive` | Close all issues, sync delta specs, extract long-term knowledge, clean up |
 | OpenCode `/opsx-explore` / Claude `/opsx:explore` | Thinking partner — explore ideas, check issue feedback, clarify requirements |
+| OpenCode `/opsx-memory-init` / Claude `/opsx:memory-init` | Initialize the 3-layer memory structure (`memory/` + `wiki/`) for cross-session continuity |
+| OpenCode `/opsx-migrate` / Claude `/opsx:migrate` | Import existing knowledge (docs, archived changes, vault pages) into memory/wiki |
+| OpenCode `/opsx-lint` / Claude `/opsx:lint` | Validate memory health — freshness, size caps, broken links, extraction completeness |
+| OpenCode `/opsx-ask` / Claude `/opsx:ask` | Answer questions from the vault using budget-aware retrieval |
 
 ## Configuration
 
@@ -279,6 +283,37 @@ isolation:
 ```
 
 When enabled, `/opsx-propose` (OpenCode) or `/opsx:propose` (Claude Code) creates a worktree automatically. All subsequent commands (`apply`, `review`, `archive`) operate inside it. On archive, the worktree is cleaned up but the branch is preserved for you to merge.
+
+## Cross-Session Memory
+
+AI sessions are stateless by default. OpenSpec GitFlow adds a **3-layer memory system** — ≤2900 tokens at startup, self-compacting, Obsidian-compatible.
+
+```mermaid
+flowchart LR
+    subgraph "Layer 1: memory/ (always loaded)"
+        A["MEMORY.md"] --- B["session-bridge.md"] --- C["pitfalls.md"]
+    end
+    subgraph "Layer 2: wiki/ (on-demand)"
+        D["hot.md"] --- E["index.md"] --- F["patterns/ sessions/ decisions/ ..."]
+    end
+    subgraph "Layer 3: docs/ (untouched)"
+        G["existing docs"]
+    end
+
+    B -.->|"startup read"| D
+    D -.->|"navigate"| E
+    E -.->|"wikilinks"| F
+    F -.->|"references"| G
+```
+
+| Scenario | Command |
+|----------|---------|
+| New project (auto during install) | `/opsx-install` |
+| Add memory to existing project | `/opsx-memory-init` |
+| Migrate existing KB into memory | `/opsx-migrate` |
+| Health check | `/opsx-lint` |
+
+**[Full documentation: Architecture, Lifecycle, Migration, Obsidian →](docs/cross-session-memory.md)**
 
 ## Schemas
 
@@ -370,6 +405,9 @@ Then set `schema: my-schema` in your `config.yaml`.
 | Review | None | Automated quality checks + approve/reject/discuss + repair loop |
 | Spec format | Generic | Delta operations (ADDED/MODIFIED/REMOVED/RENAMED) with formal scenarios |
 | Worktree isolation | None | Opt-in parallel development via git worktrees |
+| Cross-session memory | None | 3-layer memory system with ≤3000 token startup, self-compaction, and Obsidian compatibility |
+| Knowledge migration | None | Guided import from docs, archived changes, agent configs, and vault pages |
+| Memory health | None | 11-check lint (freshness, size caps, broken links, extraction completeness) |
 | Skill architecture | Flat files | Composable 3-tier hierarchy (Atoms → Molecules → Compounds) with dependency graph, schema validation, and CLI tooling |
 
 ## Repository Layout
@@ -409,7 +447,8 @@ openspec/
 .opencode/
 ├── skills/openspec-*/              # Source-of-truth skill definitions
 │   ├── SKILL.md                    # AI-readable instructions
-│   └── skill.meta.json             # Machine-readable metadata (tier, deps, platform)
+│   ├── skill.meta.json             # Machine-readable metadata (tier, deps, platform)
+│   └── templates/                  # Template files (e.g., memory-init scaffolds)
 └── commands/opsx-*.md              # Slash command dispatch
 
 .claude/
@@ -465,6 +504,7 @@ node bin/ds-skills.js check-deps --path ../.. opsx-propose
 
 | Article | Language | Description |
 |---------|----------|-------------|
+| [Cross-Session Memory](docs/cross-session-memory.md) | EN / [中文](docs/cross-session-memory.zh-TW.md) | 3-layer memory architecture, lifecycle integration, migration guide |
 | [OpenSpec 落地 GitHub](docs/superpowers/articles/2026-04-28-openspec-github-workflow-zhihu.md) | 中文 | How we connected Spec, Issue, Review and Git workflow into a single pipeline — written for Zhihu |
 
 ## Contributing

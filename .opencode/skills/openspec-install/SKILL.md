@@ -140,6 +140,11 @@ Use when the target project has no managed fileset and no manifest.
    - If yes: ask for `isolation.root` (default: `.worktrees`) and `isolation.branch_prefix` (default: `feat/`)
    - Do NOT auto-enable worktree isolation without asking
 
+4b. **Ask whether to initialize memory structure**
+   - Prompt: "Initialize memory structure for cross-session continuity? (yes/no — default: yes)"
+   - If user passes `--no-memory` flag: skip this prompt and do not initialize memory
+   - Record the choice for Step 10
+
 5. **Copy managed fileset from source repo to target**
 
    Copy each of the following from the source repo (this repo) to the target project:
@@ -174,6 +179,15 @@ Use when the target project has no managed fileset and no manifest.
 9. **Generate `openspec/.opsx-install-report.md`**
 
    Write the report with mode, timestamp, source repo, target project, and per-check status. See [Verification Report](#verification-report).
+
+10. **Initialize memory structure (unless opted out)**
+
+    If the user chose to initialize memory in Step 4b (or did not pass `--no-memory`):
+    - Invoke the **openspec-memory-init** skill against the target project
+    - This creates `memory/` and `wiki/` directories with template files
+    - It also injects the Session Memory Protocol into the project's agent config file
+    - If memory-init reports files skipped (already exist), include that in the install report
+    - If `--no-memory` was specified or user declined: skip this step entirely
 
 ---
 
@@ -336,3 +350,5 @@ The manifest at `openspec/.opsx-install.json`:
 - Skipping the backup step before legacy migration
 - Forgetting to check `gh auth status` or `glab auth status` before a write operation
 - Forgetting that `openspec-*` skills are user-level prerequisites, not project-local managed files
+- Running memory-init when `--no-memory` was specified
+- Auto-initializing memory without asking the user first (unless default-yes prompt is used)

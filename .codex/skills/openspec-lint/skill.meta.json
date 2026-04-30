@@ -1,0 +1,22 @@
+{
+  "slug": "openspec-lint",
+  "tier": "molecule",
+  "version": "1.0.0",
+  "description": "Validate memory health across 11 checks with severity levels, size caps, and auto-fix routing",
+  "depends_on": ["openspec-memory-init"],
+  "platform": "universal",
+  "tags": [
+    "lifecycle",
+    "memory",
+    "lint",
+    "health"
+  ],
+  "installation": {
+    "targets": [
+      "opencode",
+      "claude",
+      "codex"
+    ],
+    "base_path": "openspec-lint"
+  }
+}

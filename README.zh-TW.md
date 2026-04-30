@@ -260,8 +260,12 @@ Verify-only 會檢查 prerequisites、使用者層級 skills 是否存在、mana
 | OpenCode `/opsx-propose` / Claude `/opsx:propose` | 產生 planning artifacts，接著 close out 成可追蹤的 handoff state |
 | OpenCode `/opsx-apply` / Claude `/opsx:apply` | 執行一個 Task Group，同步 closeout 狀態，然後停止等待 review |
 | OpenCode `/opsx-review` / Claude `/opsx:review` | 蒐集證據、要求明確決策，然後套用使用者同意的狀態轉換 |
-| OpenCode `/opsx-archive` / Claude `/opsx:archive` | 關閉所有 issues、同步 delta specs，並完成清理 |
+| OpenCode `/opsx-archive` / Claude `/opsx:archive` | 關閉所有 issues、同步 delta specs、萃取長期知識，並完成清理 |
 | OpenCode `/opsx-explore` / Claude `/opsx:explore` | 思考夥伴，可用來探索想法、查看 issue feedback、釐清需求 |
+| OpenCode `/opsx-memory-init` / Claude `/opsx:memory-init` | 初始化三層記憶結構（`memory/` + `wiki/`），啟用跨 session 延續性 |
+| OpenCode `/opsx-migrate` / Claude `/opsx:migrate` | 匯入既有知識（docs、已歸檔 changes、vault 頁面）到 memory/wiki |
+| OpenCode `/opsx-lint` / Claude `/opsx:lint` | 驗證記憶健康度 — 新鮮度、大小上限、broken links、萃取完整性 |
+| OpenCode `/opsx-ask` / Claude `/opsx:ask` | 使用預算感知檢索回答來自 vault 的問題 |
 
 ## 設定
 
@@ -279,6 +283,37 @@ isolation:
 ```
 
 啟用後，OpenCode 的 `/opsx-propose` 或 Claude Code 的 `/opsx:propose` 會自動建立 worktree。後續所有 commands（`apply`、`review`、`archive`）都會在其中執行。執行 archive 時，worktree 會被清理，但 branch 會保留下來供你 merge。
+
+## 跨 Session 記憶
+
+AI sessions 預設是無狀態的。OpenSpec GitFlow 加入了 **三層記憶系統** — 啟動 ≤2900 tokens、自動壓縮、Obsidian 相容。
+
+```mermaid
+flowchart LR
+    subgraph "Layer 1: memory/（每次必讀）"
+        A["MEMORY.md"] --- B["session-bridge.md"] --- C["pitfalls.md"]
+    end
+    subgraph "Layer 2: wiki/（按需取用）"
+        D["hot.md"] --- E["index.md"] --- F["patterns/ sessions/ decisions/ ..."]
+    end
+    subgraph "Layer 3: docs/（不動）"
+        G["既有文件"]
+    end
+
+    B -.->|"啟動讀取"| D
+    D -.->|"導航"| E
+    E -.->|"wikilinks"| F
+    F -.->|"參照"| G
+```
+
+| 場景 | 指令 |
+|------|------|
+| 新專案（install 時自動） | `/opsx-install` |
+| 既有專案加入記憶 | `/opsx-memory-init` |
+| 遷移既有知識庫 | `/opsx-migrate` |
+| 健康檢查 | `/opsx-lint` |
+
+**[完整文件：架構、生命週期、遷移、Obsidian →](docs/cross-session-memory.zh-TW.md)**
 
 ## Schema
 
@@ -370,6 +405,9 @@ apply:
 | Review | 無 | Automated quality checks，加上 approve/reject/discuss 與 repair loop |
 | Spec 格式 | 通用 | 使用帶有正式 scenarios 的 delta operations（ADDED/MODIFIED/REMOVED/RENAMED） |
 | Worktree isolation | 無 | 透過 git worktrees 進行可選的平行開發 |
+| 跨 session 記憶 | 無 | 三層記憶系統，≤3000 token 啟動，自動壓縮，Obsidian 相容 |
+| 知識遷移 | 無 | 從 docs、已歸檔 changes、agent configs、vault 頁面導入知識 |
+| 記憶健康度 | 無 | 11 項 lint 檢查（新鮮度、大小上限、broken links、萃取完整性） |
 | Skill 架構 | 扁平檔案 | 可組合三層階層（Atoms → Molecules → Compounds），含相依圖譜、schema 驗證與 CLI 工具鏈 |
 
 ## 儲存庫結構

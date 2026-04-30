@@ -1,0 +1,22 @@
+{
+  "slug": "openspec-ask",
+  "tier": "molecule",
+  "version": "1.0.0",
+  "description": "Answer human questions from Obsidian vault using early-stop retrieval with token budget enforcement",
+  "depends_on": ["openspec-memory-init"],
+  "platform": "universal",
+  "tags": [
+    "lifecycle",
+    "memory",
+    "qa",
+    "retrieval"
+  ],
+  "installation": {
+    "targets": [
+      "opencode",
+      "claude",
+      "codex"
+    ],
+    "base_path": "openspec-ask"
+  }
+}

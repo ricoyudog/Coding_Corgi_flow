@@ -3,7 +3,7 @@
   "tier": "molecule",
   "version": "1.0.0",
   "description": "Close issues, sync delta specs, and archive completed change (GitLab)",
-  "depends_on": [],
+  "depends_on": ["openspec-memory-extract"],
   "platform": "gitlab",
   "tags": [
     "lifecycle",

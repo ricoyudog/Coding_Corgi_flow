@@ -83,6 +83,12 @@ After all tasks in the group are complete, close out the group without doing new
 2. Sync to issue tracker if tracked (child issue description + completion note + labels)
 3. Update parent issue progress if tracked
 4. Prepare the group for review handoff
+5. **Memory writes (if memory/ and wiki/ exist)**:
+   - Update `memory/session-bridge.md`: set Active opsx Change to current change/phase/branch, update Done with completed tasks, update Waiting with next group info
+   - If any pitfalls were discovered during this group: append to `memory/pitfalls.md` Active section with source link `(source: [[openspec/changes/<name>/tasks]])`
+   - If any implicit rules or architectural insights emerged: append to `wiki/architecture/implicit-contracts.md`
+   - Update `wiki/hot.md` Recent Decisions if significant decisions were made
+   - If memory/ or wiki/ don't exist, skip memory writes silently
 
 **Issue sync SHOULD be delegated to a subagent** — it is mechanical work that doesn't need main agent context.
 
