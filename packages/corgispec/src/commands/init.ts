@@ -1,6 +1,10 @@
 import { Command } from "commander";
 import { resolve } from "node:path";
 import { existsSync, mkdirSync, writeFileSync, cpSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname } from "node:path";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const CONFIG_TEMPLATE = `schema: {{schema}}
 
@@ -47,6 +51,12 @@ interface InitOptions {
   path: string;
 }
 
+export interface InitializeOpenSpecOptions {
+  target: string;
+  schema: SchemaOption;
+  bundledSchemasDir?: string | null;
+}
+
 export function createInitCommand(): Command {
   const cmd = new Command("init");
 
@@ -82,25 +92,11 @@ export function createInitCommand(): Command {
           process.exit(1);
         }
 
-        // Create directory structure
-        const openspecDir = resolve(target, "openspec");
-        mkdirSync(resolve(openspecDir, "changes"), { recursive: true });
-        mkdirSync(resolve(openspecDir, "schemas"), { recursive: true });
-        mkdirSync(resolve(openspecDir, "specs"), { recursive: true });
-
-        // Write config.yaml with template
-        const configContent = CONFIG_TEMPLATE.replace("{{schema}}", schema);
-        writeFileSync(configPath, configContent);
-
-        // Copy bundled schema if available
-        const bundledSchemaDir = findBundledSchemas();
-        if (bundledSchemaDir) {
-          const sourceSchema = resolve(bundledSchemaDir, schema);
-          const targetSchema = resolve(openspecDir, "schemas", schema);
-          if (existsSync(sourceSchema) && !existsSync(targetSchema)) {
-            cpSync(sourceSchema, targetSchema, { recursive: true });
-          }
-        }
+        initializeOpenSpec({
+          target,
+          schema,
+          bundledSchemasDir: findBundledSchemas(),
+        });
 
         console.log(`Initialized OpenSpec in ${target}`);
         console.log(`  Schema: ${schema}`);
@@ -164,16 +160,38 @@ function initPlatformDirs(target: string, platform: PlatformOption): void {
   }
 }
 
+export function initializeOpenSpec(options: InitializeOpenSpecOptions): void {
+  const openspecDir = resolve(options.target, "openspec");
+  const configPath = resolve(openspecDir, "config.yaml");
+
+  mkdirSync(resolve(openspecDir, "changes"), { recursive: true });
+  mkdirSync(resolve(openspecDir, "schemas"), { recursive: true });
+  mkdirSync(resolve(openspecDir, "specs"), { recursive: true });
+
+  const configContent = CONFIG_TEMPLATE.replace("{{schema}}", options.schema);
+  writeFileSync(configPath, configContent);
+
+  if (!options.bundledSchemasDir) {
+    return;
+  }
+
+  const sourceSchema = resolve(options.bundledSchemasDir, options.schema);
+  const targetSchema = resolve(openspecDir, "schemas", options.schema);
+  if (existsSync(sourceSchema) && !existsSync(targetSchema)) {
+    cpSync(sourceSchema, targetSchema, { recursive: true });
+  }
+}
+
 /**
  * Find bundled schemas relative to the CLI's install location.
  */
-function findBundledSchemas(): string | null {
+export function findBundledSchemas(): string | null {
   // When installed globally: dist/../assets/schemas
   // When running from source: look up from dist to assets
   const candidates = [
-    resolve(import.meta.dirname ?? ".", "../assets/schemas"),
-    resolve(import.meta.dirname ?? ".", "../../assets/schemas"),
-    resolve(import.meta.dirname ?? ".", "../../../openspec/schemas"),
+    resolve(__dirname, "../assets/schemas"),
+    resolve(__dirname, "../../assets/schemas"),
+    resolve(__dirname, "../../../openspec/schemas"),
   ];
 
   for (const candidate of candidates) {

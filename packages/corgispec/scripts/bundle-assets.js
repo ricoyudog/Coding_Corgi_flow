@@ -3,13 +3,17 @@
 /**
  * bundle-assets.js
  *
- * Copies skill files, JSON schemas, and workflow schemas from the repo
+ * Copies skill files, command assets, memory-init templates, JSON schemas,
+ * and workflow schemas from the repo
  * source-of-truth locations into the package's assets/ directory for distribution.
  *
  * Run as part of prepublishOnly: npm run build && node scripts/bundle-assets.js
  *
  * Asset sources:
  *   .opencode/skills/openspec-*  → assets/skills/
+ *   .opencode/commands/*.md      → assets/commands/opencode/
+ *   .claude/commands/opsx/*.md   → assets/commands/claude/opsx/
+ *   .opencode/skills/openspec-memory-init/templates/** → assets/memory-init/templates/
  *   schemas/                     → assets/schemas/ (JSON Schema files for validation)
  *   openspec/schemas/            → assets/schemas/ (workflow schemas for init/doctor)
  */
@@ -23,7 +27,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(__dirname, "..");
 const repoRoot = resolve(packageRoot, "../..");
 
-const assetsDir = resolve(packageRoot, "assets");
+const assetsDir = process.env.CORGISPEC_ASSETS_DIR
+  ? resolve(process.env.CORGISPEC_ASSETS_DIR)
+  : resolve(packageRoot, "assets");
 
 // --- Clean and recreate assets directory ---
 if (existsSync(assetsDir)) {
@@ -33,6 +39,21 @@ mkdirSync(assetsDir, { recursive: true });
 
 let totalFiles = 0;
 const errors = [];
+
+function copyMarkdownFiles(sourceDir, destDir) {
+  mkdirSync(destDir, { recursive: true });
+
+  if (!existsSync(sourceDir)) {
+    return 0;
+  }
+
+  const files = readdirSync(sourceDir).filter((file) => file.endsWith(".md"));
+  for (const file of files) {
+    cpSync(resolve(sourceDir, file), resolve(destDir, file));
+  }
+
+  return files.length;
+}
 
 // --- 1. Bundle skills from .opencode/skills/openspec-* ---
 const skillsSource = resolve(repoRoot, ".opencode/skills");
@@ -66,7 +87,45 @@ if (existsSync(skillsSource)) {
   errors.push(`Skills source not found at ${skillsSource}`);
 }
 
-// --- 2. Bundle JSON schemas (for skill validation) ---
+// --- 2. Bundle project-local command assets ---
+const opencodeCommandsSource = resolve(repoRoot, ".opencode/commands");
+const opencodeCommandsDest = resolve(assetsDir, "commands/opencode");
+const claudeCommandsSource = resolve(repoRoot, ".claude/commands/opsx");
+const claudeCommandsDest = resolve(assetsDir, "commands/claude/opsx");
+
+if (existsSync(opencodeCommandsSource)) {
+  const commandCount = copyMarkdownFiles(opencodeCommandsSource, opencodeCommandsDest);
+  totalFiles += commandCount;
+  console.log(`✓ Bundled ${commandCount} OpenCode command(s) from ${opencodeCommandsSource}`);
+} else {
+  errors.push(`OpenCode commands source not found at ${opencodeCommandsSource}`);
+}
+
+if (existsSync(claudeCommandsSource)) {
+  const commandCount = copyMarkdownFiles(claudeCommandsSource, claudeCommandsDest);
+  totalFiles += commandCount;
+  console.log(`✓ Bundled ${commandCount} Claude command(s) from ${claudeCommandsSource}`);
+} else {
+  errors.push(`Claude commands source not found at ${claudeCommandsSource}`);
+}
+
+// --- 3. Bundle openspec-memory-init templates ---
+const memoryInitTemplatesSource = resolve(
+  repoRoot,
+  ".opencode/skills/openspec-memory-init/templates"
+);
+const memoryInitTemplatesDest = resolve(assetsDir, "memory-init/templates");
+
+if (existsSync(memoryInitTemplatesSource)) {
+  mkdirSync(resolve(assetsDir, "memory-init"), { recursive: true });
+  cpSync(memoryInitTemplatesSource, memoryInitTemplatesDest, { recursive: true });
+  totalFiles++;
+  console.log(`✓ Bundled openspec-memory-init templates from ${memoryInitTemplatesSource}`);
+} else {
+  errors.push(`Memory init templates source not found at ${memoryInitTemplatesSource}`);
+}
+
+// --- 4. Bundle JSON schemas (for skill validation) ---
 const jsonSchemasSource = resolve(repoRoot, "schemas");
 const schemasDest = resolve(assetsDir, "schemas");
 mkdirSync(schemasDest, { recursive: true });
@@ -84,7 +143,7 @@ if (existsSync(jsonSchemasSource)) {
   errors.push(`JSON schemas source not found at ${jsonSchemasSource}`);
 }
 
-// --- 3. Bundle workflow schemas (for init/doctor) ---
+// --- 5. Bundle workflow schemas (for init/doctor) ---
 const workflowSchemasSource = resolve(repoRoot, "openspec/schemas");
 
 if (existsSync(workflowSchemasSource)) {
@@ -111,7 +170,7 @@ if (existsSync(workflowSchemasSource)) {
   errors.push(`Workflow schemas source not found at ${workflowSchemasSource}`);
 }
 
-// --- 4. Content verification (checksum comparison) ---
+// --- 6. Content verification (checksum comparison) ---
 console.log("\nVerifying bundled content...");
 let verifyCount = 0;
 let verifyErrors = 0;
@@ -155,6 +214,32 @@ if (existsSync(jsonSchemasSource)) {
       verifyErrors++;
       errors.push(`Checksum mismatch: schemas/${file}`);
     }
+  }
+}
+
+// Verify representative command and memory-init assets
+for (const [label, src, dest] of [
+  [
+    "commands/opencode/opsx-install.md",
+    resolve(opencodeCommandsSource, "opsx-install.md"),
+    resolve(opencodeCommandsDest, "opsx-install.md"),
+  ],
+  [
+    "commands/claude/opsx/install.md",
+    resolve(claudeCommandsSource, "install.md"),
+    resolve(claudeCommandsDest, "install.md"),
+  ],
+  [
+    "memory-init/templates/session-memory-protocol.md",
+    resolve(memoryInitTemplatesSource, "session-memory-protocol.md"),
+    resolve(memoryInitTemplatesDest, "session-memory-protocol.md"),
+  ],
+]) {
+  if (verifyFile(src, dest)) {
+    verifyCount++;
+  } else {
+    verifyErrors++;
+    errors.push(`Checksum mismatch: ${label}`);
   }
 }
 

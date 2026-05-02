@@ -9,7 +9,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 /**
  * Get the bundled skills directory from the package assets.
  */
-function getBundledSkillsDir(): string {
+export function getBundledSkillsDir(): string {
   // From dist/commands/ → ../assets/skills
   const fromDist = resolve(__dirname, "../assets/skills");
   if (existsSync(fromDist)) {
@@ -28,7 +28,7 @@ function getBundledSkillsDir(): string {
 /**
  * Install skills to a target directory.
  */
-function installSkillsTo(
+export function installSkillsTo(
   sourceDir: string,
   targetDir: string,
   dryRun: boolean

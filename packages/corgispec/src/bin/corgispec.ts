@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { checkNodeVersion } from "../lib/node-guard.js";
 import { createInstallCommand } from "../commands/install.js";
+import { createBootstrapCommand } from "../commands/bootstrap.js";
 import { createValidateCommand } from "../commands/validate.js";
 import { createListCommand } from "../commands/list.js";
 import { createGraphCommand } from "../commands/graph.js";
@@ -39,8 +40,11 @@ if (process.env["NO_COLOR"] !== undefined) {
   process.env["FORCE_COLOR"] = "0";
 }
 
-// Skill management commands
+// Setup & skill management commands
+program.addCommand(createBootstrapCommand());
 program.addCommand(createInstallCommand());
+program.addCommand(createInitCommand());
+program.addCommand(createDoctorCommand());
 program.addCommand(createValidateCommand());
 program.addCommand(createListCommand());
 program.addCommand(createGraphCommand());
@@ -52,9 +56,5 @@ program.addCommand(createProposeCommand());
 program.addCommand(createApplyCommand());
 program.addCommand(createReviewCommand());
 program.addCommand(createArchiveCommand());
-
-// Init & Doctor commands
-program.addCommand(createInitCommand());
-program.addCommand(createDoctorCommand());
 
 program.parse();

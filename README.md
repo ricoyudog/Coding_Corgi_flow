@@ -39,57 +39,78 @@ This diagram shows the command handoff points only. Inside that flow, `/opsx-pro
 
 ### Prerequisites
 
-- **Node.js** (for the OpenSpec CLI)
-- **OpenCode** or **Claude Code** — to run the project-local installer command from this repo
+- **Node.js 18+** (for `corgispec` and the OpenSpec CLI)
+- **OpenCode** or **Claude Code**
 - **glab CLI** ([install](https://gitlab.com/gitlab-org/cli)) — required for `gitlab-tracked`
 - **gh CLI** ([install](https://cli.github.com/)) — required for `github-tracked`
 - At least one of `glab` or `gh` is needed for issue-tracking features.
-
-This workflow now has two installation layers:
-
-1. **User-level skills** — installed once into your Claude/OpenCode user directories
-2. **Project-local assets** — installed per target project via `/opsx-install`
-
-### 1. Install OpenSpec CLI
+- Install the OpenSpec CLI before bootstrapping:
 
 ```bash
 npm install -g https://github.com/ricoyudog/OpenSpec/tarball/main
 openspec --version
 ```
 
-### 2. Clone this repo
+### 1. Build `corgispec`
 
 ```bash
 git clone https://github.com/ricoyudog/openspec_gitflow_modified.git
-cd openspec_gitflow_modified
+cd openspec_gitflow_modified/packages/corgispec
+npm install
+npm run build
 ```
 
-### 3. Install user-level skills
+### 2. Tell your agent to run bootstrap
 
-Run the repo installer script once on your machine:
+Open the cloned repo in your agent and tell it:
 
-```bash
-./install-skills.sh
+```text
+Fetch and follow instructions from https://raw.githubusercontent.com/ricoyudog/openspec_gitflow_modified/main/.opencode/INSTALL.md
 ```
 
-This installs:
+If you are using a branch or tag instead of `main`, replace `main` in that URL with the same checked-out ref so the fetched dispatcher matches your local repo contents.
 
-- `openspec-*` skills into `~/.claude/skills/` and `~/.config/opencode/skill/`
+That dispatcher tells the agent to run `corgispec bootstrap --target /path/to/project --mode auto`, optionally adding `--schema <schema>` if you already provided one.
 
-You can inspect the planned changes first:
+### 3. Review the bootstrap report
 
-```bash
-./install-skills.sh --dry-run
+Bootstrap writes `openspec/.opsx-install-report.md` in the target project and the agent should summarize whether it succeeded, stopped, or failed.
+
+### 4. Start using the workflow in the target project
+
+After bootstrap finishes, open the **target project** in OpenCode or Claude Code and start the workflow:
+
+```text
+# OpenCode
+/opsx-propose Add user authentication with JWT and refresh tokens
+
+# Claude Code
+/opsx:propose Add user authentication with JWT and refresh tokens
 ```
 
-### 4. Initialize OpenSpec in the target project
+This generates all planning artifacts, writes the local tracked handoff state, and mirrors it to parent/child issues. After that, `/opsx-apply` runs one Task Group and its closeout, then stops for `/opsx-review`, which gathers evidence, asks for an explicit decision, and applies the transition the user approved. Then use the assistant-specific command form:
+
+- OpenCode: `/opsx-apply`, `/opsx-review`, `/opsx-archive`, `/opsx-explore`
+- Claude Code: `/opsx:apply`, `/opsx:review`, `/opsx:archive`, `/opsx:explore`
+
+> **Platform detection**: All `/opsx-*` commands auto-detect GitLab or GitHub from your `config.yaml`. Same commands, either platform.
+
+## Install / Update / Verify Workflow
+
+Use the quick start above for new onboarding. The sections below are lower-level installer reference material for explicit install, update, verify-only, and legacy-migration cases.
+
+### Legacy manual install flow
+
+If you need to run the older explicit install flow instead of bootstrap, start here.
+
+### 1. Initialize OpenSpec in the target project
 
 ```bash
 cd /path/to/your-project
 openspec init
 ```
 
-### 5. Run the installer from the cloned repo
+### 2. Run the installer from the cloned repo
 
 Open the cloned `openspec_gitflow_modified` repo in **OpenCode** or **Claude Code** and run the installer command.
 
@@ -105,9 +126,9 @@ Examples:
 
 If you omit flags, the installer prompts for the target path, schema, and whether to enable worktree isolation.
 
-The installer assumes the required user-level skills are already present. If they are missing, it should fail fast and tell you to run `./install-skills.sh` first.
+The installer assumes the required user-level skills are already present. If bootstrap could not provision them, run `./install-skills.sh` from the cloned repo before retrying this manual path.
 
-### 6. Answer the installer prompts
+### 3. Answer the installer prompts
 
 - **Target project path** — where `openspec init` already ran
 - **Schema** — choose `gitlab-tracked` or `github-tracked`
@@ -125,7 +146,7 @@ It then patches only installer-owned keys in `openspec/config.yaml` and records 
 - `openspec/.opsx-install-report.md`
 - `openspec/.opsx-backups/<timestamp>/` when a legacy install backup is needed
 
-### 7. Review the verification report
+### 4. Review the verification report
 
 Every install, update, and verify-only run writes `openspec/.opsx-install-report.md` in the target project.
 
@@ -138,7 +159,7 @@ Review it before continuing. The report records:
 - PASS/FAIL status
 - whether any mutations were performed
 
-### 8. Configure additional project context (optional)
+### 5. Configure additional project context (optional)
 
 The installer manages only the `schema` field and installer-owned `isolation` keys in `openspec/config.yaml`.
 
@@ -174,27 +195,6 @@ rules:
 ```
 
 > **Why enable worktree isolation?** Without it, all changes share your main checkout — you can only work on one change at a time, and code changes mix with your main branch. With worktrees, each change is isolated in its own directory with its own feature branch. On archive, the worktree is cleaned up but the branch is preserved for you to merge via MR/PR.
-
-### 9. Start using the workflow in the target project
-
-After the installer finishes, open the **target project** in OpenCode or Claude Code and start the workflow:
-
-```text
-# OpenCode
-/opsx-propose Add user authentication with JWT and refresh tokens
-
-# Claude Code
-/opsx:propose Add user authentication with JWT and refresh tokens
-```
-
-This generates all planning artifacts, writes the local tracked handoff state, and mirrors it to parent/child issues. After that, `/opsx-apply` runs one Task Group and its closeout, then stops for `/opsx-review`, which gathers evidence, asks for an explicit decision, and applies the transition the user approved. Then use the assistant-specific command form:
-
-- OpenCode: `/opsx-apply`, `/opsx-review`, `/opsx-archive`, `/opsx-explore`
-- Claude Code: `/opsx:apply`, `/opsx:review`, `/opsx:archive`, `/opsx:explore`
-
-> **Platform detection**: All `/opsx-*` commands auto-detect GitLab or GitHub from your `config.yaml`. Same commands, either platform.
-
-## Install / Update / Verify Workflow
 
 The installer supports four explicit modes.
 
@@ -256,7 +256,7 @@ For the full agent-executable validation scenarios covering fresh install, manag
 
 | Command | What it does |
 |---------|-------------|
-| OpenCode `/opsx-install` / Claude `/opsx:install` | Install, update, or verify the project-local OpenSpec GitFlow assets in a target project |
+| OpenCode `/opsx-install` / Claude `/opsx:install` | Legacy/manual-only installer path for project-local asset install, update, or verify |
 | OpenCode `/opsx-propose` / Claude `/opsx:propose` | Generate planning artifacts, then close out into tracked handoff state |
 | OpenCode `/opsx-apply` / Claude `/opsx:apply` | Execute one Task Group, sync closeout state, then stop for review |
 | OpenCode `/opsx-review` / Claude `/opsx:review` | Gather evidence, ask for an explicit decision, then apply the transition the user approved |
@@ -308,7 +308,7 @@ flowchart LR
 
 | Scenario | Command |
 |----------|---------|
-| New project (auto during install) | `/opsx-install` |
+| New project bootstrap | Follow `.opencode/INSTALL.md` so the agent runs `corgispec bootstrap` |
 | Add memory to existing project | `/opsx-memory-init` |
 | Migrate existing KB into memory | `/opsx-migrate` |
 | Health check | `/opsx-lint` |

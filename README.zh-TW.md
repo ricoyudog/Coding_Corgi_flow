@@ -39,57 +39,78 @@ flowchart LR
 
 ### 先決條件
 
-- **Node.js**（供 OpenSpec CLI 使用）
-- **OpenCode** 或 **Claude Code**，用來從這個 repo 執行 project-local installer command
+- **Node.js 18+**（供 `corgispec` 與 OpenSpec CLI 使用）
+- **OpenCode** 或 **Claude Code**
 - **glab CLI** ([install](https://gitlab.com/gitlab-org/cli))，`gitlab-tracked` 必要
 - **gh CLI** ([install](https://cli.github.com/))，`github-tracked` 必要
 - 要使用 issue-tracking 功能，至少需要 `glab` 或 `gh` 其中之一。
-
-這套流程現在分成兩層安裝：
-
-1. **使用者層級 skills** —— 只需安裝一次，到 Claude/OpenCode 的使用者目錄
-2. **專案本地資產** —— 每個目標專案用 `/opsx-install` 安裝一次
-
-### 1. 安裝 OpenSpec CLI
+- 在執行 bootstrap 前，先安裝 OpenSpec CLI：
 
 ```bash
 npm install -g https://github.com/ricoyudog/OpenSpec/tarball/main
 openspec --version
 ```
 
-### 2. 複製這個 repo
+### 1. 建置 `corgispec`
 
 ```bash
 git clone https://github.com/ricoyudog/openspec_gitflow_modified.git
-cd openspec_gitflow_modified
+cd openspec_gitflow_modified/packages/corgispec
+npm install
+npm run build
 ```
 
-### 3. 安裝使用者層級 skills
+### 2. 告訴你的 agent 執行 bootstrap
 
-先在你的機器上執行一次 repo 內建的 installer script：
+在你的 agent 中開啟已 clone 的 repo，並告訴它：
 
-```bash
-./install-skills.sh
+```text
+Fetch and follow instructions from https://raw.githubusercontent.com/ricoyudog/openspec_gitflow_modified/main/.opencode/INSTALL.md
 ```
 
-它會安裝：
+如果你使用的不是 `main`，而是其他 branch 或 tag，請把 URL 中的 `main` 換成相同的 checked-out ref，確保抓到的 dispatcher 與本地 repo 內容一致。
 
-- `openspec-*` skills 到 `~/.claude/skills/` 與 `~/.config/opencode/skill/`
+這個 dispatcher 會指示 agent 執行 `corgispec bootstrap --target /path/to/project --mode auto`；如果你已經先提供 schema，則會附帶 `--schema <schema>`。
 
-若想先看即將執行的動作：
+### 3. 查看 bootstrap 報告
 
-```bash
-./install-skills.sh --dry-run
+Bootstrap 會在目標專案寫入 `openspec/.opsx-install-report.md`，agent 應該要摘要說明這次是 succeeded、stopped，還是 failed。
+
+### 4. 在目標專案中開始使用這套工作流程
+
+bootstrap 完成後，請在 OpenCode 或 Claude Code 中開啟 **目標專案**，然後開始使用這套 workflow：
+
+```text
+# OpenCode
+/opsx-propose Add user authentication with JWT and refresh tokens
+
+# Claude Code
+/opsx:propose Add user authentication with JWT and refresh tokens
 ```
 
-### 4. 在目標專案中初始化 OpenSpec
+這會先產生所有 planning artifacts，接著寫入本地的 tracked handoff state，並把它鏡像到 parent/child issues。之後，`/opsx-apply` 會執行一個 Task Group 與其 closeout，然後停下來等 `/opsx-review`；而 `/opsx-review` 會先蒐集證據，再要求明確決策，最後套用使用者同意的狀態轉換。接著請使用對應 assistant 的 command 形式：
+
+- OpenCode：`/opsx-apply`、`/opsx-review`、`/opsx-archive`、`/opsx-explore`
+- Claude Code：`/opsx:apply`、`/opsx:review`、`/opsx:archive`、`/opsx:explore`
+
+> **Platform detection**：所有 `/opsx-*` commands 都會從你的 `config.yaml` 自動偵測 GitLab 或 GitHub。相同的 commands，任一平台都能使用。
+
+## 安裝 / 更新 / 驗證流程
+
+若是新專案 onboarding，請優先使用上方的快速開始。以下內容保留作為較底層的 installer 參考，供明確 install、update、verify-only 與 legacy migration 情境使用。
+
+### 舊版手動安裝流程
+
+如果你需要改走較舊的明確安裝流程，而不是 bootstrap，請從這裡開始。
+
+### 1. 在目標專案中初始化 OpenSpec
 
 ```bash
 cd /path/to/your-project
 openspec init
 ```
 
-### 5. 從已複製的 repo 執行 installer
+### 2. 從已複製的 repo 執行 installer
 
 在 **OpenCode** 或 **Claude Code** 中開啟已 clone 的 `openspec_gitflow_modified` repo，然後執行 installer command。
 
@@ -105,9 +126,9 @@ openspec init
 
 如果省略 flags，installer 會提示你輸入 target path、schema，以及是否啟用 worktree isolation。
 
-installer 預設你已經先安裝好使用者層級 skills。若缺少這些 skills，它應該要立即失敗，並提示你先執行 `./install-skills.sh`。
+installer 預設所需的使用者層級 skills 已經存在。若 bootstrap 沒有成功補齊它們，請先在已 clone 的 repo 中執行 `./install-skills.sh`，再回來重試這條手動路徑。
 
-### 6. 回答 installer 的提示
+### 3. 回答 installer 的提示
 
 - **Target project path**，也就是已經執行過 `openspec init` 的位置
 - **Schema**，請選擇 `gitlab-tracked` 或 `github-tracked`
@@ -125,7 +146,7 @@ installer 只會把 project-local 的 managed fileset 複製到目標專案：
 - `openspec/.opsx-install-report.md`
 - `openspec/.opsx-backups/<timestamp>/`，當需要建立 legacy install backup 時使用
 
-### 7. 查看驗證報告
+### 4. 查看驗證報告
 
 每次 install、update，以及 verify-only 執行，都會在目標專案寫入 `openspec/.opsx-install-report.md`。
 
@@ -138,7 +159,7 @@ installer 只會把 project-local 的 managed fileset 複製到目標專案：
 - PASS/FAIL 狀態
 - 是否有執行任何 mutations
 
-### 8. 設定額外的專案 context（選填）
+### 5. 設定額外的專案 context（選填）
 
 installer 只會管理 `openspec/config.yaml` 內的 `schema` 欄位與由 installer 擁有的 `isolation` keys。
 
@@ -174,27 +195,6 @@ rules:
 ```
 
 > **為什麼要啟用 worktree isolation？** 如果不啟用，所有 changes 都會共用你的主要 checkout，你一次只能處理一個 change，而且程式碼變更會和 main branch 混在一起。使用 worktrees 時，每個 change 都會在自己的目錄與自己的 feature branch 中隔離。執行 archive 時，worktree 會被清理，但 branch 會保留下來，方便你用 MR/PR 進行 merge。
-
-### 9. 在目標專案中開始使用這套工作流程
-
-installer 完成後，請在 OpenCode 或 Claude Code 中開啟 **目標專案**，然後開始使用這套 workflow：
-
-```text
-# OpenCode
-/opsx-propose Add user authentication with JWT and refresh tokens
-
-# Claude Code
-/opsx:propose Add user authentication with JWT and refresh tokens
-```
-
-這會先產生所有 planning artifacts，接著寫入本地的 tracked handoff state，並把它鏡像到 parent/child issues。之後，`/opsx-apply` 會執行一個 Task Group 與其 closeout，然後停下來等 `/opsx-review`；而 `/opsx-review` 會先蒐集證據，再要求明確決策，最後套用使用者同意的狀態轉換。接著請使用對應 assistant 的 command 形式：
-
-- OpenCode：`/opsx-apply`、`/opsx-review`、`/opsx-archive`、`/opsx-explore`
-- Claude Code：`/opsx:apply`、`/opsx:review`、`/opsx:archive`、`/opsx:explore`
-
-> **Platform detection**：所有 `/opsx-*` commands 都會從你的 `config.yaml` 自動偵測 GitLab 或 GitHub。相同的 commands，任一平台都能使用。
-
-## 安裝 / 更新 / 驗證流程
 
 installer 支援四種明確模式。
 
@@ -256,7 +256,7 @@ Verify-only 會檢查 prerequisites、使用者層級 skills 是否存在、mana
 
 | 指令 | 功能說明 |
 |---------|-------------|
-| OpenCode `/opsx-install` / Claude `/opsx:install` | 在目標專案中安裝、更新或驗證 project-local 的 OpenSpec GitFlow 資產 |
+| OpenCode `/opsx-install` / Claude `/opsx:install` | 僅供 legacy/manual 情境使用的 installer 路徑，用來安裝、更新或驗證 project-local 資產 |
 | OpenCode `/opsx-propose` / Claude `/opsx:propose` | 產生 planning artifacts，接著 close out 成可追蹤的 handoff state |
 | OpenCode `/opsx-apply` / Claude `/opsx:apply` | 執行一個 Task Group，同步 closeout 狀態，然後停止等待 review |
 | OpenCode `/opsx-review` / Claude `/opsx:review` | 蒐集證據、要求明確決策，然後套用使用者同意的狀態轉換 |
@@ -308,7 +308,7 @@ flowchart LR
 
 | 場景 | 指令 |
 |------|------|
-| 新專案（install 時自動） | `/opsx-install` |
+| 新專案 bootstrap | 依照 `.opencode/INSTALL.md`，讓 agent 執行 `corgispec bootstrap` |
 | 既有專案加入記憶 | `/opsx-memory-init` |
 | 遷移既有知識庫 | `/opsx-migrate` |
 | 健康檢查 | `/opsx-lint` |
