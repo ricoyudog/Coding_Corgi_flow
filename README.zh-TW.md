@@ -39,22 +39,13 @@ flowchart LR
 
 ### 先決條件
 
-- **Node.js 18+**（供 `corgispec` 使用）
-- **OpenCode** 或 **Claude Code**
-- **glab CLI** ([install](https://gitlab.com/gitlab-org/cli))，`gitlab-tracked` 必要
-- **gh CLI** ([install](https://cli.github.com/))，`github-tracked` 必要
+- **Node.js 18+**
+- **LLM Agent** — OpenCode、Claude Code、Cursor、AmpCode 等
+- **glab CLI**（[安裝](https://gitlab.com/gitlab-org/cli)），`gitlab-tracked` 必要
+- **gh CLI**（[安裝](https://cli.github.com/)），`github-tracked` 必要
 - 要使用 issue-tracking 功能，至少需要 `glab` 或 `gh` 其中之一。
 
-### 1. 建置 `corgispec`
-
-```bash
-git clone https://github.com/ricoyudog/openspec_gitflow_modified.git
-cd openspec_gitflow_modified/packages/corgispec
-npm install
-npm run build
-```
-
-### 2. 安裝到你的專案
+### 1. 安裝到你的專案
 
 複製並貼上以下提示詞到你的 LLM Agent（OpenCode、Claude Code、Cursor 等）：
 
@@ -62,15 +53,17 @@ npm run build
 Fetch and follow instructions from https://raw.githubusercontent.com/ricoyudog/openspec_gitflow_modified/main/.opencode/INSTALL.md
 ```
 
-如果你使用的不是 `main`，而是其他 branch 或 tag，請把 URL 中的 `main` 換成相同的 checked-out ref，確保抓到的 dispatcher 與本地 repo 內容一致。
+Agent 會自動 clone repo、建置 CLI、並 bootstrap 你的專案。
 
-這個 dispatcher 會指示 agent 執行 `corgispec bootstrap --target /path/to/project --mode auto`；如果你已經先提供 schema，則會附帶 `--schema <schema>`。
+> 如果你使用的不是 `main`，請把 URL 中的 `main` 換成相同的 checked-out ref。
+>
+> 不使用 agent 的手動安裝方式，請參考[舊版手動安裝流程](#舊版手動安裝流程)。
 
-### 3. 查看 bootstrap 報告
+### 2. 查看 bootstrap 報告
 
 Bootstrap 會在目標專案寫入 `openspec/.corgi-install-report.md`，agent 應該要摘要說明這次是 succeeded、stopped，還是 failed。
 
-### 4. 在目標專案中開始使用這套工作流程
+### 3. 在目標專案中開始使用這套工作流程
 
 bootstrap 完成後，請在 OpenCode 或 Claude Code 中開啟 **目標專案**，然後開始使用這套 workflow：
 

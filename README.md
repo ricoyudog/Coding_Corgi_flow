@@ -39,22 +39,13 @@ This diagram shows the command handoff points only. Inside that flow, `/corgi-pr
 
 ### Prerequisites
 
-- **Node.js 18+** (for `corgispec`)
-- **OpenCode** or **Claude Code**
+- **Node.js 18+**
+- **An LLM Agent** — OpenCode, Claude Code, Cursor, AmpCode, etc.
 - **glab CLI** ([install](https://gitlab.com/gitlab-org/cli)) — required for `gitlab-tracked`
 - **gh CLI** ([install](https://cli.github.com/)) — required for `github-tracked`
 - At least one of `glab` or `gh` is needed for issue-tracking features.
 
-### 1. Build `corgispec`
-
-```bash
-git clone https://github.com/ricoyudog/openspec_gitflow_modified.git
-cd openspec_gitflow_modified/packages/corgispec
-npm install
-npm run build
-```
-
-### 2. Install to your project
+### 1. Install to your project
 
 Copy and paste the following prompt into your LLM Agent (OpenCode, Claude Code, Cursor, etc.):
 
@@ -62,15 +53,17 @@ Copy and paste the following prompt into your LLM Agent (OpenCode, Claude Code, 
 Fetch and follow instructions from https://raw.githubusercontent.com/ricoyudog/openspec_gitflow_modified/main/.opencode/INSTALL.md
 ```
 
-If you are using a branch or tag instead of `main`, replace `main` in that URL with the same checked-out ref so the fetched dispatcher matches your local repo contents.
+The agent will clone the repo, build the CLI, and bootstrap your project automatically.
 
-That dispatcher tells the agent to run `corgispec bootstrap --target /path/to/project --mode auto`, optionally adding `--schema <schema>` if you already provided one.
+> If you are using a branch or tag instead of `main`, replace `main` in that URL with the same checked-out ref.
+>
+> For manual installation without an agent, see [Legacy manual install flow](#legacy-manual-install-flow).
 
-### 3. Review the bootstrap report
+### 2. Review the bootstrap report
 
 Bootstrap writes `openspec/.corgi-install-report.md` in the target project and the agent should summarize whether it succeeded, stopped, or failed.
 
-### 4. Start using the workflow in the target project
+### 3. Start using the workflow in the target project
 
 After bootstrap finishes, open the **target project** in OpenCode or Claude Code and start the workflow:
 
