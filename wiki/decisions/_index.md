@@ -1,6 +1,6 @@
 ---
 type: wiki
-updated: 2026-05-01
+updated: 2026-05-04
 ---
 
 # Decisions Index
@@ -9,4 +9,5 @@ updated: 2026-05-01
 
 ## Decisions
 
-(No decisions recorded yet — these are created when reviews approve significant choices)
+- [[corgispec-review-verify-upgrade|Upgrade corgispec Review & Verify Pipeline]] — 2026-05-04 — proposed
+  - 借鏡 addyosmani/agent-skills，分三階段升級品質保證流程

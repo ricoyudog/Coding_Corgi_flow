@@ -63,9 +63,21 @@ The agent will clone the repo, build the CLI, and bootstrap your project automat
 
 Bootstrap writes `openspec/.corgi-install-report.md` in the target project and the agent should summarize whether it succeeded, stopped, or failed.
 
-### 3. Start using the workflow in the target project
+### 3. Initialize cross-session memory (recommended)
 
-After bootstrap finishes, open the **target project** in OpenCode or Claude Code and start the workflow:
+Open the **target project** in OpenCode or Claude Code and run:
+
+```text
+# OpenCode
+/corgi-memory-init
+
+# Claude Code
+/corgi:memory-init
+```
+
+This creates the `memory/` and `wiki/` directories so the agent retains context across sessions (what was done, pitfalls discovered, decisions made). You can skip this, but multi-session work will lose continuity.
+
+### 4. Start using the workflow
 
 ```text
 # OpenCode

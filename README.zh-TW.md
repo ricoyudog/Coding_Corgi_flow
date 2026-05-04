@@ -63,9 +63,21 @@ Agent 會自動 clone repo、建置 CLI、並 bootstrap 你的專案。
 
 Bootstrap 會在目標專案寫入 `openspec/.corgi-install-report.md`，agent 應該要摘要說明這次是 succeeded、stopped，還是 failed。
 
-### 3. 在目標專案中開始使用這套工作流程
+### 3. 初始化跨 session 記憶（建議）
 
-bootstrap 完成後，請在 OpenCode 或 Claude Code 中開啟 **目標專案**，然後開始使用這套 workflow：
+在 OpenCode 或 Claude Code 中開啟 **目標專案** 並執行：
+
+```text
+# OpenCode
+/corgi-memory-init
+
+# Claude Code
+/corgi:memory-init
+```
+
+這會建立 `memory/` 和 `wiki/` 目錄，讓 agent 在不同 session 之間保留上下文（做了什麼、踩過哪些坑、做過哪些決策）。可以跳過，但多 session 作業時會失去連續性。
+
+### 4. 開始使用 workflow
 
 ```text
 # OpenCode

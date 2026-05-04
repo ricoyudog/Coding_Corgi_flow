@@ -195,8 +195,10 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "913034aff04d9884",
+  "active": "a9a33ff17c042bf2",
   "lastOpenFiles": [
+    "wiki/decisions/corgispec-review-verify-upgrade.md",
+    "wiki/decisions/corgispec-review-verify-upgrade.md.tmp.51024.1777885758569",
     "wiki/research/_index.md.tmp.51024.1777885280951",
     "wiki/research/addyosmani-agent-skills-verify-vs-review.md",
     "wiki/research/addyosmani-agent-skills-verify-vs-review.md.tmp.51024.1777885260488",
@@ -210,8 +212,6 @@
     "docs/superpowers/plans/sedBBngai",
     "docs/superpowers/plans/sedxAxUa8",
     "docs/superpowers/plans/sedLGbC5l",
-    "docs/superpowers/plans/sedVDss56",
-    "docs/superpowers/articles/sed1S3MQD",
     "packages/corgispec/assets/skills/corgispec-review/references/worktree-discovery.md",
     "packages/corgispec/assets/skills/corgispec-review/references/quality-checks.md",
     "packages/corgispec/assets/skills/corgispec-review/references/review-decisions.md",
