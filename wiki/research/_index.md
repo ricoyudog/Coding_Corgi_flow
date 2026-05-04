@@ -1,6 +1,6 @@
 ---
 type: wiki
-updated: 2026-05-01
+updated: 2026-05-04
 ---
 
 # Research Index
@@ -9,4 +9,4 @@ updated: 2026-05-01
 
 ## Topics
 
-(No research topics yet — these are created during corgi explore)
+- [[addyosmani-agent-skills-verify-vs-review|addyosmani/agent-skills: VERIFY vs REVIEW 階段對比]] — 2026-05-04

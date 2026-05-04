@@ -1,0 +1,23 @@
+{
+  "id": "conv-1777884596995-khglxv91q",
+  "providerId": "claude",
+  "title": "Compare Review and Verify stages in agent-skills",
+  "titleGenerationStatus": "success",
+  "createdAt": 1777884596995,
+  "updatedAt": 1777885287187,
+  "lastResponseAt": 1777885287187,
+  "sessionId": "a72877a1-707f-4eb8-8a20-83983d53c08e",
+  "providerState": {
+    "providerSessionId": "a72877a1-707f-4eb8-8a20-83983d53c08e"
+  },
+  "usage": {
+    "model": "opus",
+    "inputTokens": 81,
+    "cacheCreationInputTokens": 0,
+    "cacheReadInputTokens": 45312,
+    "contextWindow": 1000000,
+    "contextTokens": 45393,
+    "percentage": 5,
+    "contextWindowIsAuthoritative": true
+  }
+}

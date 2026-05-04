@@ -1,0 +1,16 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "agent": {
+    "claudian-aux-passive": {
+      "description": "Internal Claudian no-tool agent for OpenCode auxiliary tasks.",
+      "mode": "primary",
+      "permission": {
+        "*": "deny",
+        "external_directory": "deny"
+      },
+      "prompt": "{file:E:\\code\\openspec_gitflow_modified\\.claudian\\opencode\\aux\\title-gen\\system.md}"
+    }
+  },
+  "default_agent": "claudian-aux-passive",
+  "username": "呆呆王"
+}

@@ -50,7 +50,7 @@ flowchart LR
 複製並貼上以下提示詞到你的 LLM Agent（OpenCode、Claude Code、Cursor 等）：
 
 ```text
-Fetch and follow instructions from https://raw.githubusercontent.com/ricoyudog/openspec_gitflow_modified/main/.opencode/INSTALL.md
+Fetch and follow instructions from https://raw.githubusercontent.com/ricoyudog/Coding_Corgi_flow/feat/openspec-llm-memory/.opencode/INSTALL.md
 ```
 
 Agent 會自動 clone repo、建置 CLI、並 bootstrap 你的專案。
@@ -99,7 +99,7 @@ openspec init
 
 ### 2. 從已複製的 repo 執行 installer
 
-在 **OpenCode** 或 **Claude Code** 中開啟已 clone 的 `openspec_gitflow_modified` repo，然後執行 installer command。
+在 **OpenCode** 或 **Claude Code** 中開啟已 clone 的 `Coding_Corgi_flow` repo，然後執行 installer command。
 
 範例：
 

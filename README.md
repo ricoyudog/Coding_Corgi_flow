@@ -50,7 +50,7 @@ This diagram shows the command handoff points only. Inside that flow, `/corgi-pr
 Copy and paste the following prompt into your LLM Agent (OpenCode, Claude Code, Cursor, etc.):
 
 ```text
-Fetch and follow instructions from https://raw.githubusercontent.com/ricoyudog/openspec_gitflow_modified/main/.opencode/INSTALL.md
+Fetch and follow instructions from https://raw.githubusercontent.com/ricoyudog/Coding_Corgi_flow/feat/openspec-llm-memory/.opencode/INSTALL.md
 ```
 
 The agent will clone the repo, build the CLI, and bootstrap your project automatically.
@@ -99,7 +99,7 @@ openspec init
 
 ### 2. Run the installer from the cloned repo
 
-Open the cloned `openspec_gitflow_modified` repo in **OpenCode** or **Claude Code** and run the installer command.
+Open the cloned `Coding_Corgi_flow` repo in **OpenCode** or **Claude Code** and run the installer command.
 
 Examples:
 

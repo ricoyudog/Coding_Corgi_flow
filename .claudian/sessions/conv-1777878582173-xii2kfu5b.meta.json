@@ -1,0 +1,23 @@
+{
+  "id": "conv-1777878582173-xii2kfu5b",
+  "providerId": "opencode",
+  "title": "Send greeting",
+  "titleGenerationStatus": "success",
+  "createdAt": 1777878582173,
+  "updatedAt": 1777878655357,
+  "lastResponseAt": 1777878628945,
+  "sessionId": "ses_20e2d9ee4ffeNCnx7bUwh3ak5V",
+  "providerState": {
+    "databasePath": "C:\\Users\\yuri3\\AppData\\Roaming\\opencode\\opencode.db"
+  },
+  "usage": {
+    "cacheCreationInputTokens": 0,
+    "cacheReadInputTokens": 0,
+    "contextTokens": 37482,
+    "contextWindow": 200000,
+    "contextWindowIsAuthoritative": false,
+    "inputTokens": 37482,
+    "model": "opencode:github-copilot/claude-opus-4.6",
+    "percentage": 19
+  }
+}

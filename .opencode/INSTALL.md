@@ -6,8 +6,8 @@ Use this file as the entry point when an LLM agent is bootstrapping OpenSpec Git
 
 1. **Clone the repo** (if not already inside it):
    ```bash
-   git clone https://github.com/ricoyudog/openspec_gitflow_modified.git /tmp/openspec_gitflow_modified
-   cd /tmp/openspec_gitflow_modified
+   git clone -b feat/openspec-llm-memory https://github.com/ricoyudog/Coding_Corgi_flow.git /tmp/Coding_Corgi_flow
+   cd /tmp/Coding_Corgi_flow
    ```
 
 2. **Build corgispec**:

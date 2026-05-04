@@ -1,0 +1,23 @@
+{
+  "id": "conv-1777881607859-h67girtki",
+  "providerId": "opencode",
+  "title": "Start Conversation",
+  "titleGenerationStatus": "success",
+  "createdAt": 1777881607860,
+  "updatedAt": 1777881650174,
+  "lastResponseAt": 1777881641036,
+  "sessionId": "ses_20dff7272ffeJzdhyysDWO2aAK",
+  "providerState": {
+    "databasePath": "C:\\Users\\yuri3\\AppData\\Roaming\\opencode\\opencode.db"
+  },
+  "usage": {
+    "cacheCreationInputTokens": 0,
+    "cacheReadInputTokens": 0,
+    "contextTokens": 0,
+    "contextWindow": 1048576,
+    "contextWindowIsAuthoritative": true,
+    "inputTokens": 0,
+    "model": "opencode:llm-api-gw/deepseek-v4-pro",
+    "percentage": 0
+  }
+}

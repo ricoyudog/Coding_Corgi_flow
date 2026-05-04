@@ -1,0 +1,23 @@
+{
+  "id": "conv-1777881731052-rw5e6e343",
+  "providerId": "opencode",
+  "title": "Explain JSON-RPC transport disposed error",
+  "titleGenerationStatus": "success",
+  "createdAt": 1777881731052,
+  "updatedAt": 1777882351396,
+  "lastResponseAt": 1777882134167,
+  "sessionId": "ses_20dfd93bfffeMOnXCjRX11HxOC",
+  "providerState": {
+    "databasePath": "C:\\Users\\yuri3\\AppData\\Roaming\\opencode\\opencode.db"
+  },
+  "usage": {
+    "cacheCreationInputTokens": 0,
+    "cacheReadInputTokens": 0,
+    "contextTokens": 0,
+    "contextWindow": 1048576,
+    "contextWindowIsAuthoritative": true,
+    "inputTokens": 0,
+    "model": "opencode:llm-api-gw/deepseek-v4-pro/max",
+    "percentage": 0
+  }
+}

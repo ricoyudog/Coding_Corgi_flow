@@ -1,0 +1,23 @@
+{
+  "id": "conv-1777878734490-k7zaufrze",
+  "providerId": "opencode",
+  "title": "Map knowledge sources to corgispec phases",
+  "titleGenerationStatus": "success",
+  "createdAt": 1777878734490,
+  "updatedAt": 1777881697499,
+  "lastResponseAt": 1777881673941,
+  "sessionId": "ses_20e2b4a12ffegSaI9M4jsN7wF7",
+  "providerState": {
+    "databasePath": "C:\\Users\\yuri3\\AppData\\Roaming\\opencode\\opencode.db"
+  },
+  "usage": {
+    "cacheCreationInputTokens": 0,
+    "cacheReadInputTokens": 0,
+    "contextTokens": 0,
+    "contextWindow": 200000,
+    "contextWindowIsAuthoritative": false,
+    "inputTokens": 0,
+    "model": "opencode:llm-api-gw/deepseek-v4-pro",
+    "percentage": 0
+  }
+}

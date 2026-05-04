@@ -19,6 +19,6 @@
   "notificationsEnabled": true,
   "globalTokenName": "",
   "personalAccessToken": "",
-  "selectLatestPluginVersionByDefault": false,
-  "allowIncompatiblePlugins": false
+  "selectLatestPluginVersionByDefault": true,
+  "allowIncompatiblePlugins": true
 }

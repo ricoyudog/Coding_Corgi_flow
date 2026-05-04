@@ -1,0 +1,23 @@
+{
+  "id": "conv-1777882609704-4kb7caf50",
+  "providerId": "claude",
+  "title": "Map knowledge sources used across CorgiSpec stages",
+  "titleGenerationStatus": "success",
+  "createdAt": 1777882609704,
+  "updatedAt": 1777884901421,
+  "lastResponseAt": 1777884901421,
+  "sessionId": "bf0f036f-e47e-4708-9820-0aac7ed4d03a",
+  "providerState": {
+    "providerSessionId": "bf0f036f-e47e-4708-9820-0aac7ed4d03a"
+  },
+  "usage": {
+    "model": "opus",
+    "inputTokens": 513,
+    "cacheCreationInputTokens": 0,
+    "cacheReadInputTokens": 50304,
+    "contextWindow": 1000000,
+    "contextTokens": 50817,
+    "percentage": 5,
+    "contextWindowIsAuthoritative": true
+  }
+}

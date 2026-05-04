@@ -1,9 +1,9 @@
 {
-  "userName": "",
+  "userName": "呆呆王",
   "permissionMode": "yolo",
-  "model": "haiku",
-  "thinkingBudget": "off",
-  "effortLevel": "high",
+  "model": "opus",
+  "thinkingBudget": "medium",
+  "effortLevel": "max",
   "serviceTier": "default",
   "enableAutoTitleGeneration": true,
   "titleGenerationModel": "",
@@ -19,7 +19,7 @@
     "scrollDownKey": "s",
     "focusInputKey": "i"
   },
-  "locale": "en",
+  "locale": "zh-CN",
   "providerConfigs": {
     "claude": {
       "safeMode": "acceptEdits",
@@ -33,7 +33,7 @@
       "enableOpus1M": false,
       "enableSonnet1M": false,
       "customModels": "",
-      "lastModel": "haiku",
+      "lastModel": "opus",
       "environmentVariables": "",
       "environmentHash": ""
     },
@@ -46,36 +46,47 @@
       "reasoningSummary": "detailed",
       "environmentVariables": "",
       "environmentHash": "",
-      "installationMethod": "native-windows",
-      "installationMethodsByHost": {},
-      "wslDistroOverride": "",
+      "installationMethodsByHost": {
+        "YURI3-W11": "native-windows"
+      },
       "wslDistroOverridesByHost": {}
     },
     "opencode": {
       "cliPath": "",
-      "cliPathsByHost": {},
-      "enabled": false,
+      "cliPathsByHost": {
+        "YURI3-W11": "C:\\Users\\yuri3\\AppData\\Roaming\\npm\\node_modules\\opencode-ai\\node_modules\\opencode-windows-x64\\bin\\opencode.exe"
+      },
+      "enabled": true,
       "environmentHash": "",
       "environmentVariables": "OPENCODE_ENABLE_EXA=1",
       "modelAliases": {},
-      "preferredThinkingByModel": {},
-      "selectedMode": "",
-      "visibleModels": []
+      "preferredThinkingByModel": {
+        "llm-api-gw/deepseek-v4-pro": "high"
+      },
+      "selectedMode": "claudian-yolo",
+      "visibleModels": [
+        "github-copilot/claude-opus-4.6",
+        "llm-api-gw/deepseek-v4-pro"
+      ]
     }
   },
   "settingsProvider": "claude",
   "savedProviderModel": {
-    "claude": "haiku"
+    "claude": "opus",
+    "opencode": "opencode:github-copilot/claude-opus-4.6"
   },
   "savedProviderEffort": {
-    "claude": "high"
+    "claude": "max",
+    "opencode": "default"
   },
   "savedProviderServiceTier": {},
   "savedProviderThinkingBudget": {
-    "claude": "off"
+    "claude": "medium",
+    "opencode": "off"
   },
   "savedProviderPermissionMode": {
-    "claude": "yolo"
+    "claude": "yolo",
+    "opencode": "yolo"
   },
   "lastCustomModel": "",
   "maxTabs": 3,

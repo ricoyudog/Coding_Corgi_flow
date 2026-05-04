@@ -1,0 +1,22 @@
+{
+  "id": "conv-1777882382434-nmws8egfw",
+  "providerId": "claude",
+  "title": "我想知道 corgispec 不同階段的時候 會用到什麼部分的knowledge 例如 wiki h...",
+  "titleGenerationStatus": "failed",
+  "createdAt": 1777882382434,
+  "updatedAt": 1777882602499,
+  "lastResponseAt": 1777882392564,
+  "sessionId": "58838db5-54e8-4a0d-9593-010d66f3f040",
+  "providerState": {
+    "providerSessionId": "58838db5-54e8-4a0d-9593-010d66f3f040"
+  },
+  "usage": {
+    "model": "opus",
+    "inputTokens": 0,
+    "cacheCreationInputTokens": 0,
+    "cacheReadInputTokens": 0,
+    "contextWindow": 200000,
+    "contextTokens": 0,
+    "percentage": 0
+  }
+}

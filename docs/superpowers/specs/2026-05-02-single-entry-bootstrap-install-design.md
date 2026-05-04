@@ -152,7 +152,7 @@ It must **not** ask the agent to manually reconstruct the install workflow from 
 README should become the human-facing pointer, for example:
 
 1. install `corgispec`
-2. tell your agent: `Fetch and follow instructions from https://raw.githubusercontent.com/ricoyudog/openspec_gitflow_modified/main/.opencode/INSTALL.md`
+2. tell your agent: `Fetch and follow instructions from https://raw.githubusercontent.com/ricoyudog/Coding_Corgi_flow/feat/openspec-llm-memory/.opencode/INSTALL.md`
 
 The detailed branch logic should no longer live in README quick start.
 

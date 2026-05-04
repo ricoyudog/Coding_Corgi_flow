@@ -1,6 +1,6 @@
 ## Context
 
-This repo (`openspec_gitflow_modified`) is a workflow/skills toolkit that turns AI coding assistants into structured engineering workflows. It currently ships skills, schemas, and slash commands but relies on three disconnected mechanisms for installation and management:
+This repo (`Coding_Corgi_flow`) is a workflow/skills toolkit that turns AI coding assistants into structured engineering workflows. It currently ships skills, schemas, and slash commands but relies on three disconnected mechanisms for installation and management:
 
 1. **Upstream CLI** (`@fission-ai/openspec` v1.3.1) — globally installed, provides `openspec init/list/change/archive/status/instructions` commands
 2. **Bash script** (`install-skills.sh`) — copies skill files to user-level directories

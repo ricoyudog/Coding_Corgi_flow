@@ -1,0 +1,23 @@
+{
+  "id": "conv-1777882510952-81jqkbeta",
+  "providerId": "opencode",
+  "title": "Greet and introduce capabilities",
+  "titleGenerationStatus": "success",
+  "createdAt": 1777882510952,
+  "updatedAt": 1777884611148,
+  "lastResponseAt": 1777882556071,
+  "sessionId": "ses_20df1a89cffevWwTjFvrAeNQis",
+  "providerState": {
+    "databasePath": "C:\\Users\\yuri3\\AppData\\Roaming\\opencode\\opencode.db"
+  },
+  "usage": {
+    "cacheCreationInputTokens": 40379,
+    "cacheReadInputTokens": 0,
+    "contextTokens": 3,
+    "contextWindow": 200000,
+    "contextWindowIsAuthoritative": true,
+    "inputTokens": 3,
+    "model": "opencode:github-copilot/claude-opus-4.6",
+    "percentage": 0
+  }
+}

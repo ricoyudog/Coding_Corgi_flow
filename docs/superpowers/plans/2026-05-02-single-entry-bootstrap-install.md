@@ -890,7 +890,7 @@ cd packages/corgispec && npm install && npm run build
 Tell your agent:
 
 ```text
-Fetch and follow instructions from https://raw.githubusercontent.com/ricoyudog/openspec_gitflow_modified/main/.opencode/INSTALL.md
+Fetch and follow instructions from https://raw.githubusercontent.com/ricoyudog/Coding_Corgi_flow/feat/openspec-llm-memory/.opencode/INSTALL.md
 ```
 
 The agent will run `corgispec bootstrap`, which handles user-level skill installation, target project detection, fresh install, managed update, legacy migration, and install reporting.
@@ -914,7 +914,7 @@ cd packages/corgispec && npm install && npm run build
 把這句話直接交給 agent：
 
 ```text
-Fetch and follow instructions from https://raw.githubusercontent.com/ricoyudog/openspec_gitflow_modified/main/.opencode/INSTALL.md
+Fetch and follow instructions from https://raw.githubusercontent.com/ricoyudog/Coding_Corgi_flow/feat/openspec-llm-memory/.opencode/INSTALL.md
 ```
 
 agent 會執行 `corgispec bootstrap`，自動處理 user-level skills、target project 偵測、fresh install、managed update、legacy migration，以及 install report。

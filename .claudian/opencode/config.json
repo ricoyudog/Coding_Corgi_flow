@@ -1,0 +1,30 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "agent": {
+    "build": {
+      "prompt": "{file:E:\\code\\openspec_gitflow_modified\\.claudian\\opencode\\system.md}"
+    },
+    "claudian-yolo": {
+      "mode": "primary",
+      "permission": {
+        "plan_enter": "allow",
+        "question": "allow"
+      },
+      "prompt": "{file:E:\\code\\openspec_gitflow_modified\\.claudian\\opencode\\system.md}"
+    },
+    "claudian-safe": {
+      "mode": "primary",
+      "permission": {
+        "plan_enter": "allow",
+        "question": "allow",
+        "bash": "ask",
+        "edit": "ask"
+      },
+      "prompt": "{file:E:\\code\\openspec_gitflow_modified\\.claudian\\opencode\\system.md}"
+    },
+    "plan": {
+      "prompt": "{file:E:\\code\\openspec_gitflow_modified\\.claudian\\opencode\\system.md}"
+    }
+  },
+  "username": "呆呆王"
+}
