@@ -39,17 +39,11 @@ flowchart LR
 
 ### 先決條件
 
-- **Node.js 18+**（供 `corgispec` 與 OpenSpec CLI 使用）
+- **Node.js 18+**（供 `corgispec` 使用）
 - **OpenCode** 或 **Claude Code**
 - **glab CLI** ([install](https://gitlab.com/gitlab-org/cli))，`gitlab-tracked` 必要
 - **gh CLI** ([install](https://cli.github.com/))，`github-tracked` 必要
 - 要使用 issue-tracking 功能，至少需要 `glab` 或 `gh` 其中之一。
-- 在執行 bootstrap 前，先安裝 OpenSpec CLI：
-
-```bash
-npm install -g https://github.com/ricoyudog/OpenSpec/tarball/main
-openspec --version
-```
 
 ### 1. 建置 `corgispec`
 

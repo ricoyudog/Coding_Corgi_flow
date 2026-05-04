@@ -39,17 +39,11 @@ This diagram shows the command handoff points only. Inside that flow, `/opsx-pro
 
 ### Prerequisites
 
-- **Node.js 18+** (for `corgispec` and the OpenSpec CLI)
+- **Node.js 18+** (for `corgispec`)
 - **OpenCode** or **Claude Code**
 - **glab CLI** ([install](https://gitlab.com/gitlab-org/cli)) — required for `gitlab-tracked`
 - **gh CLI** ([install](https://cli.github.com/)) — required for `github-tracked`
 - At least one of `glab` or `gh` is needed for issue-tracking features.
-- Install the OpenSpec CLI before bootstrapping:
-
-```bash
-npm install -g https://github.com/ricoyudog/OpenSpec/tarball/main
-openspec --version
-```
 
 ### 1. Build `corgispec`
 
