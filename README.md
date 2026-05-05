@@ -1,6 +1,6 @@
 **English** | [繁體中文](README.zh-TW.md)
 
-# OpenSpec GitFlow
+# Coding Corgi Flow
 
 Turn AI coding assistants into structured engineering workflows — with schema-driven planning, checkpoint-based implementation, and full issue tracking on GitLab or GitHub.
 
@@ -316,7 +316,7 @@ When enabled, `/corgi-propose` (OpenCode) or `/corgi:propose` (Claude Code) crea
 
 ## Cross-Session Memory
 
-AI sessions are stateless by default. OpenSpec GitFlow adds a **3-layer memory system** — ≤2900 tokens at startup, self-compacting, Obsidian-compatible.
+AI sessions are stateless by default. Coding Corgi Flow adds a **3-layer memory system** — ≤2900 tokens at startup, self-compacting, Obsidian-compatible.
 
 ```mermaid
 flowchart LR
