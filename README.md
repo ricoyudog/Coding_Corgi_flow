@@ -12,7 +12,8 @@ OpenSpec provides the core CLI (`openspec init`, artifact pipeline, change lifec
 
 - **Issue tracking** — Parent/child issues created automatically on GitLab (`glab`) or GitHub (`gh`)
 - **Checkpoint-based apply:** Executes one Task Group at a time, syncs closeout state, then pauses for review
-- **Interactive review cycle:** Gathers review evidence, asks for an explicit decision, then applies the transition the user approved
+- **Automated verify gate:** Runs lint, build, tests, and spec coverage before review — blocks review on failure
+- **5-axis review:** Architecture, Security, Performance, Code Quality, Completeness — evidence-driven with explicit approve/reject/discuss
 - **Progress sync** — Rich summaries posted to issues (objectives, completion, files produced)
 - **Workflow labels** — State machine: `backlog → todo → in-progress → review → done`
 - **Git worktree isolation** — Run multiple changes in parallel, each in its own worktree (opt-in)
@@ -25,15 +26,18 @@ flowchart LR
     B --> C["Issues\n(parent + children)"]
     C --> D["/corgi-apply"]
     D --> E{"Group done?"}
-    E -->|Yes| F["/corgi-review"]
-    F --> G{"Approved?"}
-    G -->|Yes, more groups| D
-    G -->|Rejected| H["Fix tasks added"]
-    H --> D
-    G -->|All done| I["/corgi-archive"]
+    E -->|Yes| F["/corgi-verify"]
+    F --> G{"Pass?"}
+    G -->|No| D
+    G -->|Yes| H["/corgi-review"]
+    H --> I{"Approved?"}
+    I -->|Yes, more groups| D
+    I -->|Rejected| J["Fix tasks added"]
+    J --> D
+    I -->|All done| K["/corgi-archive"]
 ```
 
-This diagram shows the command handoff points only. Inside that flow, `/corgi-propose` finishes by closing out into a tracked handoff state, `/corgi-apply` runs one Task Group through implementation and closeout before it stops, and `/corgi-review` gathers evidence before it asks for an explicit decision and applies the transition the user approved.
+This diagram shows the command handoff points only. Inside that flow, `/corgi-propose` finishes by closing out into a tracked handoff state, `/corgi-apply` runs one Task Group through implementation and closeout before it stops, `/corgi-verify` runs automated verification (lint, build, tests, spec coverage) and blocks review if it fails, and `/corgi-review` gathers evidence before it asks for an explicit decision and applies the transition the user approved.
 
 ## Quick Start
 
@@ -89,8 +93,8 @@ This creates the `memory/` and `wiki/` directories so the agent retains context 
 
 This generates all planning artifacts, writes the local tracked handoff state, and mirrors it to parent/child issues. After that, `/corgi-apply` runs one Task Group and its closeout, then stops for `/corgi-review`, which gathers evidence, asks for an explicit decision, and applies the transition the user approved. Then use the assistant-specific command form:
 
-- OpenCode: `/corgi-apply`, `/corgi-review`, `/corgi-archive`, `/corgi-explore`
-- Claude Code: `/corgi:apply`, `/corgi:review`, `/corgi:archive`, `/corgi:explore`
+- OpenCode: `/corgi-apply`, `/corgi-verify`, `/corgi-review`, `/corgi-archive`, `/corgi-explore`
+- Claude Code: `/corgi:apply`, `/corgi:verify`, `/corgi:review`, `/corgi:archive`, `/corgi:explore`
 
 > **Platform detection**: All `/corgi-*` commands auto-detect GitLab or GitHub from your `config.yaml`. Same commands, either platform.
 
@@ -258,7 +262,8 @@ For the full agent-executable validation scenarios covering fresh install, manag
 | OpenCode `/corgi-install` / Claude `/corgi:install` | Legacy/manual-only installer path for project-local asset install, update, or verify |
 | OpenCode `/corgi-propose` / Claude `/corgi:propose` | Generate planning artifacts, then close out into tracked handoff state |
 | OpenCode `/corgi-apply` / Claude `/corgi:apply` | Execute one Task Group, sync closeout state, then stop for review |
-| OpenCode `/corgi-review` / Claude `/corgi:review` | Gather evidence, ask for an explicit decision, then apply the transition the user approved |
+| OpenCode `/corgi-verify` / Claude `/corgi:verify` | Automated quality gate: lint, build, tests, spec coverage — blocks review if it fails |
+| OpenCode `/corgi-review` / Claude `/corgi:review` | 5-axis review (Architecture, Security, Performance, Code Quality, Completeness), explicit decision, apply transition |
 | OpenCode `/corgi-archive` / Claude `/corgi:archive` | Close all issues, sync delta specs, extract long-term knowledge, clean up |
 | OpenCode `/corgi-explore` / Claude `/corgi:explore` | Thinking partner — explore ideas, check issue feedback, clarify requirements |
 | OpenCode `/corgi-memory-init` / Claude `/corgi:memory-init` | Initialize the 3-layer memory structure (`memory/` + `wiki/`) for cross-session continuity |
@@ -401,7 +406,7 @@ Then set `schema: my-schema` in your `config.yaml`.
 | Apply behavior | Runs all tasks at once | Checkpoint-based: one group at a time, pauses for review |
 | Progress sync | Local checkboxes only | Rich summaries posted to issues |
 | Workflow labels | None | State machine: `backlog → todo → in-progress → review → done` |
-| Review | None | Automated quality checks + approve/reject/discuss + repair loop |
+| Review | None | 5-axis automated quality checks (Architecture, Security, Performance, Code Quality, Completeness) + verify gate + approve/reject/discuss + repair loop |
 | Spec format | Generic | Delta operations (ADDED/MODIFIED/REMOVED/RENAMED) with formal scenarios |
 | Worktree isolation | None | Opt-in parallel development via git worktrees |
 | Cross-session memory | None | 3-layer memory system with ≤3000 token startup, self-compaction, and Obsidian compatibility |
