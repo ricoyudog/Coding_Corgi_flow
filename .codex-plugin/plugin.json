@@ -1,0 +1,23 @@
+{
+  "name": "corgispec",
+  "version": "2.0.0",
+  "description": "OpenSpec GitFlow — AI-driven change management: propose → apply → review → archive with GitLab/GitHub issue tracking, checkpoint-based implementation, and cross-session memory",
+  "author": {
+    "name": "呆呆王",
+    "url": "https://github.com/ricoyudog/openspec_gitflow_modified"
+  },
+  "repository": "https://github.com/ricoyudog/openspec_gitflow_modified",
+  "license": "MIT",
+  "keywords": ["openspec", "gitflow", "change-management", "spec-driven", "issue-tracking", "ai-workflow"],
+  "skills": "./.codex/skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "CorgiSpec",
+    "shortDescription": "AI-driven change management workflow",
+    "longDescription": "OpenSpec GitFlow 提供完整的 AI 驅動變更管理：propose → apply → review → archive。支援 GitLab/GitHub 雙平台 issue 追蹤、checkpoint 式逐步實作、五軸自動化審查（架構/安全/效能/品質/完整性）、Git worktree 隔離開發，以及跨 session 記憶持久化。內建 17 個 agent skills，適用於 OpenCode、Claude Code 和 Codex。",
+    "developerName": "呆呆王",
+    "category": "Workflow",
+    "capabilities": ["Read", "Write", "Execute"],
+    "brandColor": "#10A37F"
+  }
+}

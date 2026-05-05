@@ -1,6 +1,6 @@
 ---
 type: memory
-updated: 2026-05-02
+updated: 2026-05-05
 ---
 
 # Session Bridge
@@ -8,25 +8,26 @@ updated: 2026-05-02
 > AI agent reads this first at startup. Last session's handoff state.
 
 ## Active corgi Change
-- **Change**: single-entry bootstrap install
-- **Phase**: implementation complete, branch preserved
-- **Branch**: bootstrap-install
+- **Change**: plugin-marketplace-distribution
+- **Phase**: Group 1 complete, Group 2 pending
+- **Branch**: (none — isolation.mode=none)
 
 ## Done (last session completed)
-- Implemented `corgispec bootstrap` orchestration plus report/manifest writing in the `bootstrap-install` worktree.
-- Added bundled command and memory-template assets, reusable install/memory helpers, and `.opencode/INSTALL.md`.
-- Updated `README.md` and `README.zh-TW.md` to the bootstrap-first onboarding model.
-- Verified in `/root/.config/superpowers/worktrees/openspec_gitflow_modified/bootstrap-install/packages/corgispec` with `npm test` -> 11 files, 114 tests passed.
+- Group 1 (Plugin Manifests): Created `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json` with platform-specific schemas, validated field types (author=object, version=string, keywords=array, interface=object)
+- Created `.claude-plugin/` and `.codex-plugin/` directories
+- Validated both files with Python type checks — all pass
 
 ## Waiting (next steps / blockers)
-- Branch `bootstrap-install` is preserved without commit/push by user choice.
-- If resumed, start in `/root/.config/superpowers/worktrees/openspec_gitflow_modified/bootstrap-install` and decide whether to commit, open a PR, or merge.
+- Group 2 (Cross-Platform Skill Symlinks): Create `.agents/` directory, replace `.codex/skills/` physical copies with symlinks pointing to `.claude/skills/`, verify all 17 skills resolve
+- Run `/corgi-apply` to continue with Group 2
 
 ## New Pitfalls
-- `packages/corgispec/test/install-assets.test.ts` must not rebuild the real `packages/corgispec/assets` directory during the suite; use isolated bundle output to avoid races with `skills.test.ts`.
+- _None from Group 1_
 
 ## New Discoveries
-- `corgispec bootstrap` now covers fresh install, managed update, legacy migration, verify-only flow, user-level skill sync, project memory initialization, and machine-readable JSON output.
+- `.claude/skills/` has 17 skills ready for symlink mirroring
+- Git remote: `https://github.com/ricoyudog/openspec_gitflow_modified.git`
+- No `.gitlab.yaml` tracking file — issue sync is skipped for this change
 
 ## Next Session Start
 1. Read this file ← you are here

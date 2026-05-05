@@ -1,0 +1,14 @@
+{
+  "name": "corgispec",
+  "version": "2.0.0",
+  "description": "OpenSpec GitFlow — AI-driven change management: propose → apply → review → archive with GitLab/GitHub issue tracking, checkpoint-based implementation, and cross-session memory",
+  "author": {
+    "name": "呆呆王",
+    "url": "https://github.com/ricoyudog/openspec_gitflow_modified"
+  },
+  "license": "MIT",
+  "keywords": ["openspec", "gitflow", "change-management", "spec-driven", "issue-tracking", "ai-workflow"],
+  "repositories": [
+    { "type": "git", "url": "https://github.com/ricoyudog/openspec_gitflow_modified" }
+  ]
+}
