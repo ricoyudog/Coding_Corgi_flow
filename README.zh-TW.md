@@ -1,6 +1,6 @@
 [English](README.md) | **繁體中文**
 
-# OpenSpec GitFlow
+# Coding Corgi Flow
 
 把 AI coding assistants 轉成結構化的工程工作流程，結合 schema-driven planning、checkpoint-based implementation，以及在 GitLab 或 GitHub 上的完整 issue tracking。
 

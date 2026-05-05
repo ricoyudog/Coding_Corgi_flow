@@ -59,7 +59,7 @@ Choose one of three methods:
 **Claude Code:**
 
 ```text
-/plugin marketplace add ricoyudog/openspec_gitflow_modified
+/plugin marketplace add ricoyudog/Coding_Corgi_flow
 /plugin install corgispec@corgispec
 ```
 
