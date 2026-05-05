@@ -1,0 +1,22 @@
+{
+  "name": "corgispec-marketplace",
+  "interface": {
+    "displayName": "CorgiSpec - OpenSpec GitFlow"
+  },
+  "plugins": [
+    {
+      "name": "corgispec",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/ricoyudog/openspec_gitflow_modified.git",
+        "path": ".",
+        "ref": "v2.0.0"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Workflow"
+    }
+  ]
+}

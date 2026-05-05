@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "corgispec": {
+      "source": {
+        "source": "github",
+        "repo": "ricoyudog/openspec_gitflow_modified"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "corgispec@corgispec": true
+  }
+}

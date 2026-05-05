@@ -9,17 +9,18 @@ updated: 2026-05-05
 
 ## Active corgi Change
 - **Change**: plugin-marketplace-distribution
-- **Phase**: Group 2 complete (uncommitted), Group 3 pending
+- **Phase**: Group 3 implemented (uncommitted), Group 4 pending
 - **Branch**: feat/openspec-llm-memory
-- **Last Commit**: feat(plugin-marketplace-distribution): add Claude Code and Codex plugin manifests (405769a)
+- **Last Commit**: ef0c955 (Group 2)
 
 ## Done (last session completed)
-- Group 1 (Plugin Manifests): Created `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json` — reviewed & approved, committed & pushed
-- Group 2 (Cross-Platform Skill Symlinks): Created `.agents/skills/` and `.agents/plugins/` directories. Replaced `.codex/skills/` physical copies with 17 per-skill symlinks → `.claude/skills/`. Created `.agents/skills/` 17 per-skill symlinks → `.claude/skills/`. Backup at `.codex/skills.backup/`. Verified all 34 symlinks resolve correctly, content identical across all 3 paths. Canonical `.claude/skills/` intact — 17/17 skills with SKILL.md + skill.meta.json.
+- Group 1 (Plugin Manifests): Reviewed, approved, committed & pushed
+- Group 2 (Cross-Platform Skill Symlinks): Reviewed, approved, committed & pushed
+- Group 3 (Marketplace & Team Auto-Install Configuration): .claude-plugin/marketplace.json (Claude + Codex shared), .claude/settings.json (team auto-install), .agents/plugins/marketplace.json (Codex repo-scoped, git-subdir, INSTALLED_BY_DEFAULT, ON_INSTALL). All 24 validations pass.
 
 ## Waiting (next steps / blockers)
-- Group 3 (Marketplace & Team Auto-Install Configuration): Write marketplace.json for both platforms, Claude settings.json for team auto-install, Codex plugins/marketplace.json
-- Run `/corgi-review` to review Group 2 first, then `/corgi-apply` for Group 3
+- Group 4 (Setup & Install Scripts): Write setup.sh, extend install-skills.sh with --codex flag, dry-run & execute validation
+- Run `/corgi-verify`, then `/corgi-review` for Group 3
 
 ## New Pitfalls
 - _None from Group 1_

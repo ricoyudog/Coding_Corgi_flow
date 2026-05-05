@@ -18,10 +18,10 @@
 
 ## 3. Marketplace & Team Auto-Install Configuration
 
-- [ ] 3.1 Write `.claude-plugin/marketplace.json` with cross-platform registry (plugin entry with `source` using git tag ref, `category: "Workflow"`)
-- [ ] 3.2 Write `.claude/settings.json` with `extraKnownMarketplaces` and `enabledPlugins` for team auto-install
-- [ ] 3.3 Write `.agents/plugins/marketplace.json` for Codex repo-scoped marketplace with `policy.installation: INSTALLED_BY_DEFAULT` and `git-subdir` source type
-- [ ] 3.4 Verify marketplace.json is valid for both platforms (Claude Code `/plugin marketplace add` format + Codex priority-3 read)
+- [x] 3.1 Write `.claude-plugin/marketplace.json` with cross-platform registry (plugin entry with `source` using git tag ref, `category: "Workflow"`)
+- [x] 3.2 Write `.claude/settings.json` with `extraKnownMarketplaces` and `enabledPlugins` for team auto-install
+- [x] 3.3 Write `.agents/plugins/marketplace.json` for Codex repo-scoped marketplace with `policy.installation: INSTALLED_BY_DEFAULT` and `git-subdir` source type
+- [x] 3.4 Verify marketplace.json is valid for both platforms (Claude Code `/plugin marketplace add` format + Codex priority-3 read)
 
 ## 4. Setup & Install Scripts
 

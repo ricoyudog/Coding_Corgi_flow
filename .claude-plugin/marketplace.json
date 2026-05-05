@@ -1,0 +1,18 @@
+{
+  "name": "corgispec-marketplace",
+  "owner": {
+    "name": "呆呆王",
+    "url": "https://github.com/ricoyudog"
+  },
+  "plugins": [
+    {
+      "name": "corgispec",
+      "source": {
+        "source": "github",
+        "repo": "ricoyudog/openspec_gitflow_modified",
+        "ref": "v2.0.0"
+      },
+      "category": "Workflow"
+    }
+  ]
+}
