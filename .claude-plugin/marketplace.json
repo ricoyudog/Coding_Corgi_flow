@@ -9,7 +9,7 @@
       "name": "corgispec",
       "source": {
         "source": "github",
-        "repo": "ricoyudog/openspec_gitflow_modified",
+        "repo": "ricoyudog/Coding_Corgi_flow",
         "ref": "v2.0.0"
       },
       "category": "Workflow"

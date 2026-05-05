@@ -8,7 +8,7 @@
       "name": "corgispec",
       "source": {
         "source": "git-subdir",
-        "url": "https://github.com/ricoyudog/openspec_gitflow_modified.git",
+        "url": "https://github.com/ricoyudog/Coding_Corgi_flow.git",
         "path": ".",
         "ref": "v2.0.0"
       },
