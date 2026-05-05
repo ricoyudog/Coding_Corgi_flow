@@ -10,11 +10,11 @@
 
 ## 2. Cross-Platform Skill Symlinks
 
-- [ ] 2.1 Create `.agents/` directory structure (`skills/` and `plugins/` subdirs)
-- [ ] 2.2 Replace `.codex/skills/` physical copies with per-skill symlinks pointing to `.claude/skills/<skill-name>/` — back up existing physical copies first
-- [ ] 2.3 Create `.agents/skills/` per-skill symlinks pointing to `.claude/skills/<skill-name>/`
-- [ ] 2.4 Verify all 17 skills resolve correctly from `.codex/skills/` and `.agents/skills/` paths
-- [ ] 2.5 Verify Claude Code can still load all skills from `.claude/skills/` without issues
+- [x] 2.1 Create `.agents/` directory structure (`skills/` and `plugins/` subdirs)
+- [x] 2.2 Replace `.codex/skills/` physical copies with per-skill symlinks pointing to `.claude/skills/<skill-name>/` — back up existing physical copies first
+- [x] 2.3 Create `.agents/skills/` per-skill symlinks pointing to `.claude/skills/<skill-name>/`
+- [x] 2.4 Verify all 17 skills resolve correctly from `.codex/skills/` and `.agents/skills/` paths
+- [x] 2.5 Verify Claude Code can still load all skills from `.claude/skills/` without issues
 
 ## 3. Marketplace & Team Auto-Install Configuration
 
