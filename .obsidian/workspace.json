@@ -4,21 +4,17 @@
     "type": "split",
     "children": [
       {
-        "id": "d8d10be7e4923e0b",
+        "id": "d583a21e9b86a183",
         "type": "tabs",
         "children": [
           {
-            "id": "913034aff04d9884",
+            "id": "a1a68fdbb84fba3f",
             "type": "leaf",
             "state": {
-              "type": "markdown",
-              "state": {
-                "file": "wiki/index.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "index"
+              "type": "graph",
+              "state": {},
+              "icon": "lucide-git-fork",
+              "title": "關聯圖檢視"
             }
           }
         ]
@@ -78,7 +74,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 300
+    "width": 331.5
   },
   "right": {
     "id": "7ee96d245eab3d0c",
@@ -94,7 +90,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "wiki/index.md",
+                "file": "memory/session-bridge.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -104,7 +100,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "index 的反向連結"
+              "title": "session-bridge 的反向連結"
             }
           },
           {
@@ -195,43 +191,42 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "a9a33ff17c042bf2",
+  "active": "a1a68fdbb84fba3f",
   "lastOpenFiles": [
-    "wiki/decisions/corgispec-review-verify-upgrade.md",
-    "wiki/decisions/corgispec-review-verify-upgrade.md.tmp.51024.1777885758569",
-    "wiki/research/_index.md.tmp.51024.1777885280951",
+    "wiki/architecture/overview.md",
+    "wiki/research/addyosmani-agent-skills-verify-vs-review.md.tmp.33040.1777966087780",
+    "wiki/research/addyosmani-agent-skills-verify-vs-review.md.tmp.33040.1777966072761",
+    "wiki/research/addyosmani-agent-skills-verify-vs-review.md.tmp.33040.1777966047815",
+    "wiki/research/addyosmani-agent-skills-verify-vs-review.md.tmp.33040.1777966017401",
+    "wiki/architecture/implicit-contracts.md",
+    "wiki/architecture/_index.md",
+    "wiki/sessions/plugin-marketplace-distribution.md",
     "wiki/research/addyosmani-agent-skills-verify-vs-review.md",
-    "wiki/research/addyosmani-agent-skills-verify-vs-review.md.tmp.51024.1777885260488",
-    "docs/cross-session-memory.zh-TW.md",
-    "docs/cross-session-memory.md",
-    "AGENTS.md",
-    "packages/corgispec/vitest.config.ts.timestamp-1777876121586-358b0a136b38d8.mjs",
-    "packages/corgispec/tsup.config.bundled_rjrwz3ikdno.mjs",
-    "docs/superpowers/plans/sed4FY6fA",
-    "sedQ8LJV5",
-    "docs/superpowers/plans/sedBBngai",
-    "docs/superpowers/plans/sedxAxUa8",
-    "docs/superpowers/plans/sedLGbC5l",
-    "packages/corgispec/assets/skills/corgispec-review/references/worktree-discovery.md",
-    "packages/corgispec/assets/skills/corgispec-review/references/quality-checks.md",
-    "packages/corgispec/assets/skills/corgispec-review/references/review-decisions.md",
-    "packages/corgispec/assets/skills/corgispec-review/references/repair-flow.md",
-    "packages/corgispec/assets/skills/corgispec-review/SKILL.md",
-    "packages/corgispec/assets/skills/corgispec-propose/references/gitlab-issues.md",
-    "packages/corgispec/assets/skills/corgispec-propose/references/artifact-creation.md",
-    "packages/corgispec/assets/skills/corgispec-propose/SKILL.md",
-    "packages/corgispec/assets/skills/corgispec-memory-migrate/SKILL.md",
-    "packages/corgispec/assets/skills/corgispec-memory-init/templates/wiki/decisions/_index.md",
-    "packages/corgispec/assets/skills/corgispec-memory-init/templates/wiki/sessions/_index.md",
-    "packages/corgispec/assets/skills/corgispec-memory-init/templates/wiki/questions/_index.md",
-    "packages/corgispec/assets/skills/corgispec-memory-init/templates/wiki/research/_index.md",
-    "packages/corgispec/assets/skills/corgispec-memory-init/templates/wiki/architecture/implicit-contracts.md",
-    "packages/corgispec/assets/skills/corgispec-memory-init/templates/wiki/patterns/_index.md",
-    "packages/corgispec/assets/skills/corgispec-memory-init/templates/wiki/architecture/_index.md",
-    "packages/corgispec/assets/skills/corgispec-memory-init/templates/wiki/meta/_index.md",
-    "packages/corgispec/assets/skills/corgispec-memory-init/templates/memory/MEMORY.md",
-    "packages/corgispec/assets/skills/corgispec-memory-init/templates/memory/pitfalls.md",
-    "packages/corgispec/assets/skills/corgispec-memory-init/templates/memory/session-bridge.md",
-    "packages/corgispec/assets/skills/corgispec-memory-init/templates/wiki/hot.md"
+    "wiki/research/codex-claude-plugin-distribution-research.md",
+    "wiki/decisions/corgispec-review-verify-upgrade.md",
+    "memory/session-bridge.md",
+    "wiki/hot.md",
+    "openspec/changes/archive/2026-05-05-plugin-marketplace-distribution/specs/plugin-packaging/spec.md",
+    "openspec/changes/archive/2026-05-05-plugin-marketplace-distribution/specs/marketplace-configuration/spec.md",
+    "openspec/changes/archive/2026-05-05-plugin-marketplace-distribution/specs/cross-platform-skill-sync/spec.md",
+    "openspec/changes/archive/2026-05-05-plugin-marketplace-distribution/specs/one-click-setup/spec.md",
+    "openspec/changes/archive/2026-05-05-plugin-marketplace-distribution/specs/plugin-packaging",
+    "openspec/changes/archive/2026-05-05-plugin-marketplace-distribution/specs/marketplace-configuration",
+    "openspec/changes/archive/2026-05-05-plugin-marketplace-distribution/specs/cross-platform-skill-sync",
+    "openspec/changes/archive/2026-05-05-plugin-marketplace-distribution/specs/one-click-setup",
+    "openspec/changes/archive/2026-05-05-plugin-marketplace-distribution/proposal.md",
+    "openspec/changes/archive/2026-05-05-plugin-marketplace-distribution/tasks.md",
+    "openspec/changes/archive/2026-05-05-plugin-marketplace-distribution/specs",
+    "openspec/changes/archive/2026-05-05-plugin-marketplace-distribution/design.md",
+    "openspec/changes/archive/2026-05-05-plugin-marketplace-distribution",
+    "wiki/patterns/canonical-source-platform-symlinks.md",
+    "memory/MEMORY.md",
+    "openspec/specs/one-click-setup/spec.md",
+    "openspec/specs/marketplace-configuration/spec.md",
+    "openspec/specs/cross-platform-skill-sync/spec.md",
+    "openspec/specs/plugin-packaging/spec.md",
+    "memory/pitfalls.md",
+    "openspec/changes/archive/2026-05-05-openspec-llm-memory/specs/memory-lint/spec.md",
+    "openspec/changes/archive/2026-05-05-openspec-llm-memory/specs/memory-extract/spec.md"
   ]
 }

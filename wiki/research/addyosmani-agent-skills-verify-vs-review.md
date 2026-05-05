@@ -1,6 +1,6 @@
 ---
 type: wiki
-updated: 2026-05-04
+updated: 2026-05-05
 source: https://github.com/addyosmani/agent-skills
 ---
 
@@ -212,61 +212,85 @@ REVIEW 關注的是**品質屬性**：程式碼的長期可維護性、安全性
 
 ## 四、與本專案 corgispec-review 對比
 
-| 維度 | corgispec-review | addyosmani REVIEW |
-|------|-----------------|-------------------|
-| **Verify 分離** | ❌ 無獨立 Verify 階段，驗證嵌入在 apply | ✅ Verify 和 Review 是兩個獨立階段 |
-| **審查軸向** | 3 軸（code quality, spec coverage, functional） | 5 軸（+architecture, performance） |
-| **嚴重度分級** | ❌ 無分級 | ✅ Critical/Important/Suggestion/Nit/FYI |
-| **反狡辯表** | ❌ 無 | ✅ 每個 skill 都有完整的藉口-反駁表 |
-| **Persona 系統** | ❌ 無 | ✅ 三個審查人格可獨立呼叫 |
-| **Human Gate** | ✅ Step 5 強制詢問 Approve/Reject/Discuss | ✅ 透過 slash command 的互動流程 |
-| **Review Report** | ✅ 結構化報告貼到 GitLab issue | ✅ Verification Story 文件化 |
-| **自動化測試** | 基礎（跑 pytest） | 深入（TDD 循環 + DevTools + 回歸測試） |
-| **安全檢查** | ❌ 未涉及 | ✅ 完整的 security-and-hardening 技能 |
-| **效能檢查** | ❌ 未涉及 | ✅ MEASURE→IDENTIFY→FIX→VERIFY→GUARD |
-| **簡化檢查** | ❌ 未涉及 | ✅ Chesterton's Fence + 增量簡化 |
+> **更新時間**: 2026-05-05 — 代碼稽核後修正。已完成項目以 ✅ 標記，未完成項以 ❌ 標記。
+
+### 已實現項
+
+| 維度 | corgispec-review (現狀) | addyosmani REVIEW | 實作位置 |
+|------|------------------------|-------------------|----------|
+| **Verify 分離** | ✅ `corgispec-verify` 獨立技能（v1.0.0） | ✅ Verify 和 Review 是兩個獨立階段 | `.opencode/skills/corgispec-verify/SKILL.md` |
+| **審查軸向** | ✅ 6 軸（code quality, spec, functional, architecture, performance, security） | 5 軸（+architecture, performance） | `references/quality-checks.md` |
+| **嚴重度分級** | ✅ 🔴Critical / 🟡Important / 🔵Suggestion / ⚪Nit / ℹ️FYI | ✅ Critical/Important/Suggestion/Nit/FYI | `references/quality-checks.md` §Severity Classification |
+| **反狡辯表** | ✅ 7 條中英雙語藉口vs反駁表 | ✅ 每個 skill 都有完整的藉口-反駁表 | `references/quality-checks.md` §0 |
+| **Human Gate** | ✅ Step 5 強制詢問 Approve/Reject/Discuss | ✅ 透過 slash command 的互動流程 | `SKILL.md` Step 5 |
+| **Review Report** | ✅ 結構化報告含所有軸向 + 嚴重度摘要 | ✅ Verification Story 文件化 | `references/quality-checks.md` §7 |
+| **安全檢查** | ✅ `security-checklist.md`（Always Check + Red Flags + 偵測腳本） | ✅ 完整的 security-and-hardening 技能 | `references/security-checklist.md` |
+| **效能檢查** | ✅ `performance-checklist.md`（N+1/分頁/同步/記憶體 + 語言級偵測） | ✅ MEASURE→IDENTIFY→FIX→VERIFY→GUARD | `references/performance-checklist.md` |
+| **自動化測試** | ⚠️ 已改進：多語言檢測（pytest/npm/bun/go/rust/make）但缺少 TDD 循環和 DevTools 整合 | 深入（TDD 循環 + DevTools + 回歸測試） | `references/verification-steps.md` |
+
+### 未實現項
+
+| 維度 | corgispec-review (現狀) | addyosmani REVIEW |
+|------|------------------------|-------------------|
+| **Persona 系統** | ❌ 無 — 無 code-reviewer/test-engineer/security-auditor sub-agent | ✅ 三個審查人格可獨立呼叫 |
+| **簡化檢查** | ❌ 無 — 無 Chesterton's Fence / 增量簡化 / 反狡辯表 | ✅ Chesterton's Fence + 增量簡化 |
 
 ---
 
-## 五、值得借鏡的設計
+## 五、值得借鏡的設計（含實作狀態）
 
-### 1. 反狡辯表（Rationalizations Table）— 最大亮點
+> **更新時間**: 2026-05-05 — 代碼稽核後的實作狀態。
 
-這是 addyosmani 專案最具突破性的設計。corgispec-review 沒有這個機制。建議可以在 quality-checks 中為常見的「跳過審查藉口」預製反駁：
+### 1. ✅ 已實作：反狡辯表（Rationalizations Table）
 
-| 藉口 | 反駁 |
-|------|------|
-| "Review 太花時間" | 未 review 的 bug 修復成本是 review 時發現的 10 倍 |
-| "只是小改動" | 歷史上的重大事故中，60% 來自於「小改動」 |
+這是 addyosmani 專案最具突破性的設計。**已實作**於 `references/quality-checks.md` §0，包含 7 條中英雙語藉口vs反駁表。GH 版（`corgispec-gh-review`）也已內聯實作。
 
-### 2. 嚴重度分級
+### 2. ✅ 已實作：嚴重度分級
 
-corgispec-review 目前把所有問題混在一起報告。引入 Critical/Important/Suggestion 分級可以讓品質報告更有行動指引。
+**已實作** 🔴Critical / 🟡Important / 🔵Suggestion / ⚪Nit / ℹ️FYI 五級體系，品質報告已有明確行動指引。GL 版在 `quality-checks.md`，GH 版內聯於 SKILL.md。
 
-### 3. Verify 階段分離
+### 3. ✅ 已實作：Verify 階段分離
 
-目前 Apply 和 Verify 混在一起。分離出獨立的 Verify 階段可以讓流程更清晰，也更容易插入自動化驗證門檻。
+**已實作** `corgispec-verify` 獨立技能（v1.0.0），全自動化驗證關卡（測試/規格覆蓋/lint/build），坐落在 apply 和 review 之間。流程變為：`apply → verify → review → archive`。
 
-### 4. Agent Persona
+### 4. ❌ 未實作：Agent Persona
 
-addyosmani 的 code-reviewer/test-engineer/security-auditor 三個人格可以平行審查（`/ship` 指令會 fan-out），這對大型變更特別有價值。
+addyosmani 的 code-reviewer/test-engineer/security-auditor 三個人格可以平行審查（`/ship` 指令會 fan-out），對大型變更特別有價值。**尚未實作**。
 
-### 5. Security 和 Performance checklists
+### 5. ✅ 已實作：Security 和 Performance checklists
 
-可以參考 `references/security-checklist.md` 和 `references/performance-checklist.md`，作為 corgispec-review 品質檢查的擴充維度。
+**已實作** `references/security-checklist.md` 和 `references/performance-checklist.md`，作為 corgispec-review 品質檢查的擴充維度。GL 和 GH 版均有，內容相同。
+
+### 6. ❌ 未實作：代碼簡化技能（Code Simplification）
+
+addyosmani 的 `code-simplification` 技能含 Chesterton's Fence 原則、增量簡化流程、以及最豐富的 7 條反狡辯表。**尚未實作** — 無 `corgispec-code-simplify` 技能。
 
 ---
 
 ## 總結
 
-| | addyosmani VERIFY | addyosmani REVIEW | corgispec-review |
+> **更新時間**: 2026-05-05 — 代碼稽核後修正。
+
+| | addyosmani VERIFY | addyosmani REVIEW | corgispec (2026-05-05 現狀) |
 |---|---|---|---|
-| **成熟度** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ |
-| **深度** | 3 技能，15 條反狡辯 | 4 技能，22 條反狡辯，3 人格 | 1 技能，0 反狡辯 |
-| **覆蓋面** | 測試+瀏覽器+除錯 | 程式品質+簡化+安全+效能 | 程式品質+spec 覆蓋+功能驗證 |
+| **成熟度** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ |
+| **深度** | 3 技能，15 條反狡辯 | 4 技能，22 條反狡辯，3 人格 | verify(1) + review(1) 技能，7 條反狡辯，安全+效能深度清單 |
+| **覆蓋面** | 測試+瀏覽器+除錯 | 程式品質+簡化+安全+效能 | 測試+lint+build+spec覆蓋 + 程式品質+架構+安全+效能 |
 | **可遷移性** | 跨平台通用格式 | 跨平台通用格式 | OpenSpec 專用 |
 
-addyosmani 的設計哲學是 **"Process over prose"** + **"Verification is mandatory"** — 每個 skill 都是**可執行的劇本**，不是參考文件。corgispec 已經有很好的流程框架（尤其是 Human Gate 和 GitLab 整合），可以從 addyosmani 借鏡的主要是：**反狡辯表、嚴重度分級、Persona 系統、以及將 Verify 獨立成一個階段**。
+### 稽核結論
+
+經 2026-05-05 代碼稽核，corgispec 已從 addyosmani 借鏡並實作 **8 項中的 6 項**：
+
+| 狀態 | 項目 |
+|------|------|
+| ✅ 已實作 | Verify 階段分離、5+軸審查、嚴重度分級、反狡辯表、安全檢查清單、效能檢查清單 |
+| ⚠️ 部分 | 自動化測試（多語言支援但缺 TDD 循環和 DevTools 整合） |
+| ❌ 未實作 | **Persona 系統**（三個審查人格）、**代碼簡化技能**（Chesterton's Fence + 增量簡化） |
+
+addyosmani 的設計哲學是 **"Process over prose"** + **"Verification is mandatory"** — 每個 skill 都是**可執行的劇本**，不是參考文件。corgispec 已吸收其核心機制（反狡辯表、嚴重度分級、Verify 分離），下一步可考慮的兩個未實作項目：
+1. **Persona 系統**：讓 code-reviewer/test-engineer/security-auditor 三個角色平行審查
+2. **代碼簡化技能**：Chesterton's Fence 原則 + 增量簡化流程
 
 ---
 

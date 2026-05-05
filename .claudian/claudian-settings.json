@@ -28,7 +28,7 @@
         "YURI3-W11": "C:\\Users\\yuri3\\AppData\\Roaming\\npm\\node_modules\\@anthropic-ai\\claude-code\\bin\\claude.exe"
       },
       "loadUserSettings": true,
-      "enableChrome": false,
+      "enableChrome": true,
       "enableBangBash": false,
       "enableOpus1M": false,
       "enableSonnet1M": false,

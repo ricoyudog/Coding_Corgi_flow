@@ -1,6 +1,6 @@
 ---
 type: wiki
-updated: 2026-05-02
+updated: 2026-05-05
 tags: [hot, entry]
 pinned: true
 ---
@@ -26,4 +26,6 @@ pinned: true
 - (none yet — see [[memory/pitfalls]])
 
 ## Recently Shipped
+- **plugin-marketplace-distribution** (2026-05-05) — Packaged CorgiSpec as installable plugins for Claude Code and Codex with symlink-based skill sharing from a single canonical source
+- **openspec-llm-memory** (2026-05-05) — 3-layer cross-session memory system with 4 new skills (memory-init, lint, ask, extract) and lifecycle integration into install/archive
 - `bootstrap-install` worktree: `corgispec bootstrap`, bundled command/memory assets, reusable install/memory helpers, bootstrap reports, and bootstrap-focused docs/tests. Verified with `npm test` in `packages/corgispec` (114 passing tests).

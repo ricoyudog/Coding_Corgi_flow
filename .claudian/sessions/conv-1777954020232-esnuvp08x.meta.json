@@ -1,0 +1,23 @@
+{
+  "id": "conv-1777954020232-esnuvp08x",
+  "providerId": "claude",
+  "title": "Check session bridge max storage capacity",
+  "titleGenerationStatus": "success",
+  "createdAt": 1777954020233,
+  "updatedAt": 1777959694357,
+  "lastResponseAt": 1777954074845,
+  "sessionId": "b48f2a15-d8c0-4415-8658-6b1e087b4faf",
+  "providerState": {
+    "providerSessionId": "b48f2a15-d8c0-4415-8658-6b1e087b4faf"
+  },
+  "usage": {
+    "model": "opus",
+    "inputTokens": 1171,
+    "cacheCreationInputTokens": 0,
+    "cacheReadInputTokens": 19200,
+    "contextWindow": 1000000,
+    "contextTokens": 20371,
+    "percentage": 2,
+    "contextWindowIsAuthoritative": true
+  }
+}

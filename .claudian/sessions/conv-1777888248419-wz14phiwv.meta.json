@@ -1,0 +1,23 @@
+{
+  "id": "conv-1777888248419-wz14phiwv",
+  "providerId": "claude",
+  "title": "Create corgi-saveIdea feature for Obsidian",
+  "titleGenerationStatus": "success",
+  "createdAt": 1777888248420,
+  "updatedAt": 1777944401326,
+  "lastResponseAt": 1777888342378,
+  "sessionId": "126b0743-9c14-4422-adca-866ce6f0dd00",
+  "providerState": {
+    "providerSessionId": "126b0743-9c14-4422-adca-866ce6f0dd00"
+  },
+  "usage": {
+    "model": "opus",
+    "inputTokens": 4687,
+    "cacheCreationInputTokens": 0,
+    "cacheReadInputTokens": 13056,
+    "contextWindow": 1000000,
+    "contextTokens": 17743,
+    "percentage": 2,
+    "contextWindowIsAuthoritative": true
+  }
+}

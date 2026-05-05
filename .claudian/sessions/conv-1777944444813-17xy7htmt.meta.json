@@ -1,0 +1,23 @@
+{
+  "id": "conv-1777944444813-17xy7htmt",
+  "providerId": "claude",
+  "title": "Research Codex and Claude Code plugin development",
+  "titleGenerationStatus": "success",
+  "createdAt": 1777944444813,
+  "updatedAt": 1777954004242,
+  "lastResponseAt": 1777946846344,
+  "sessionId": "212c40b5-9e3b-432b-82de-1471cabeaae8",
+  "providerState": {
+    "providerSessionId": "212c40b5-9e3b-432b-82de-1471cabeaae8"
+  },
+  "usage": {
+    "model": "opus",
+    "inputTokens": 635,
+    "cacheCreationInputTokens": 0,
+    "cacheReadInputTokens": 77696,
+    "contextWindow": 1000000,
+    "contextTokens": 78331,
+    "percentage": 8,
+    "contextWindowIsAuthoritative": true
+  }
+}

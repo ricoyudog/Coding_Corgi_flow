@@ -1,0 +1,23 @@
+{
+  "id": "conv-1777959723569-a6suxudax",
+  "providerId": "claude",
+  "title": "Verify code compliance with original design",
+  "titleGenerationStatus": "success",
+  "createdAt": 1777959723569,
+  "updatedAt": 1777966100126,
+  "lastResponseAt": 1777966100126,
+  "sessionId": "68259723-e77f-46e7-b775-4d0acd4e2e56",
+  "providerState": {
+    "providerSessionId": "68259723-e77f-46e7-b775-4d0acd4e2e56"
+  },
+  "usage": {
+    "model": "opus",
+    "inputTokens": 166,
+    "cacheCreationInputTokens": 0,
+    "cacheReadInputTokens": 66816,
+    "contextWindow": 1000000,
+    "contextTokens": 66982,
+    "percentage": 7,
+    "contextWindowIsAuthoritative": true
+  }
+}

@@ -4,19 +4,19 @@
   "title": "Map knowledge sources used across CorgiSpec stages",
   "titleGenerationStatus": "success",
   "createdAt": 1777882609704,
-  "updatedAt": 1777884901421,
-  "lastResponseAt": 1777884901421,
+  "updatedAt": 1777944396806,
+  "lastResponseAt": 1777888115347,
   "sessionId": "bf0f036f-e47e-4708-9820-0aac7ed4d03a",
   "providerState": {
     "providerSessionId": "bf0f036f-e47e-4708-9820-0aac7ed4d03a"
   },
   "usage": {
     "model": "opus",
-    "inputTokens": 513,
+    "inputTokens": 48061,
     "cacheCreationInputTokens": 0,
-    "cacheReadInputTokens": 50304,
+    "cacheReadInputTokens": 448,
     "contextWindow": 1000000,
-    "contextTokens": 50817,
+    "contextTokens": 48509,
     "percentage": 5,
     "contextWindowIsAuthoritative": true
   }

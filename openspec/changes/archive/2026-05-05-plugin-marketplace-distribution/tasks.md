@@ -25,7 +25,7 @@
 
 ## 4. Setup & Install Scripts
 
-- [ ] 4.1 Write `setup.sh` — one-command symlink initialization with `--help`, `--dry-run`, idempotent re-run, backup detection for physical copies, and post-setup validation (count skills, verify resolve, check plugin.json parse)
-- [ ] 4.2 Extend `install-skills.sh` with `--codex` flag to optionally create Codex symlinks during user-level installation, preserving backward compatibility
-- [ ] 4.3 Run `./setup.sh --dry-run` to preview, then `./setup.sh` to execute, verifying all symlinks and passing validation
-- [ ] 4.4 Run `install-skills.sh --dry-run` and `install-skills.sh --codex --dry-run` to verify both modes report correctly without making changes
+- [x] 4.1 Write `setup.sh` — one-command symlink initialization with `--help`, `--dry-run`, idempotent re-run, backup detection for physical copies, and post-setup validation (count skills, verify resolve, check plugin.json parse)
+- [x] 4.2 Extend `install-skills.sh` with `--codex` flag to optionally create Codex symlinks during user-level installation, preserving backward compatibility
+- [x] 4.3 Run `./setup.sh --dry-run` to preview, then `./setup.sh` to execute, verifying all symlinks and passing validation
+- [x] 4.4 Run `install-skills.sh --dry-run` and `install-skills.sh --codex --dry-run` to verify both modes report correctly without making changes

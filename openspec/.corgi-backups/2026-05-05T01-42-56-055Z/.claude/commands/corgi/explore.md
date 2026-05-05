@@ -1,0 +1,26 @@
+---
+name: "OPSX: Explore"
+description: Think through ideas, investigate problems, or clarify requirements
+category: Workflow
+tags: [workflow, explore, experimental]
+---
+
+Think through ideas, investigate problems, or clarify requirements.
+
+**Input**: Optionally specify a change name or topic to explore.
+
+**Steps**
+
+1. **Determine platform**
+
+   Read `openspec/config.yaml` and check the `schema` field.
+
+2. **Dispatch to platform skill**
+
+   - If `schema: gitlab-tracked` → Follow the instructions in the **corgispec-explore** skill
+   - If `schema: github-tracked` → Follow the instructions in the **corgispec-gh-explore** skill
+   - Otherwise → Tell the user: "Unsupported schema '<value>'. Supported: gitlab-tracked, github-tracked." and stop.
+
+3. **Pass through all input**
+
+   Forward the user's input (change name, topic, etc.) to the selected skill as-is.

@@ -1,0 +1,23 @@
+{
+  "id": "conv-1777944417106-9hhlf5f2g",
+  "providerId": "claude",
+  "title": "Analyze project architecture and design",
+  "titleGenerationStatus": "success",
+  "createdAt": 1777944417106,
+  "updatedAt": 1777966214365,
+  "lastResponseAt": 1777945082156,
+  "sessionId": "5d6fc381-dcfe-4759-96c2-846996448d96",
+  "providerState": {
+    "providerSessionId": "5d6fc381-dcfe-4759-96c2-846996448d96"
+  },
+  "usage": {
+    "model": "opus",
+    "inputTokens": 267,
+    "cacheCreationInputTokens": 0,
+    "cacheReadInputTokens": 53120,
+    "contextWindow": 1000000,
+    "contextTokens": 53387,
+    "percentage": 5,
+    "contextWindowIsAuthoritative": true
+  }
+}

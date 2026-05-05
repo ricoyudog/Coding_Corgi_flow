@@ -18,6 +18,7 @@ OpenSpec provides the core CLI (`openspec init`, artifact pipeline, change lifec
 - **Workflow labels** — State machine: `backlog → todo → in-progress → review → done`
 - **Git worktree isolation** — Run multiple changes in parallel, each in its own worktree (opt-in)
 - **Project-local installer** — OpenCode and Claude Code are supported in installer v1
+- **Plugin distribution** — Install via Claude Code `/plugin install` or Codex `codex plugin install`. Symlink-based skill sharing from a single canonical source.
 - **Composable skill hierarchy** — Skills are structured as Atoms → Molecules → Compounds with machine-readable metadata, validated by the `ds-skills` CLI
 
 ```mermaid
@@ -51,6 +52,29 @@ This diagram shows the command handoff points only. Inside that flow, `/corgi-pr
 
 ### 1. Install to your project
 
+Choose one of three methods:
+
+#### A. Plugin Install (recommended for Claude Code / Codex)
+
+**Claude Code:**
+
+```text
+/plugin marketplace add ricoyudog/openspec_gitflow_modified
+/plugin install corgispec@corgispec
+```
+
+**Codex**
+
+Open the target project in Codex — the repo-scoped marketplace (`.agents/plugins/marketplace.json`) auto-discovers CorgiSpec with `INSTALLED_BY_DEFAULT` policy. Alternatively:
+
+```text
+codex plugin install corgispec
+```
+
+> Plugin install creates symlinks from Codex skill paths to the canonical `.claude/skills/` directory. Skills update automatically — no sync tools needed.
+
+#### B. Bootstrap Install (recommended for OpenCode / any agent)
+
 Copy and paste the following prompt into your LLM Agent (OpenCode, Claude Code, Cursor, etc.):
 
 ```text
@@ -60,8 +84,10 @@ Fetch and follow instructions from https://raw.githubusercontent.com/ricoyudog/C
 The agent will clone the repo, build the CLI, and bootstrap your project automatically.
 
 > If you are using a branch or tag instead of `main`, replace `main` in that URL with the same checked-out ref.
->
-> For manual installation without an agent, see [Legacy manual install flow](#legacy-manual-install-flow).
+
+#### C. Legacy Manual Install
+
+For manual installation without an agent, see [Legacy manual install flow](#legacy-manual-install-flow).
 
 ### 2. Review the bootstrap report
 
@@ -413,6 +439,7 @@ Then set `schema: my-schema` in your `config.yaml`.
 | Knowledge migration | None | Guided import from docs, archived changes, agent configs, and vault pages |
 | Memory health | None | 11-check lint (freshness, size caps, broken links, extraction completeness) |
 | Skill architecture | Flat files | Composable 3-tier hierarchy (Atoms → Molecules → Compounds) with dependency graph, schema validation, and CLI tooling |
+| Plugin marketplace | None | One-click install via Claude Code `/plugin install` or Codex `codex plugin install` with cross-platform marketplace manifests |
 
 ## Repository Layout
 
@@ -456,13 +483,21 @@ openspec/
 └── commands/corgi-*.md              # Slash command dispatch
 
 .claude/
-├── skills/corgispec-*/              # Claude skill mirrors
+├── settings.json                     # Team auto-install config
+├── skills/corgispec-*/              # Canonical skill source (physical body)
 │   ├── SKILL.md
 │   └── skill.meta.json
 └── commands/corgi/                  # Claude slash command dispatch
 
+.claude-plugin/                       # Claude Code Plugin
+├── plugin.json                       # Plugin manifest
+└── marketplace.json                  # Cross-platform marketplace registry
+
+.codex-plugin/                        # Codex Plugin
+└── plugin.json                       # Plugin manifest with interface block
+
 .codex/
-└── skills/corgispec-*/              # Codex skill mirrors
+└── skills/corgispec-*/              # Codex skill symlinks → .claude/skills/
     ├── SKILL.md
     └── skill.meta.json
 ```

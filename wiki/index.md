@@ -1,6 +1,6 @@
 ---
 type: wiki
-updated: 2026-05-01
+updated: 2026-05-05
 ---
 
 # OpenSpec GitFlow Wiki Index
@@ -13,6 +13,9 @@ updated: 2026-05-01
 
 ## Patterns
 - [[wiki/patterns/_index|Patterns Index]]
+- [[wiki/patterns/canonical-source-platform-symlinks|Canonical Source with Platform Symlink Mirrors]]
+- [[wiki/patterns/three-layer-memory-architecture|Three-Layer Memory Architecture]]
+- [[wiki/patterns/self-compacting-memory-caps|Self-Compacting Memory with Word/Line Caps]]
 
 ## Research
 - [[wiki/research/_index|Research Index]]
@@ -22,6 +25,8 @@ updated: 2026-05-01
 
 ## Session History
 - [[wiki/sessions/_index|Session Index]]
+- [[wiki/sessions/plugin-marketplace-distribution|plugin-marketplace-distribution]]
+- [[wiki/sessions/openspec-llm-memory|openspec-llm-memory]]
 
 ## Questions
 - [[wiki/questions/_index|Questions Index]]
