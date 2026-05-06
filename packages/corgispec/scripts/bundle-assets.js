@@ -10,7 +10,7 @@
  * Run as part of prepublishOnly: npm run build && node scripts/bundle-assets.js
  *
  * Asset sources:
- *   .opencode/skills/corgispec-*  → assets/skills/
+ *   .opencode/skills/<tier>/corgispec-*  → assets/skills/<tier>/
  *   .opencode/commands/*.md      → assets/commands/opencode/
  *   .claude/commands/corgi/*.md   → assets/commands/claude/corgi/
  *   .opencode/skills/corgispec-memory-init/templates/** → assets/memory-init/templates/
@@ -55,30 +55,48 @@ function copyMarkdownFiles(sourceDir, destDir) {
   return files.length;
 }
 
-// --- 1. Bundle skills from .opencode/skills/corgispec-* ---
+// --- 1. Bundle skills from .opencode/skills/ (tiered: atoms/, molecules/, compounds/, + flat root) ---
 const skillsSource = resolve(repoRoot, ".opencode/skills");
 const skillsDest = resolve(assetsDir, "skills");
 mkdirSync(skillsDest, { recursive: true });
 
+const tierDirs = ["atoms", "molecules", "compounds"];
+
+function bundleSkillEntry(entry, parentDir, tier) {
+  if (!entry.isDirectory() || !entry.name.startsWith("corgispec-")) return false;
+  const src = resolve(parentDir, entry.name);
+  const destParent = tier ? resolve(skillsDest, tier) : skillsDest;
+  mkdirSync(destParent, { recursive: true });
+  const dest = resolve(destParent, entry.name);
+  cpSync(src, dest, { recursive: true });
+
+  if (!existsSync(resolve(dest, "SKILL.md"))) {
+    errors.push(`${entry.name}: missing SKILL.md`);
+  }
+  if (!existsSync(resolve(dest, "skill.meta.json"))) {
+    errors.push(`${entry.name}: missing skill.meta.json`);
+  }
+  return true;
+}
+
 if (existsSync(skillsSource)) {
-  const entries = readdirSync(skillsSource, { withFileTypes: true });
   let skillCount = 0;
 
-  for (const entry of entries) {
-    if (entry.isDirectory() && entry.name.startsWith("corgispec-")) {
-      const src = resolve(skillsSource, entry.name);
-      const dest = resolve(skillsDest, entry.name);
-      cpSync(src, dest, { recursive: true });
-      skillCount++;
-
-      // Validate: SKILL.md and skill.meta.json must exist
-      if (!existsSync(resolve(dest, "SKILL.md"))) {
-        errors.push(`${entry.name}: missing SKILL.md`);
-      }
-      if (!existsSync(resolve(dest, "skill.meta.json"))) {
-        errors.push(`${entry.name}: missing skill.meta.json`);
-      }
+  // Scan tiered subdirectories first
+  for (const tier of tierDirs) {
+    const tierPath = resolve(skillsSource, tier);
+    if (!existsSync(tierPath)) continue;
+    const entries = readdirSync(tierPath, { withFileTypes: true });
+    for (const entry of entries) {
+      if (bundleSkillEntry(entry, tierPath, tier)) skillCount++;
     }
+  }
+
+  // Scan root for any remaining flat skills (backward compat)
+  const rootEntries = readdirSync(skillsSource, { withFileTypes: true });
+  for (const entry of rootEntries) {
+    if (tierDirs.includes(entry.name)) continue;
+    if (bundleSkillEntry(entry, skillsSource, null)) skillCount++;
   }
 
   totalFiles += skillCount;
@@ -112,7 +130,7 @@ if (existsSync(claudeCommandsSource)) {
 // --- 3. Bundle corgispec-memory-init templates ---
 const memoryInitTemplatesSource = resolve(
   repoRoot,
-  ".opencode/skills/corgispec-memory-init/templates"
+  ".opencode/skills/atoms/corgispec-memory-init/templates"
 );
 const memoryInitTemplatesDest = resolve(assetsDir, "memory-init/templates");
 
@@ -186,23 +204,32 @@ function verifyFile(srcPath, destPath) {
 
 // Verify skills
 if (existsSync(skillsSource)) {
-  const entries = readdirSync(skillsSource, { withFileTypes: true });
-  for (const entry of entries) {
-    if (entry.isDirectory() && entry.name.startsWith("corgispec-")) {
-      for (const file of ["SKILL.md", "skill.meta.json"]) {
-        const src = resolve(skillsSource, entry.name, file);
-        const dest = resolve(skillsDest, entry.name, file);
-        if (existsSync(src)) {
-          if (verifyFile(src, dest)) {
-            verifyCount++;
-          } else {
-            verifyErrors++;
-            errors.push(`Checksum mismatch: ${entry.name}/${file}`);
+  function verifySkillEntries(parentDir, tier) {
+    if (!existsSync(parentDir)) return;
+    const entries = readdirSync(parentDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory() && entry.name.startsWith("corgispec-")) {
+        for (const file of ["SKILL.md", "skill.meta.json"]) {
+          const src = resolve(parentDir, entry.name, file);
+          const destParent = tier ? resolve(skillsDest, tier) : skillsDest;
+          const dest = resolve(destParent, entry.name, file);
+          if (existsSync(src)) {
+            if (verifyFile(src, dest)) {
+              verifyCount++;
+            } else {
+              verifyErrors++;
+              errors.push(`Checksum mismatch: ${entry.name}/${file}`);
+            }
           }
         }
       }
     }
   }
+
+  for (const tier of tierDirs) {
+    verifySkillEntries(resolve(skillsSource, tier), tier);
+  }
+  verifySkillEntries(skillsSource, null);
 }
 
 // Verify JSON schemas

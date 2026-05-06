@@ -27,6 +27,8 @@ export function getBundledSkillsDir(): string {
 
 /**
  * Install skills to a target directory.
+ * Source may be tiered (atoms/, molecules/, compounds/) or flat.
+ * Target is always flat (agent platforms expect flat user-level layout).
  */
 export function installSkillsTo(
   sourceDir: string,
@@ -34,18 +36,14 @@ export function installSkillsTo(
   dryRun: boolean
 ): string[] {
   const installed: string[] = [];
+  const tierDirs = ["atoms", "molecules", "compounds"];
 
   if (!existsSync(sourceDir)) {
     return installed;
   }
 
-  const entries = readdirSync(sourceDir, { withFileTypes: true });
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-
-    const src = resolve(sourceDir, entry.name);
-    const dest = resolve(targetDir, entry.name);
-
+  function installEntry(src: string, name: string): void {
+    const dest = resolve(targetDir, name);
     if (dryRun) {
       console.log(`  DRY-RUN: ${src} → ${dest}`);
     } else {
@@ -54,9 +52,28 @@ export function installSkillsTo(
         rmSync(dest, { recursive: true });
       }
       cpSync(src, dest, { recursive: true });
-      console.log(`  Installed: ${entry.name} → ${dest}`);
+      console.log(`  Installed: ${name} → ${dest}`);
     }
-    installed.push(entry.name);
+    installed.push(name);
+  }
+
+  // Scan tier subdirectories
+  for (const tier of tierDirs) {
+    const tierPath = resolve(sourceDir, tier);
+    if (!existsSync(tierPath)) continue;
+    const entries = readdirSync(tierPath, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      installEntry(resolve(tierPath, entry.name), entry.name);
+    }
+  }
+
+  // Scan root for flat skills (backward compat)
+  const entries = readdirSync(sourceDir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    if (tierDirs.includes(entry.name)) continue;
+    installEntry(resolve(sourceDir, entry.name), entry.name);
   }
 
   return installed;

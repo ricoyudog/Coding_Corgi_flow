@@ -56,41 +56,34 @@ export interface SkillValidationIssue {
 /**
  * Discover all skills in a directory.
  * Skills are directories containing skill.meta.json.
+ * Supports tiered layout (atoms/, molecules/, compounds/) with flat-root fallback.
  */
 export function discoverSkills(skillsDir: string): DiscoveredSkill[] {
   if (!existsSync(skillsDir)) {
     return [];
   }
 
-  const entries = readdirSync(skillsDir, { withFileTypes: true });
+  const tierDirs = ["atoms", "molecules", "compounds"];
   const skills: DiscoveredSkill[] = [];
 
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
+  function loadEntry(dir: string, name: string): void {
+    const skillDir = resolve(dir, name);
+    const metaPath = resolve(skillDir, "skill.meta.json");
 
-    const dir = resolve(skillsDir, entry.name);
-    const metaPath = resolve(dir, "skill.meta.json");
-
-    if (!existsSync(metaPath)) continue;
+    if (!existsSync(metaPath)) return;
 
     try {
       const metaContent = readFileSync(metaPath, "utf-8");
       const meta = JSON.parse(metaContent) as SkillMeta;
-      const hasSkillMd = existsSync(resolve(dir, "SKILL.md"));
+      const hasSkillMd = existsSync(resolve(skillDir, "SKILL.md"));
 
-      skills.push({
-        slug: entry.name,
-        dir,
-        meta,
-        hasSkillMd,
-      });
+      skills.push({ slug: name, dir: skillDir, meta, hasSkillMd });
     } catch {
-      // Skip unparseable skill directories
       skills.push({
-        slug: entry.name,
-        dir,
+        slug: name,
+        dir: skillDir,
         meta: {
-          slug: entry.name,
+          slug: name,
           tier: "atom",
           version: "0.0.0",
           description: "(parse error)",
@@ -98,9 +91,35 @@ export function discoverSkills(skillsDir: string): DiscoveredSkill[] {
           platform: "universal",
           installation: { targets: [], base_path: "" },
         },
-        hasSkillMd: existsSync(resolve(dir, "SKILL.md")),
+        hasSkillMd: existsSync(resolve(skillDir, "SKILL.md")),
       });
     }
+  }
+
+  // Phase 1: scan tier subdirectories
+  for (const tier of tierDirs) {
+    const tierPath = resolve(skillsDir, tier);
+    if (!existsSync(tierPath)) continue;
+    try {
+      const entries = readdirSync(tierPath, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isDirectory()) loadEntry(tierPath, entry.name);
+      }
+    } catch {
+      // tier dir unreadable, skip
+    }
+  }
+
+  // Phase 2: scan root for flat skills (backward compat)
+  try {
+    const entries = readdirSync(skillsDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      if (tierDirs.includes(entry.name)) continue;
+      loadEntry(skillsDir, entry.name);
+    }
+  } catch {
+    // root unreadable, skip
   }
 
   return skills;

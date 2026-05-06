@@ -16,15 +16,19 @@
 
 ## 3. Restructure directories into tier-based layout (Issue 3)
 
-- [ ] 3.1 Create `atoms/` and `molecules/` subdirectories in `.opencode/skills/`
-- [ ] 3.2 Move 2 atom skills (`corgispec-memory-extract`, `corgispec-memory-init`) into `.opencode/skills/atoms/`
-- [ ] 3.3 Move 15 molecule skills into `.opencode/skills/molecules/`
-- [ ] 3.4 Update all 17 `skill.meta.json` files: change `base_path` from `"<slug>"` to `"<tier>/<slug>"`
-- [ ] 3.5 Mirror the same tier structure to `.claude/skills/` (create `atoms/`, `molecules/`, move skills)
-- [ ] 3.6 Regenerate `.codex/skills/` symlinks to point to new `.claude/skills/<tier>/<slug>/` paths
-- [ ] 3.7 Restructure `packages/corgispec/assets/skills/` with same tier layout (including newly added corgispec-verify)
-- [ ] 3.8 Run `node tools/ds-skills/bin/ds-skills.js validate --path .` — confirm loader discovers all 17 skills via tier directories
-- [ ] 3.9 Run `cd packages/corgispec && npm test` — confirm no test regressions
+- [x] 3.1 Create `atoms/` and `molecules/` subdirectories in `.opencode/skills/`
+- [x] 3.2 Move 2 atom skills (`corgispec-memory-extract`, `corgispec-memory-init`) into `.opencode/skills/atoms/`
+- [x] 3.3 Move 15 molecule skills into `.opencode/skills/molecules/`
+- [x] 3.4 Update all 17 `skill.meta.json` files: change `base_path` from `"<slug>"` to `"<tier>/<slug>"`
+- [x] 3.5 Mirror the same tier structure to `.claude/skills/` (create `atoms/`, `molecules/`, move skills)
+- [x] 3.6 Regenerate `.codex/skills/` symlinks to point to new `.claude/skills/<tier>/<slug>/` paths
+- [x] 3.7 Restructure `packages/corgispec/assets/skills/` with same tier layout (including newly added corgispec-verify)
+- [x] 3.8 Run `node tools/ds-skills/bin/ds-skills.js validate --path .` — confirm loader discovers all 17 skills via tier directories
+- [x] 3.9 Run `cd packages/corgispec && npm test` — confirm no test regressions
+- [x] 3.10 Restructure `.codex/skills/` into tier subdirectories: create `atoms/` and `molecules/` inside `.codex/skills/`, place symlinks at `.codex/skills/<tier>/<slug>` → `../../../.claude/skills/<tier>/<slug>` (per spec scenario: "Codex reads `atoms/corgispec-memory-init/SKILL.md` via `.codex/skills/`")
+- [x] 3.11 Update `bundle-assets.js` to output skills into `assets/skills/<tier>/<slug>/` (not flat `assets/skills/<slug>/`) — matching spec requirement that tier layout applies to `packages/corgispec/assets/skills/`
+- [x] 3.12 Restructure `.agents/skills/` with same tier-based symlink layout (currently broken flat symlinks)
+- [x] 3.13 Run `node tools/ds-skills/bin/ds-skills.js validate --path .` and `cd packages/corgispec && npm test` — confirm no regressions after tier restructuring
 
 ## 4. Reconcile blueprint spec (Issue 4)
 

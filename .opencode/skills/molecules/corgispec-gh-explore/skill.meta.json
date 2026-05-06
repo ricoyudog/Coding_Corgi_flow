@@ -1,0 +1,20 @@
+{
+  "slug": "corgispec-gh-explore",
+  "tier": "molecule",
+  "version": "1.0.0",
+  "description": "Enter explore mode for investigating problems and clarifying requirements (GitHub)",
+  "depends_on": [],
+  "platform": "github",
+  "tags": [
+    "lifecycle",
+    "explore"
+  ],
+  "installation": {
+    "targets": [
+      "opencode",
+      "claude",
+      "codex"
+    ],
+    "base_path": "molecules/corgispec-gh-explore"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "slug": "corgispec-explore",
+  "tier": "molecule",
+  "version": "1.0.0",
+  "description": "Enter explore mode for investigating problems and clarifying requirements (GitLab)",
+  "depends_on": [],
+  "platform": "gitlab",
+  "tags": [
+    "lifecycle",
+    "explore"
+  ],
+  "installation": {
+    "targets": [
+      "opencode",
+      "claude",
+      "codex"
+    ],
+    "base_path": "molecules/corgispec-explore"
+  }
+}

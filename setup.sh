@@ -29,8 +29,8 @@ Creates per-skill symlinks from .codex/skills/ and .agents/skills/
 pointing to the canonical .claude/skills/ directory.
 
 What gets configured:
-  .codex/skills/corgispec-*  -> ../../.claude/skills/corgispec-*
-  .agents/skills/corgispec-* -> ../../.claude/skills/corgispec-*
+  .codex/skills/<tier>/corgispec-*  -> ../../../.claude/skills/<tier>/corgispec-*
+  .agents/skills/<tier>/corgispec-* -> ../../../.claude/skills/<tier>/corgispec-*
 
 Options:
   --dry-run   Preview changes without modifying files
@@ -66,14 +66,8 @@ check_symlink_support() {
 
 resolve_target() {
   local skill_name="$1"
-  local target_dir="$2"
-  local depth
-  if [[ "$target_dir" == "$CODEX_SKILLS" ]]; then
-    depth="../../"
-  else
-    depth="../../"
-  fi
-  echo "${depth}.claude/skills/${skill_name}"
+  local tier="$2"
+  echo "../../../.claude/skills/${tier}/${skill_name}"
 }
 
 needs_symlink() {
@@ -93,16 +87,18 @@ create_symlink() {
   local skill_dir="$1"
   local target_dir="$2"
   local label="$3"
+  local tier="$4"
   local skill_name
   skill_name="$(basename "$skill_dir")"
-  local link_path="$target_dir/$skill_name"
+  local tier_dir="$target_dir/$tier"
+  local link_path="$tier_dir/$skill_name"
   local expected_target
-  expected_target="$(resolve_target "$skill_name" "$target_dir")"
+  expected_target="$(resolve_target "$skill_name" "$tier")"
 
-  mkdir -p "$target_dir"
+  mkdir -p "$tier_dir"
 
   if ! needs_symlink "$link_path" "$expected_target"; then
-    ok "$label/$skill_name — already configured"
+    ok "$label/$tier/$skill_name — already configured"
     return 0
   fi
 
@@ -113,31 +109,31 @@ create_symlink() {
       printf 'Replace with symlink to %s? [y/N] ' "$expected_target"
       read -r confirmed
       if [[ ! "$confirmed" =~ ^[Yy]$ ]]; then
-        warn "$label/$skill_name — skipped (user declined)"
+        warn "$label/$tier/$skill_name — skipped (user declined)"
         return 0
       fi
       mkdir -p "$CODEX_BACKUP"
       mv "$link_path" "$CODEX_BACKUP/$skill_name"
       log "  Backed up to $CODEX_BACKUP/$skill_name"
       ln -sfn "$expected_target" "$link_path"
-      ok "$label/$skill_name — replaced physical copy with symlink"
+      ok "$label/$tier/$skill_name — replaced physical copy with symlink"
     else
-      warn "DRY-RUN: would backup $label/$skill_name physical copy, then symlink -> $expected_target"
+      warn "DRY-RUN: would backup $label/$tier/$skill_name physical copy, then symlink -> $expected_target"
     fi
   elif [[ -e "$link_path" ]]; then
     if [[ "$DRY_RUN" -eq 0 ]]; then
       rm -rf "$link_path"
       ln -sfn "$expected_target" "$link_path"
-      ok "$label/$skill_name — replaced incorrect link"
+      ok "$label/$tier/$skill_name — replaced incorrect link"
     else
-      warn "DRY-RUN: would replace incorrect link $label/$skill_name -> $expected_target"
+      warn "DRY-RUN: would replace incorrect link $label/$tier/$skill_name -> $expected_target"
     fi
   else
     if [[ "$DRY_RUN" -eq 0 ]]; then
       ln -sfn "$expected_target" "$link_path"
-      ok "$label/$skill_name — created symlink -> $expected_target"
+      ok "$label/$tier/$skill_name — created symlink -> $expected_target"
     else
-      ok "DRY-RUN: would create $label/$skill_name -> $expected_target"
+      ok "DRY-RUN: would create $label/$tier/$skill_name -> $expected_target"
     fi
   fi
 }
@@ -165,31 +161,42 @@ validate() {
     err ".codex-plugin/plugin.json — missing"
   fi
 
-  local claude_count
-  claude_count=$(find "$CLAUDE_SKILLS" -maxdepth 1 -type d -name 'corgispec-*' 2>/dev/null | wc -l)
-  log "Skills in .claude/skills/: $claude_count"
+  local skill_count=0
+  for tier in atoms molecules compounds; do
+    local tier_path="$CLAUDE_SKILLS/$tier"
+    [[ -d "$tier_path" ]] || continue
+    for skill_dir in "$tier_path"/corgispec-*; do
+      [[ -d "$skill_dir" ]] || continue
+      skill_count=$((skill_count + 1))
+    done
+  done
+  log "Skills in .claude/skills/ (tiered): $skill_count"
 
   local all_ok=1
-  for skill_dir in "$CLAUDE_SKILLS"/corgispec-*; do
-    [[ -d "$skill_dir" ]] || continue
-    local name
-    name="$(basename "$skill_dir")"
+  for tier in atoms molecules compounds; do
+    local tier_path="$CLAUDE_SKILLS/$tier"
+    [[ -d "$tier_path" ]] || continue
+    for skill_dir in "$tier_path"/corgispec-*; do
+      [[ -d "$skill_dir" ]] || continue
+      local name
+      name="$(basename "$skill_dir")"
 
-    for target in "$CODEX_SKILLS" "$AGENTS_SKILLS"; do
-      local link="$target/$name"
-      local expected
-      expected="$(resolve_target "$name" "$target")"
-      if is_symlink "$link"; then
-        local current
-        current="$(readlink "$link")"
-        if [[ "$current" != "$expected" ]]; then
-          err "${target#$SCRIPT_DIR/}/$name — points to $current, expected $expected"
+      for target in "$CODEX_SKILLS" "$AGENTS_SKILLS"; do
+        local link="$target/$tier/$name"
+        local expected
+        expected="$(resolve_target "$name" "$tier")"
+        if is_symlink "$link"; then
+          local current
+          current="$(readlink "$link")"
+          if [[ "$current" != "$expected" ]]; then
+            err "${target#$SCRIPT_DIR/}/$tier/$name — points to $current, expected $expected"
+            all_ok=0
+          fi
+        else
+          err "${target#$SCRIPT_DIR/}/$tier/$name — not a symlink"
           all_ok=0
         fi
-      else
-        err "${target#$SCRIPT_DIR/}/$name — not a symlink"
-        all_ok=0
-      fi
+      done
     done
   done
 
@@ -217,8 +224,10 @@ main() {
       echo "    2. Or run this script from an Administrator terminal"
       echo ""
       echo "  Workaround (manual copy fallback):"
-      echo "    cp -r .claude/skills/corgispec-* .codex/skills/"
-      echo "    cp -r .claude/skills/corgispec-* .agents/skills/"
+      echo "    cp -r .claude/skills/atoms/ .codex/skills/atoms/"
+      echo "    cp -r .claude/skills/molecules/ .codex/skills/molecules/"
+      echo "    cp -r .claude/skills/atoms/ .agents/skills/atoms/"
+      echo "    cp -r .claude/skills/molecules/ .agents/skills/molecules/"
     else
       echo "  This is unexpected on your platform ($OS). Please check:"
       echo "    - Filesystem supports symlinks (not FAT32/exFAT)"
@@ -233,19 +242,21 @@ main() {
     log "DRY-RUN mode — no filesystem changes will be made"
   fi
 
-  local -a skills=()
-  shopt -s nullglob
-  for d in "$CLAUDE_SKILLS"/corgispec-*; do
-    skills+=("$d")
-  done
-  shopt -u nullglob
+  local skill_count=0
+  for tier in atoms molecules compounds; do
+    local tier_path="$CLAUDE_SKILLS/$tier"
+    [[ -d "$tier_path" ]] || continue
 
-  log "Found ${#skills[@]} skill(s) in .claude/skills/"
-
-  for skill in "${skills[@]}"; do
-    create_symlink "$skill" "$CODEX_SKILLS" ".codex/skills"
-    create_symlink "$skill" "$AGENTS_SKILLS" ".agents/skills"
+    shopt -s nullglob
+    for skill_dir in "$tier_path"/corgispec-*; do
+      skill_count=$((skill_count + 1))
+      create_symlink "$skill_dir" "$CODEX_SKILLS" ".codex/skills" "$tier"
+      create_symlink "$skill_dir" "$AGENTS_SKILLS" ".agents/skills" "$tier"
+    done
+    shopt -u nullglob
   done
+
+  log "Found $skill_count skill(s) in .claude/skills/ (tiered)"
 
   echo ""
   validate

@@ -1,0 +1,24 @@
+{
+  "slug": "corgispec-ask",
+  "tier": "molecule",
+  "version": "1.0.0",
+  "description": "Answer human questions from Obsidian vault using early-stop retrieval with token budget enforcement",
+  "depends_on": [
+    "corgispec-memory-init"
+  ],
+  "platform": "universal",
+  "tags": [
+    "lifecycle",
+    "memory",
+    "qa",
+    "retrieval"
+  ],
+  "installation": {
+    "targets": [
+      "opencode",
+      "claude",
+      "codex"
+    ],
+    "base_path": "molecules/corgispec-ask"
+  }
+}
