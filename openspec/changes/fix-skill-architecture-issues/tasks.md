@@ -32,6 +32,6 @@
 
 ## 4. Reconcile blueprint spec (Issue 4)
 
-- [ ] 4.1 Edit `docs/superpowers/specs/2026-04-27-composable-skill-hierarchy-design.md`: update the SKILL.md frontmatter example to remove `type` field and show actual format (`name`, `description`, `license`, `compatibility`, `metadata`)
-- [ ] 4.2 Add a note in the spec explaining that tier information is conveyed via `skill.meta.json`'s `tier` field (not SKILL.md frontmatter)
-- [ ] 4.3 Verify no other documentation references `type: capability | composite | playbook` as a current requirement
+- [x] 4.1 Edit `docs/superpowers/specs/2026-04-27-composable-skill-hierarchy-design.md`: update the SKILL.md frontmatter example to remove `type` field and show actual format (`name`, `description`, `license`, `compatibility`, `metadata`)
+- [x] 4.2 Add a note in the spec explaining that tier information is conveyed via `skill.meta.json`'s `tier` field (not SKILL.md frontmatter)
+- [x] 4.3 Verify no other documentation references `type: capability | composite | playbook` as a current requirement

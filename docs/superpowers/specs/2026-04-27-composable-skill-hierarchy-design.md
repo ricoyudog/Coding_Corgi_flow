@@ -202,10 +202,14 @@ skill-name/
 
 ```markdown
 ---
-type: capability | composite | playbook
 name: skill-slug
 description: >
   一句話描述這個 skill 做什麼、什麼時候用。
+license: MIT
+compatibility: 所需的外部依賴或前置條件。
+metadata:
+  author: author-name
+  version: "1.0"
 ---
 
 # Skill 名稱
@@ -223,21 +227,27 @@ description: >
 - atom-b
 ```
 
+> **注意：** 層級（tier）資訊不放在 SKILL.md frontmatter 中。Tier（`atom` / `molecule` / `compound`）由 `skill.meta.json` 的 `tier` 欄位宣告，並透過目錄結構（`atoms/`、`molecules/`、`compounds/`）體現。這讓 SKILL.md 保持為純指令文件，元資料關注點全部集中在 `skill.meta.json`。
+
 ### skill.meta.json
 
 ```json
 {
   "slug": "skill-slug",
-  "category": "capabilities | composites | playbooks",
+  "tier": "atom | molecule | compound",
+  "version": "1.0.0",
+  "description": "機器可讀的描述（可與 SKILL.md 的 description 相同）",
+  "depends_on": ["atom-a", "atom-b"],
+  "platform": "universal | github | gitlab",
   "tags": ["tag1", "tag2"],
   "installation": {
-    "base_command": "npx gooseworks install skill-slug",
-    "supports": ["claude", "codex", "cursor"]
-  },
-  "depends_on": ["atom-a", "atom-b"],
-  "author": "author-name"
+    "targets": ["opencode", "claude", "codex"],
+    "base_path": "<tier>/<slug>"
+  }
 }
 ```
+
+> **`tier` 欄位** 是層級分類的唯一機器可讀來源。工具鏈（ds-skills validate、corgispec CLI）根據此欄位驗證依賴方向約束，並決定 skill 在目錄結構中的位置（`atoms/`、`molecules/`、`compounds/`）。
 
 **為什麼要雙檔案？**
 
