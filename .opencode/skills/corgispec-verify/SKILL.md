@@ -35,7 +35,7 @@ Run automated verification on a completed Task Group before review. Verify assur
 
 Read `openspec/config.yaml` for schema (gitlab-tracked / github-tracked) and `isolation` settings.
 
-**If `isolation.mode: worktree`**: Changes live inside worktrees. Read `references/worktree-discovery.md` from the review skill for the full discovery procedure (this is a dependency of verify). Quick summary:
+**If `isolation.mode: worktree`**: Changes live inside worktrees. Read `references/worktree-discovery.md` for the full discovery procedure. Quick summary:
 1. `openspec list --json`, if it returns changes, use them
 2. If empty: scan `<isolation.root>/` directories, verify each with `git worktree list` and check `openspec/changes/<name>/` exists inside
 3. Auto-select if one found, prompt if multiple
