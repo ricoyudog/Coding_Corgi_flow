@@ -16,6 +16,7 @@ updated: 2026-05-05
 - [[wiki/patterns/canonical-source-platform-symlinks|Canonical Source with Platform Symlink Mirrors]]
 - [[wiki/patterns/three-layer-memory-architecture|Three-Layer Memory Architecture]]
 - [[wiki/patterns/self-compacting-memory-caps|Self-Compacting Memory with Word/Line Caps]]
+- [[wiki/patterns/tiered-discovery-with-flat-fallback|Tiered Discovery with Flat Fallback]]
 
 ## Research
 - [[wiki/research/_index|Research Index]]
@@ -25,6 +26,7 @@ updated: 2026-05-05
 
 ## Session History
 - [[wiki/sessions/_index|Session Index]]
+- [[wiki/sessions/fix-skill-architecture-issues|fix-skill-architecture-issues]]
 - [[wiki/sessions/plugin-marketplace-distribution|plugin-marketplace-distribution]]
 - [[wiki/sessions/openspec-llm-memory|openspec-llm-memory]]
 

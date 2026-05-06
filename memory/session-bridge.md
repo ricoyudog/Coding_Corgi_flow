@@ -1,6 +1,6 @@
 ---
 type: memory
-updated: 2026-05-05
+updated: 2026-05-06
 ---
 
 # Session Bridge
@@ -13,7 +13,7 @@ updated: 2026-05-05
 - **Branch**: main
 
 ## Done (last session completed)
-- Archived: plugin-marketplace-distribution — 4 groups, 18 tasks, delta specs synced, memory extracted
+- Archived: fix-skill-architecture-issues — 4 groups, 37 tasks, delta specs synced, memory extracted
 
 ## Waiting (next steps / blockers)
 - _None_
@@ -22,7 +22,9 @@ updated: 2026-05-05
 - _None_
 
 ## New Discoveries
-- _None_
+- Tiered discovery with flat fallback pattern — useful for any flat→hierarchical migration
+- `.codex/` symlinks need 3 levels of `../` when tier subdirs add nesting depth
+- `git add -f` needed for files under gitignored parent directories (e.g., `docs/`)
 
 ## Next Session Start
 1. Read this file ← you are here
