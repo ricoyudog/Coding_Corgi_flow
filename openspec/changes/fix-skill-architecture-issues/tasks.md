@@ -10,9 +10,9 @@
 
 ## 2. Add corgispec-verify to package assets (Issue 2)
 
-- [ ] 2.1 Copy `corgispec-verify/` (SKILL.md + skill.meta.json + references/) from `.opencode/skills/` to `packages/corgispec/assets/skills/corgispec-verify/`
-- [ ] 2.2 Verify `packages/corgispec/assets/skills/` now contains 17 skill directories
-- [ ] 2.3 Run `cd packages/corgispec && npm test` — confirm no test regressions
+- [x] 2.1 Copy `corgispec-verify/` (SKILL.md + skill.meta.json + references/) from `.opencode/skills/` to `packages/corgispec/assets/skills/corgispec-verify/`
+- [x] 2.2 Verify `packages/corgispec/assets/skills/` now contains 17 skill directories
+- [x] 2.3 Run `cd packages/corgispec && npm test` — confirm no test regressions
 
 ## 3. Restructure directories into tier-based layout (Issue 3)
 
