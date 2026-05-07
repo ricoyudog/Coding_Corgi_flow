@@ -128,8 +128,11 @@ log "Repo root: $SCRIPT_DIR"
 log "Claude target: $CLAUDE_DIR"
 log "OpenCode target: $OPENCODE_DIR"
 
-install_glob "$SCRIPT_DIR/.claude/skills/corgispec-*" "$CLAUDE_DIR"
-install_glob "$SCRIPT_DIR/.opencode/skills/corgispec-*" "$OPENCODE_DIR"
+# Install from tiered source (atoms/, molecules/) into flat user-level target
+install_glob "$SCRIPT_DIR/.claude/skills/atoms/corgispec-*" "$CLAUDE_DIR"
+install_glob "$SCRIPT_DIR/.claude/skills/molecules/corgispec-*" "$CLAUDE_DIR"
+install_glob "$SCRIPT_DIR/.opencode/skills/atoms/corgispec-*" "$OPENCODE_DIR"
+install_glob "$SCRIPT_DIR/.opencode/skills/molecules/corgispec-*" "$OPENCODE_DIR"
 
 if [[ "$CODEX" -eq 1 ]]; then
   install_codex_symlinks
