@@ -1,6 +1,6 @@
 ---
 type: wiki
-updated: 2026-05-05
+updated: 2026-05-12
 tags: [hot, entry]
 pinned: true
 ---
@@ -10,7 +10,7 @@ pinned: true
 > ~500 words | Hard cap 600 words | Updated every session | First entry point for humans and AI
 
 ## Active Changes
-- `bootstrap-install` branch/worktree contains an uncommitted implementation of the single-entry bootstrap installer flow.
+- `bootstrap-install` branch exists with committed bootstrap installer work (no active worktree, no active corgi change).
 
 ## Recent Decisions
 - Skills restructured into tier-based directories (`atoms/`, `molecules/`) across all platform dirs — two-phase discovery pattern for backward compat

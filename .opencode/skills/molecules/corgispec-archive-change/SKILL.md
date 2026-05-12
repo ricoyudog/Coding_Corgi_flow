@@ -85,6 +85,28 @@ Archive a completed change in the experimental workflow.
    - If memory-extract reports issues (e.g., session summary already exists), note them in the archive summary but do not block
    - If `memory/` or `wiki/` do not exist, skip this step silently (project may not use memory layer)
 
+4.8 **Wiki sync (if wiki structure exists)**
+
+   If `wiki/` directory exists in the project root:
+
+   1. **Append wiki/log.md**: Add one line in the format defined by `wiki/schema.md`:
+      ```
+      <today's date> | archive <change-name> | +wiki/sessions/<name>.md +wiki/patterns/<pattern-names>.md
+      ```
+      List all files created by memory-extract in step 4.7. If `wiki/log.md` does not exist, create it with the format header from `wiki/schema.md` Section D.
+
+   2. **Update _index.md files**: For each wiki file created by memory-extract:
+      - If a session file was created → add a wikilink entry to `wiki/sessions/_index.md`
+      - If pattern files were created → add wikilink entries to `wiki/patterns/_index.md`
+      - Follow the format convention in the existing `_index.md` entries: `- [[filename|Title]] — date — brief description`
+
+   3. **Check for extractable decisions**: Scan the change's `design.md` and the session summary for decisions with independent argumentative structure (Context + Decision + Rationale present AND affects more than a single file). If found:
+      - Create decision pages in `wiki/decisions/` with frontmatter `type: wiki`, `updated: <today>`, `status: accepted`
+      - Add entries to `wiki/decisions/_index.md`
+      - If no extractable decisions found, skip silently.
+
+   Reference `wiki/schema.md` for format rules and exemptions.
+
 5. **Perform the archive**
 
    Create `openspec/changes/archive/` if it does not exist and move the change to `openspec/changes/archive/YYYY-MM-DD-<name>`.

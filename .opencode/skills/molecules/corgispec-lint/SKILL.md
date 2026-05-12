@@ -1,6 +1,6 @@
 ---
 name: corgispec-lint
-description: Validate memory health across 11 checks — freshness, size caps, broken links, extraction completeness — with severity levels and auto-fix routing.
+description: Validate memory health across 14 checks — freshness, size caps, broken links, extraction completeness — with severity levels and auto-fix routing.
 license: MIT
 compatibility: Requires memory/ and wiki/ directories (created by corgispec-memory-init).
 metadata:
@@ -9,7 +9,7 @@ metadata:
   generatedBy: "1.0.0"
 ---
 
-Validate memory and wiki health with 11 structured checks.
+Validate memory and wiki health with 14 structured checks.
 
 ## Overview
 
@@ -247,6 +247,65 @@ Execute each check in order. Record findings with severity, description, and sug
 
 ---
 
+#### Check #12: _index.md coverage
+
+**Severity**: ⚠️ warning
+
+**Procedure**:
+1. For each wiki subdirectory that contains an `_index.md` file:
+   - List all `.md` files in the directory (excluding `_index.md` itself)
+   - Read the `_index.md` and extract all wikilinks (`[[...]]`)
+   - Compare: every `.md` file should be referenced by at least one wikilink in `_index.md`
+2. Exempt directories: `wiki/architecture/` (planned but not active)
+3. Exempt pages: Files with `unlisted: true` in frontmatter
+4. Exempt root-level files: `wiki/hot.md`, `wiki/index.md`, `wiki/schema.md`, `wiki/log.md` (no _index.md parent)
+
+**Pass condition**: Every non-exempt `.md` file in a wiki subdirectory appears in its `_index.md`.
+
+**Fail finding**: "File {path} not listed in {dir}/_index.md"
+
+**Suggested fix**: "Add a wikilink entry for this file in the corresponding _index.md, or add `unlisted: true` to the file's frontmatter if intentionally excluded."
+
+---
+
+#### Check #13: Frontmatter compliance
+
+**Severity**: ⚠️ warning
+
+**Procedure**:
+1. Read `wiki/schema.md` to load the page type → required fields mapping
+2. For each `.md` file in `wiki/` recursively (excluding `_index.md` files):
+   - Parse YAML frontmatter
+   - If `type: wiki` is present, identify the page type from the file's parent directory name (patterns → pattern, sessions → session, decisions → decision, research → research, meta → meta)
+   - Check that all required frontmatter fields for that page type are present
+
+**Pass condition**: All wiki pages have the required frontmatter fields for their type.
+
+**Fail finding**: "File {path} (type: {type}) missing required field: {field}"
+
+**Suggested fix**: "Add the missing frontmatter field. See wiki/schema.md for required fields per page type."
+
+---
+
+#### Check #14: _index.md ↔ log.md sync
+
+**Severity**: ℹ️ info
+
+**Procedure**:
+1. Read `wiki/log.md`
+2. If the file doesn't exist or has no entries → pass (log not yet initialized)
+3. Count the number of log entries (lines matching `^YYYY-MM-DD |`)
+4. Count the total number of non-index `.md` files across `wiki/sessions/` and `wiki/patterns/` (the two directories where archive/extract creates files)
+5. Compare: log entry count should be ≥ number of archive events (each archive produces at least a session file)
+
+**Pass condition**: Log entries exist for each distinct change mentioned in session files.
+
+**Fail finding**: "wiki/log.md has {N} entries but wiki/sessions/ has {M} files — possible missing log entries"
+
+**Suggested fix**: "Backfill wiki/log.md with entries for unlogged archive events. See wiki/schema.md for format."
+
+---
+
 ### 3. Generate lint report
 
 Assemble all findings into a structured report. Write to `wiki/meta/lint-report-{YYYY-MM-DD}.md` (overwrite if same-day report exists).
@@ -294,7 +353,7 @@ tags: [lint, meta]
 ### 4. Present results
 
 Display the summary to the user:
-- Total checks: 11
+- Total checks: 14
 - Errors / Warnings / Info counts
 - Overall status
 - Location of full report: `wiki/meta/lint-report-{date}.md`

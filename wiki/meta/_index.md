@@ -1,6 +1,6 @@
 ---
 type: wiki
-updated: 2026-05-01
+updated: 2026-05-12
 ---
 
 # Meta Index
@@ -9,4 +9,5 @@ updated: 2026-05-01
 
 ## Reports
 
-(No lint reports yet — run `/corgi-lint` to generate one)
+- [[lint-report-2026-05-01|Lint Report — 2026-05-01]] — 2026-05-01 — Initial memory health baseline
+- [[lint-report-2026-05-05|Lint Report — 2026-05-05]] — 2026-05-05 — Post-archive memory health check

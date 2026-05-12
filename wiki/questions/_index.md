@@ -1,6 +1,6 @@
 ---
 type: wiki
-updated: 2026-05-01
+updated: 2026-05-12
 ---
 
 # Questions Index
@@ -9,4 +9,4 @@ updated: 2026-05-01
 
 ## Questions
 
-(No questions yet — create a markdown file here with `status: pending` frontmatter to ask a question)
+No questions created yet. This directory is a scaffold — create a markdown file here with `status: pending` frontmatter to ask a question.

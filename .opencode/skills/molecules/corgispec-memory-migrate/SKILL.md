@@ -185,6 +185,25 @@ Add links for all newly created pages:
 
 Check the 80-line cap — if exceeded, keep only the 10 most recent session links.
 
+#### 3.5.1 Update _index.md files
+
+For each newly created wiki page, update the corresponding `_index.md`:
+- Session summaries → add entry to `wiki/sessions/_index.md`
+- Pattern pages → add entry to `wiki/patterns/_index.md`
+- Decision pages → add entry to `wiki/decisions/_index.md`
+
+Follow the format convention: `- [[filename|Title]] — date — brief description`
+Reference `wiki/schema.md` for format rules.
+
+#### 3.5.2 Backfill wiki/log.md
+
+For each archived change that was processed in this phase, append a log entry to `wiki/log.md`:
+```
+<archive-date> | archive <change-name> | +wiki/sessions/<name>.md +wiki/patterns/<pattern-names>.md
+```
+
+If `wiki/log.md` does not exist, create it with the format header from `wiki/schema.md` Section D.
+
 #### 3.6 Report Phase 2 results
 
 ```
@@ -333,6 +352,8 @@ For files categorized as **pitfalls**: extract individual entries and append to 
 For all other categories: create wiki reference pages following the same format as Phase 3 (summary + link to source, never copy full content).
 
 For **skip**: do nothing.
+
+For all created wiki pages, update the corresponding `_index.md` with a wikilink entry following the format in `wiki/schema.md`.
 
 #### 5.4 Report Phase 4 results
 

@@ -163,7 +163,7 @@ Update `memory/session-bridge.md`:
 
 **Preserve entries related to OTHER active changes.** Only clear entries linked to the change being archived.
 
-### 6. Update wiki/index.md
+### 6. Update wiki/index.md and _index.md files
 
 Add links to newly created pages:
 
@@ -178,6 +178,10 @@ Add links to newly created pages:
 3. **Check size**: If index.md exceeds 80 lines after updates:
    - Remove the oldest entries from `## Session History` (keep 10 most recent)
    - Do NOT remove pattern or architecture entries
+
+4. **Update _index.md files** (see `wiki/schema.md` for format convention):
+   - If a pattern was created → add a wikilink entry to `wiki/patterns/_index.md` following the existing format: `- [[filename|Title]] — date — brief description`
+   - If a session was created → add a wikilink entry to `wiki/sessions/_index.md` following the same format
 
 ### 7. Report results
 
