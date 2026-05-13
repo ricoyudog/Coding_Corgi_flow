@@ -1,6 +1,6 @@
 {
   "name": "corgispec",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Unified CLI for OpenSpec workflow — skill management, validation, and AI instruction generation",
   "type": "module",
   "bin": {
