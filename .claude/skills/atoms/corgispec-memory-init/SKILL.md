@@ -2,7 +2,7 @@
 name: corgispec-memory-init
 description: Initialize the 3-layer memory structure (memory/ + wiki/) for cross-session AI continuity in an OpenSpec project.
 license: MIT
-compatibility: Requires openspec CLI. Target project must have openspec/config.yaml.
+compatibility: Requires corgispec CLI. Target project must have openspec/config.yaml.
 metadata:
   author: openspec
   version: "1.0"

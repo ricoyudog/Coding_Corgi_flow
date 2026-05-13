@@ -2,7 +2,7 @@
 name: corgispec-gh-archive
 description: Archive a completed change in the experimental workflow with GitHub integration. Use when the user wants to finalize and archive a change after implementation is complete.
 license: MIT
-compatibility: Requires openspec CLI and gh CLI.
+compatibility: Requires corgispec CLI and gh CLI.
 metadata:
   author: openspec
   version: "1.0"

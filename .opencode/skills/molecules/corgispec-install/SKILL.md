@@ -2,7 +2,7 @@
 name: corgispec-install
 description: Use when installing, updating, or verifying this repo's project-local OpenSpec GitFlow assets in a target project.
 license: MIT
-compatibility: Requires openspec CLI.
+compatibility: Requires corgispec CLI.
 metadata:
   author: openspec
   version: "1.0"
@@ -23,7 +23,7 @@ This installer manages:
 
 ## When to Use
 
-- Fresh install into a project that already ran `openspec init`
+- Fresh install into a project that already ran `corgispec init`
 - Managed update when the target project already has an installer manifest
 - Legacy install migration when managed files exist but no installer manifest exists
 - Verify-only when the user wants a report without mutating files
@@ -103,7 +103,7 @@ Runtime artifacts:
 Before any mode runs, verify the required tools are available:
 
 ```bash
-openspec --version
+corgispec --version
 ```
 
 If the user is working with a github-tracked schema:
@@ -130,7 +130,7 @@ If any required tool is missing, unauthenticated, or the required user-level ski
 Use when the target project has no managed fileset and no manifest.
 
 1. **Validate prerequisites**
-   - Run `openspec --version` — stop if not found
+   - Run `corgispec --version` — stop if not found
    - Run `gh auth status` or `glab auth status` depending on intended schema — stop if unauthenticated
    - Verify `~/.claude/skills/corgispec-*` and `~/.config/opencode/skill/corgispec-*` exist — stop if missing
    - Confirm `openspec/config.yaml` exists in the target project — stop if missing
@@ -218,7 +218,7 @@ Use when the target project has no managed fileset and no manifest.
 Use when the target project already has `openspec/.corgi-install.json`.
 
 1. **Validate prerequisites**
-   - Run `openspec --version` — stop if not found
+   - Run `corgispec --version` — stop if not found
    - Run `gh auth status` or `glab auth status` as appropriate — stop if unauthenticated
    - Verify `~/.claude/skills/corgispec-*` and `~/.config/opencode/skill/corgispec-*` exist — stop if missing
 
@@ -283,7 +283,7 @@ Use when managed files exist in the target project but no `openspec/.corgi-insta
 Use when the user wants a health check without any file mutations.
 
 1. **Check prerequisites**
-   - Run `openspec --version` — record PASS or FAIL
+   - Run `corgispec --version` — record PASS or FAIL
    - Run `gh auth status` or `glab auth status` as appropriate — record PASS, FAIL, or SKIP
    - Verify `~/.claude/skills/corgispec-*` and `~/.config/opencode/skill/corgispec-*` exist — record PASS or FAIL
 
@@ -325,7 +325,7 @@ The report at `openspec/.corgi-install-report.md` uses this format:
 ### Checks
 | Check | Status | Detail |
 |---|---|---|---|
-| openspec CLI | PASS/FAIL | version or error |
+| corgispec CLI | PASS/FAIL | version or error |
 | gh/glab CLI | PASS/FAIL/SKIP | version or error |
 | User-level skills | PASS/FAIL | Claude/OpenCode skill paths checked |
 | User-level commands | PASS/FAIL/WARN | OpenCode/Claude command paths checked |

@@ -2,7 +2,7 @@
 name: corgispec-gh-apply
 description: "OpenSpec apply skill for GitHub: manage Task Groups via gh CLI with GitHub issues"
 license: MIT
-compatibility: Requires openspec CLI.
+compatibility: Requires corgispec CLI.
 metadata:
   author: openspec
   version: "2.0"

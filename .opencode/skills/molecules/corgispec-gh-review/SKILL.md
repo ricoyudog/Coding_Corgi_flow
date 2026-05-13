@@ -2,7 +2,7 @@
 name: corgispec-gh-review
 description: Review a completed Task Group via GitHub Issues feedback using GitHub CLI. Mirrors the GitLab review flow but switched to GitHub and gh tooling.
 license: MIT
-compatibility: Requires openspec CLI.
+compatibility: Requires corgispec CLI.
 metadata:
   author: openspec
   version: "1.0"

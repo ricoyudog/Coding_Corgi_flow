@@ -2,7 +2,7 @@
 name: corgispec-verify
 description: Automated verification gate between apply and review — runs tests, checks spec coverage, validates lint/build. No human gate required.
 license: MIT
-compatibility: Requires openspec CLI.
+compatibility: Requires corgispec CLI.
 metadata:
   author: openspec
   version: "1.0"

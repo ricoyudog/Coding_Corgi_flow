@@ -2,7 +2,7 @@
 name: corgispec-review
 description: Review a completed Task Group via GitLab issue feedback.
 license: MIT
-compatibility: Requires openspec CLI.
+compatibility: Requires corgispec CLI.
 metadata:
   author: openspec
   version: "2.0"
