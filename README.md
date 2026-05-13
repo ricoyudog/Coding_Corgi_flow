@@ -6,9 +6,7 @@ Turn AI coding assistants into structured engineering workflows — with schema-
 
 ## What This Is
 
-This project is a **community extension** of [OpenSpec](https://github.com/Fission-AI/OpenSpec) — an open-source CLI by [Fission AI](https://github.com/Fission-AI) for managing change artifacts (proposals, specs, designs, tasks) in AI-assisted development workflows.
-
-OpenSpec provides the core CLI (`openspec init`, artifact pipeline, change lifecycle). **We built custom schemas and skills on top of it** to add:
+This project provides a unified CLI (`corgispec`) that bundles the OpenSpec artifact pipeline (proposals, specs, designs, tasks) with **custom schemas and skills** to add:
 
 - **Issue tracking** — Parent/child issues created automatically on GitLab (`glab`) or GitHub (`gh`)
 - **Checkpoint-based apply:** Executes one Task Group at a time, syncs closeout state, then pauses for review
@@ -17,6 +15,7 @@ OpenSpec provides the core CLI (`openspec init`, artifact pipeline, change lifec
 - **Progress sync** — Rich summaries posted to issues (objectives, completion, files produced)
 - **Workflow labels** — State machine: `backlog → todo → in-progress → review → done`
 - **Git worktree isolation** — Run multiple changes in parallel, each in its own worktree (opt-in)
+- **npm distribution** — Install the CLI globally with `npm install -g corgispec`. Bootstrap any project with a single command.
 - **Project-local installer** — OpenCode and Claude Code are supported in installer v1
 - **Plugin distribution** — Install via Claude Code `/plugin install` or Codex `codex plugin install`. Symlink-based skill sharing from a single canonical source.
 - **Composable skill hierarchy** — Skills are structured as Atoms → Molecules → Compounds with machine-readable metadata, validated by the `ds-skills` CLI
@@ -52,9 +51,23 @@ This diagram shows the command handoff points only. Inside that flow, `/corgi-pr
 
 ### 1. Install to your project
 
-Choose one of three methods:
+Choose one of four methods:
 
-#### A. Plugin Install (recommended for Claude Code / Codex)
+#### A. npm Install (recommended)
+
+```bash
+npm install -g corgispec
+```
+
+Then bootstrap your target project:
+
+```bash
+corgispec bootstrap --path /path/to/your-project --schema github-tracked
+```
+
+This is the simplest way — no cloning, no building. Just install the CLI and run one command.
+
+#### B. Plugin Install (for Claude Code / Codex)
 
 **Claude Code:**
 
@@ -73,7 +86,7 @@ codex plugin install corgispec
 
 > Plugin install creates symlinks from Codex skill paths to the canonical `.claude/skills/` directory. Skills update automatically — no sync tools needed.
 
-#### B. Bootstrap Install (recommended for OpenCode / any agent)
+#### C. Bootstrap Install (for OpenCode / any agent)
 
 Copy and paste the following prompt into your LLM Agent (OpenCode, Claude Code, Cursor, etc.):
 
@@ -85,7 +98,7 @@ The agent will clone the repo, build the CLI, and bootstrap your project automat
 
 > If you are using a branch or tag instead of `main`, replace `main` in that URL with the same checked-out ref.
 
-#### C. Legacy Manual Install
+#### D. Legacy Manual Install
 
 For manual installation without an agent, see [Legacy manual install flow](#legacy-manual-install-flow).
 
@@ -132,11 +145,12 @@ Use the quick start above for new onboarding. The sections below are lower-level
 
 If you need to run the older explicit install flow instead of bootstrap, start here.
 
-### 1. Initialize OpenSpec in the target project
+### 1. Install corgispec CLI and initialize the target project
 
 ```bash
+npm install -g corgispec
 cd /path/to/your-project
-openspec init
+corgispec init --schema github-tracked
 ```
 
 ### 2. Run the installer from the cloned repo
@@ -159,7 +173,7 @@ The installer assumes the required user-level skills are already present. If boo
 
 ### 3. Answer the installer prompts
 
-- **Target project path** — where `openspec init` already ran
+- **Target project path** — where `corgispec init` already ran
 - **Schema** — choose `gitlab-tracked` or `github-tracked`
 - **Worktree isolation** — explicit opt-in only; never enabled automatically
 
@@ -181,7 +195,7 @@ Every install, update, and verify-only run writes `openspec/.corgi-install-repor
 
 Review it before continuing. The report records:
 
-- prerequisite checks (`openspec`, `gh`, `glab`)
+- prerequisite checks (`corgispec`, `gh`, `glab`)
 - user-level skill checks (`~/.claude/skills/corgispec-*`, `~/.config/opencode/skill/corgispec-*`)
 - schema and `openspec/config.yaml` checks
 - managed fileset sync results
