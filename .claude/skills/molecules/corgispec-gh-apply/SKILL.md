@@ -31,7 +31,13 @@ Implement tasks from an OpenSpec change using GitHub Issues — one Task Group a
 
 ### 1. Discover: Select change and resolve worktree
 
-Read `openspec/config.yaml` for `isolation` settings.
+**Context Gate**: If your session context already contains ALL of:
+- `isolation.mode` value
+- Active changes with worktree paths
+- Current branch
+→ **Gate passed**: SKIP to Step 2. Context is already available.
+
+If ANY is missing, read `openspec/config.yaml` for `isolation` settings.
 
 **If `isolation.mode: worktree`**: Changes live inside worktrees, not the main checkout. Read `references/worktree-discovery.md` for the full discovery procedure. Quick summary:
 1. `openspec list --json` — if it returns changes, use them

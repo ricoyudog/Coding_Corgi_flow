@@ -33,7 +33,14 @@ Run automated verification on a completed Task Group before review. Verify assur
 
 ### 1. Discover: select change and resolve worktree
 
-Read `openspec/config.yaml` for schema (gitlab-tracked / github-tracked) and `isolation` settings.
+**Context Gate**: If your session context already contains ALL of:
+- `isolation.mode` value
+- Active changes with worktree paths
+- Current branch
+- Schema type (gitlab-tracked / github-tracked)
+→ **Gate passed**: SKIP to Step 2. Context is already available.
+
+If ANY is missing, read `openspec/config.yaml` for schema (gitlab-tracked / github-tracked) and `isolation` settings.
 
 **If `isolation.mode: worktree`**: Changes live inside worktrees. Read `references/worktree-discovery.md` for the full discovery procedure. Quick summary:
 1. `openspec list --json`, if it returns changes, use them

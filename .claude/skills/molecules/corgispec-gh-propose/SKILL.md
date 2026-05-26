@@ -35,7 +35,12 @@ After explicit review of the proposal/spec/design/tasks package, continue with /
 
 2. **Check isolation mode and set up worktree (if configured)**
 
-   Read `openspec/config.yaml` and check for `isolation` settings:
+   **Context Gate**: If your session context already contains:
+   - `isolation.mode` value
+   - Current branch
+   → **Gate passed**: Use these values. Proceed to worktree creation step.
+
+   If NOT available, read `openspec/config.yaml` and check for `isolation` settings:
 
    ```yaml
    # Worktree isolation config (optional)

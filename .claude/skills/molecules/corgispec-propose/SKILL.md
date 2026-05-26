@@ -33,7 +33,12 @@ If user provided a clear name or description, derive a kebab-case name (e.g., "a
 
 ### 2. Discover: Resolve isolation and create worktree
 
-Read `openspec/config.yaml` and check `isolation.mode`:
+**Context Gate**: If your session context already contains:
+- `isolation.mode` value
+- Current branch
+→ **Gate passed**: Use these values. Proceed to worktree creation step.
+
+If NOT available, read `openspec/config.yaml` and check `isolation.mode`:
 
 **If `isolation.mode` is `worktree`:**
 ```bash
