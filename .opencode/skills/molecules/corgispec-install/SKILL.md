@@ -1,19 +1,19 @@
 ---
 name: corgispec-install
-description: Use when installing, updating, or verifying this repo's project-local OpenSpec GitFlow assets in a target project.
+description: Use when installing, updating, or verifying this repo's project-local Corgi GitFlow assets in a target project.
 license: MIT
 compatibility: Requires corgispec CLI.
 metadata:
-  author: openspec
+  author: corgispec
   version: "1.0"
   generatedBy: "1.3.0"
 ---
 
-Install, update, or verify project-local OpenSpec GitFlow assets.
+Install, update, or verify project-local Corgi GitFlow assets.
 
 ## Overview
 
-Use this skill to set up or maintain the repo-managed OpenSpec workflow files inside a target project.
+Use this skill to set up or maintain the repo-managed Corgi workflow files inside a target project.
 
 This installer manages:
 - **Project-local** command dispatch files and bundled schemas (per-repo)
@@ -258,7 +258,7 @@ Use when managed files exist in the target project but no `openspec/.corgi-insta
     - Classify as legacy install and display this classification to the user
 
 2. **Display legacy classification to user**
-   - Announce: "This project has OpenSpec managed files but no installer manifest. This looks like a legacy install."
+   - Announce: "This project has Corgi managed files but no installer manifest. This looks like a legacy install."
    - List the managed files found
 
 3. **Create backup**

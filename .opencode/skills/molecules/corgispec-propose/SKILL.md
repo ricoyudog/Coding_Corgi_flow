@@ -4,7 +4,7 @@ description: Propose a new change with all artifacts generated in one step. Use 
 license: MIT
 compatibility: Requires corgispec CLI.
 metadata:
-  author: openspec
+  author: corgispec
   version: "2.0"
   generatedBy: "1.3.0"
 ---

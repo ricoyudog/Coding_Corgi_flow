@@ -6,7 +6,7 @@ export function createStatusCommand(): Command {
   const cmd = new Command("status");
 
   cmd
-    .description("Show artifact completion state for an OpenSpec change")
+    .description("Show artifact completion state for a Corgi change")
     .argument("[name]", "Change name (auto-selects if only one exists)")
     .option("--json", "Output as JSON")
     .option("--path <dir>", "Working directory", ".")

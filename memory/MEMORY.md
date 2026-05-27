@@ -8,9 +8,9 @@ created: 2026-05-01
 > AI agent must obey these every session. Never expires.
 
 ## Project Identity
-- **Name**: OpenSpec GitFlow
+- **Name**: Corgi GitFlow
 - **Purpose**: Turn AI coding assistants into structured engineering workflows with schema-driven planning, checkpoint-based implementation, and full issue tracking on GitLab or GitHub.
-- **Stack**: Markdown skill definitions, JSON schema metadata, Node.js CLIs (`corgispec`, `ds-skills`), OpenSpec schemas/config, OpenCode, Claude Code, Codex, GitHub/GitLab CLI integrations
+- **Stack**: Markdown skill definitions, JSON schema metadata, Node.js CLIs (`corgispec`, `ds-skills`), Corgi schemas/config, OpenCode, Claude Code, Codex, GitHub/GitLab CLI integrations
 
 ## Hard Constraints
 - `.opencode/skills/`, `.claude/skills/`, and `.codex/skills/` must contain equivalent skill content.

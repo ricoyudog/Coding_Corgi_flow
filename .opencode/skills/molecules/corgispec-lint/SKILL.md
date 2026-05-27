@@ -4,7 +4,7 @@ description: Validate memory health across 14 checks — freshness, size caps, b
 license: MIT
 compatibility: Requires memory/ and wiki/ directories (created by corgispec-memory-init).
 metadata:
-  author: openspec
+  author: corgispec
   version: "1.0"
   generatedBy: "1.0.0"
 ---
@@ -23,7 +23,7 @@ The lint skill is read-only during checks — it gathers evidence and reports fi
 - Before `corgispec-archive` (recommended, not blocking)
 - When session-bridge seems stale or hot.md feels bloated
 - After significant refactoring of wiki/ structure
-- Every ~10 opsx sessions (per compaction triggers in Session Memory Protocol)
+- Every ~10 corgi sessions (per compaction triggers in Session Memory Protocol)
 
 Do not use this skill to modify memory files, initialize structure, or extract knowledge.
 

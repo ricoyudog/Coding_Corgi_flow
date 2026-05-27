@@ -1,15 +1,15 @@
 ---
 name: corgispec-gh-apply
-description: "OpenSpec apply skill for GitHub: manage Task Groups via gh CLI with GitHub issues"
+description: "Corgi apply skill for GitHub: manage Task Groups via gh CLI with GitHub issues"
 license: MIT
 compatibility: Requires corgispec CLI.
 metadata:
-  author: openspec
+  author: corgispec
   version: "2.0"
   generatedBy: "1.3.0"
 ---
 
-Implement tasks from an OpenSpec change using GitHub Issues — one Task Group at a time, with subagent delegation.
+Implement tasks from a Corgi change using GitHub Issues — one Task Group at a time, with subagent delegation.
 
 ## Preconditions (VERIFY BEFORE STARTING)
 

@@ -4,7 +4,7 @@ description: Review a completed Task Group via GitHub Issues feedback using GitH
 license: MIT
 compatibility: Requires corgispec CLI.
 metadata:
-  author: openspec
+  author: corgispec
   version: "1.0"
   generatedBy: "1.3.0"
 ---

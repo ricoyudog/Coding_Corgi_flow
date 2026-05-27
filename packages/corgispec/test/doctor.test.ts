@@ -47,7 +47,7 @@ describe("doctor command", () => {
 
   it("handles missing config gracefully", () => {
     const output = execSync(`node ${CLI} doctor --path ${tempDir}`, { encoding: "utf-8" });
-    expect(output).toContain("not found (not in an OpenSpec project)");
+    expect(output).toContain("not found (not in a Corgi project)");
   });
 
   it("outputs valid JSON with --json flag", () => {

@@ -128,7 +128,7 @@ function checkConfig(cwd: string): CheckResult {
     return {
       name: "Config",
       passed: true, // Not a failure — just not in a project
-      message: "not found (not in an OpenSpec project)",
+      message: "not found (not in a Corgi project)",
     };
   }
 

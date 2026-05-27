@@ -24,7 +24,7 @@ export function createBootstrapCommand(): Command {
   const cmd = new Command("bootstrap");
 
   cmd
-    .description("Bootstrap OpenSpec assets and user-level skills into a project")
+    .description("Bootstrap Corgi assets and user-level skills into a project")
     .option("--target <path>", "Target project directory", ".")
     .option("--schema <schema>", "Schema to use (github-tracked or gitlab-tracked)")
     .option("--mode <mode>", "Bootstrap mode (auto, fresh, update, legacy, verify)", "auto")

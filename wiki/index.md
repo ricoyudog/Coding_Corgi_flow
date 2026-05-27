@@ -3,7 +3,7 @@ type: wiki
 updated: 2026-05-05
 ---
 
-# OpenSpec GitFlow Wiki Index
+# Corgi GitFlow Wiki Index
 
 > AI-maintained long-term knowledge navigation. Hard cap 80 lines. Click wikilinks to jump to source.
 

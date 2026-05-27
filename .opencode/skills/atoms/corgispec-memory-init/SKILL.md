@@ -1,10 +1,10 @@
 ---
 name: corgispec-memory-init
-description: Initialize the 3-layer memory structure (memory/ + wiki/) for cross-session AI continuity in an OpenSpec project.
+description: Initialize the 3-layer memory structure (memory/ + wiki/) for cross-session AI continuity in a Corgi project.
 license: MIT
 compatibility: Requires corgispec CLI. Target project must have openspec/config.yaml.
 metadata:
-  author: openspec
+  author: corgispec
   version: "1.0"
   generatedBy: "1.0.0"
 ---
@@ -19,12 +19,12 @@ The result is a structured memory system that:
 - Costs ≤ 3000 tokens at session startup
 - Is human-readable in Obsidian (valid markdown with wikilinks)
 - Self-compacts via size caps and rotation rules
-- Integrates with the OpenSpec lifecycle (apply closeout, archive extraction)
+- Integrates with the Corgi lifecycle (apply closeout, archive extraction)
 
 ## When to Use
 
 - After `corgispec-install` completes (called automatically unless `--no-memory`)
-- Manually via `/corgi-memory-init` to add memory to an existing OpenSpec project
+- Manually via `/corgi-memory-init` to add memory to an existing Corgi project
 - When a project needs cross-session continuity but doesn't have `memory/` or `wiki/` yet
 
 Do not use this skill to modify memory contents, run lint checks, or extract knowledge from changes.
@@ -112,7 +112,7 @@ updated: <today's date YYYY-MM-DD>
 
 > AI agent reads this first at startup. Last session's handoff state.
 
-## Active opsx Change
+## Active corgi Change
 - **Change**: none
 - **Phase**: none
 - **Branch**: main
@@ -150,7 +150,7 @@ updated: <today's date YYYY-MM-DD>
 
 ## Active
 
-(No pitfalls yet — these accumulate during opsx apply sessions)
+(No pitfalls yet — these accumulate during corgi apply sessions)
 
 ## Archive
 
@@ -350,7 +350,7 @@ updated: <today's date YYYY-MM-DD>
 
 ## Contracts
 
-(No implicit contracts discovered yet — these are added during opsx apply sessions when hidden dependencies or assumptions are found)
+(No implicit contracts discovered yet — these are added during corgi apply sessions when hidden dependencies or assumptions are found)
 ```
 
 #### wiki/patterns/_index.md
@@ -367,7 +367,7 @@ updated: <today's date YYYY-MM-DD>
 
 ## Patterns
 
-(No patterns extracted yet — these are created during opsx archive)
+(No patterns extracted yet — these are created during corgi archive)
 ```
 
 #### wiki/research/_index.md
@@ -380,11 +380,11 @@ updated: <today's date YYYY-MM-DD>
 
 # Research Index
 
-> Investigation results from opsx explore sessions.
+> Investigation results from corgi explore sessions.
 
 ## Topics
 
-(No research topics yet — these are created during opsx explore)
+(No research topics yet — these are created during corgi explore)
 ```
 
 #### wiki/sessions/_index.md
@@ -401,7 +401,7 @@ updated: <today's date YYYY-MM-DD>
 
 ## Sessions
 
-(No session summaries yet — these are created during opsx archive)
+(No session summaries yet — these are created during corgi archive)
 ```
 
 #### wiki/decisions/_index.md
@@ -492,7 +492,7 @@ Then read `docs/` or code as needed.
 ### Shutdown (every session end)
 Update `memory/session-bridge.md`: Done / Waiting / New Pitfalls / New Discoveries
 
-### opsx Apply → Long-term Memory
+### corgi Apply → Long-term Memory
 After each Task Group completes:
 - New pitfalls → append to `memory/pitfalls.md` (link source change)
 - New implicit rules → append to `wiki/architecture/implicit-contracts.md`
@@ -502,7 +502,7 @@ After each Task Group completes:
 - Every archive: compress session-bridge
 - pitfalls > 20 entries: rotate oldest 10 to Archive section
 - hot.md > 550 words: trim oldest entries
-- Every 10 opsx sessions: suggest running /corgi-lint
+- Every 10 corgi sessions: suggest running /corgi-lint
 ```
 
 ### 5. Idempotency and safety

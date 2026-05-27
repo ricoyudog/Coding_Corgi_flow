@@ -1,6 +1,6 @@
-# OpenSpec GitFlow — Agent Bootstrap
+# Corgi GitFlow — Agent Bootstrap
 
-Use this file as the entry point when an LLM agent is bootstrapping OpenSpec GitFlow into a target project.
+Use this file as the entry point when an LLM agent is bootstrapping Corgi GitFlow into a target project.
 
 ## Steps
 

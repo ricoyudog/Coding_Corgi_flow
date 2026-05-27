@@ -6,7 +6,7 @@ tags: [architecture, overview, design]
 
 # Architecture & Design Overview
 
-> Comprehensive analysis of the OpenSpec GitFlow (Coding Corgi Flow) project — structure, design decisions, and key abstractions.
+> Comprehensive analysis of the Corgi GitFlow project — structure, design decisions, and key abstractions.
 
 ## 1. Project Identity
 

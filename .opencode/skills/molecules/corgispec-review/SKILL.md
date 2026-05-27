@@ -4,7 +4,7 @@ description: Review a completed Task Group via GitLab issue feedback.
 license: MIT
 compatibility: Requires corgispec CLI.
 metadata:
-  author: openspec
+  author: corgispec
   version: "2.0"
   generatedBy: "1.3.0"
 ---

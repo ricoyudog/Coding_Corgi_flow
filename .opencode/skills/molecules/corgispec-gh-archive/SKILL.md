@@ -4,7 +4,7 @@ description: Archive a completed change in the experimental workflow with GitHub
 license: MIT
 compatibility: Requires corgispec CLI and gh CLI.
 metadata:
-  author: openspec
+  author: corgispec
   version: "1.0"
   generatedBy: "1.3.0"
 ---

@@ -4,7 +4,7 @@ description: Answer human questions from Obsidian vault using early-stop retriev
 license: MIT
 compatibility: Requires memory/ and wiki/ directories (created by corgispec-memory-init).
 metadata:
-  author: openspec
+  author: corgispec
   version: "1.0"
   generatedBy: "1.0.0"
 ---

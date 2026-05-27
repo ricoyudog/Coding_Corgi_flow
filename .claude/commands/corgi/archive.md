@@ -1,5 +1,5 @@
 ---
-name: "OPSX: Archive"
+name: "Corgi: Archive"
 description: Archive a completed change, close tracking issues, and sync delta specs
 category: Workflow
 tags: [workflow, archive, experimental]

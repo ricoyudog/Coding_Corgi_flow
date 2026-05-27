@@ -5,7 +5,7 @@ tags: [hot, entry]
 pinned: true
 ---
 
-# Hot — OpenSpec GitFlow Latest
+# Hot — Corgi GitFlow Latest
 
 > ~500 words | Hard cap 600 words | Updated every session | First entry point for humans and AI
 
@@ -19,7 +19,7 @@ pinned: true
 - Bundle-asset tests must use isolated output paths instead of rebuilding the shared `packages/corgispec/assets` directory during the Vitest suite.
 
 ## Architecture Pulse
-- **Stable**: OpenSpec schema/workflow toolkit, skill metadata model, three-directory skill mirroring, OpenCode and Claude command support
+- **Stable**: Corgi schema/workflow toolkit, skill metadata model, three-directory skill mirroring, OpenCode and Claude command support
 - **Evolving**: `corgispec` as the unified CLI replacing legacy tooling, GitHub/GitLab tracked workflow assets, cross-session memory workflows
 - **Legacy**: `tools/ds-skills/` and `install-skills.sh`
 

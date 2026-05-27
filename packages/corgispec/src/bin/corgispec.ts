@@ -30,7 +30,7 @@ const program = new Command();
 program
   .name("corgispec")
   .description(
-    "Unified CLI for OpenSpec workflow — skill management, validation, and AI instruction generation"
+    "Unified CLI for Corgi workflow — skill management, validation, and AI instruction generation"
   )
   .version(pkg.version)
   .option("--no-color", "Disable color output");

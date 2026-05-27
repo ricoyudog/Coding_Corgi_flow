@@ -2,7 +2,7 @@
   "slug": "corgispec-install",
   "tier": "molecule",
   "version": "1.0.0",
-  "description": "Install, update, or verify project-local OpenSpec GitFlow assets in a target project",
+  "description": "Install, update, or verify project-local Corgi GitFlow assets in a target project",
   "depends_on": [
     "corgispec-memory-init"
   ],

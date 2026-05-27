@@ -1,7 +1,7 @@
 ---
 type: wiki
 updated: 2026-05-26
-source: "[[wiki/research/hook-study/corgispec-hook-strategy|CorgiSpec Hook Strategy]]"
+source: "[[wiki/research/2026-05-26/hook-study/corgispec-hook-strategy|CorgiSpec Hook Strategy]]"
 status: accepted
 ---
 
@@ -11,7 +11,7 @@ status: accepted
 
 ## Context
 
-[[wiki/research/hook-study/corgispec-hook-strategy|CorgiSpec 统一 Hook 策略]] 提出了用 hooks 自动化以下重复操作：
+[[wiki/research/2026-05-26/hook-study/corgispec-hook-strategy|CorgiSpec 统一 Hook 策略]] 提出了用 hooks 自动化以下重复操作：
 
 | 原 Skill 步骤                                           | Hook 自动化                       |
 | ---------------------------------------------------- | ------------------------------ |
@@ -285,7 +285,7 @@ Hooks: ✅ configured (SessionStart, PreToolUse, PostToolUse, Stop, PostCompact)
 
 ## Related
 
-- [[wiki/research/hook-study/corgispec-hook-strategy|CorgiSpec 跨平台统一 Hook 策略]] — 原始策略文档
-- [[wiki/research/hook-study/claude-code-hooks|Claude Code Hooks]] — 28 events, 5 types
-- [[wiki/research/hook-study/opencode-hooks|OpenCode Hooks]] — 14 plugin hooks, 40+ events
-- [[wiki/research/hook-study/codex-hooks|Codex Hooks]] — 8 events, command-only
+- [[wiki/research/2026-05-26/hook-study/corgispec-hook-strategy|CorgiSpec 跨平台统一 Hook 策略]] — 原始策略文档
+- [[wiki/research/2026-05-26/hook-study/claude-code-hooks|Claude Code Hooks]] — 28 events, 5 types
+- [[wiki/research/2026-05-26/hook-study/opencode-hooks|OpenCode Hooks]] — 14 plugin hooks, 40+ events
+- [[wiki/research/2026-05-26/hook-study/codex-hooks|Codex Hooks]] — 8 events, command-only

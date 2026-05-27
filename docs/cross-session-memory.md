@@ -2,7 +2,7 @@
 
 # Cross-Session Memory
 
-AI coding sessions are stateless by default — every new session starts from scratch. OpenSpec GitFlow adds a **3-layer memory system** that gives AI agents cross-session continuity while staying under a strict token budget (~2900 tokens at startup).
+AI coding sessions are stateless by default — every new session starts from scratch. Corgi GitFlow adds a **3-layer memory system** that gives AI agents cross-session continuity while staying under a strict token budget (~2900 tokens at startup).
 
 ## The Problem
 
@@ -169,7 +169,7 @@ Memory initializes automatically during `/corgi-install` (opt-out with `--no-mem
 
 ### Existing Project (no prior knowledge)
 
-Add memory to a project that already uses OpenSpec:
+Add memory to a project that already uses Corgi:
 
 ```text
 /corgi-memory-init

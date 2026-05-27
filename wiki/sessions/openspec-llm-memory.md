@@ -9,7 +9,7 @@ tags: [session, memory, cross-session, skills]
 # Session Summary: openspec-llm-memory
 
 ## Overview
-Added a 3-layer cross-session memory system (memory/ + wiki/) to OpenSpec GitFlow, shipping 4 new skills (memory-init, memory-lint, memory-ask, memory-extract) and integrating memory lifecycle hooks into install and archive workflows.
+Added a 3-layer cross-session memory system (memory/ + wiki/) to Corgi GitFlow, shipping 4 new skills (memory-init, memory-lint, memory-ask, memory-extract) and integrating memory lifecycle hooks into install and archive workflows.
 
 ## Timeline
 - **Proposed**: 2026-05-04
