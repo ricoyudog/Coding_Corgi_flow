@@ -4,6 +4,7 @@ import { existsSync, accessSync, constants, readdirSync, readFileSync } from "no
 import { homedir } from "node:os";
 import { findConfigPath, loadConfig } from "../lib/config.js";
 import { detectPlatforms } from "../lib/platform.js";
+import { detectHookConfig } from "../lib/hooks.js";
 import yaml from "js-yaml";
 
 interface CheckResult {
@@ -38,7 +39,10 @@ export function createDoctorCommand(): Command {
       // 4. Platform detection
       results.push(...checkPlatforms());
 
-      // 5. Schema validation
+      // 5. Hook configuration
+      results.push(checkHooks(cwd));
+
+      // 6. Schema validation
       results.push(checkSchemas(cwd));
 
       // Output
@@ -265,6 +269,25 @@ function checkSchemas(cwd: string): CheckResult {
       suggestion: "Check schema directory permissions.",
     };
   }
+}
+
+function checkHooks(cwd: string): CheckResult {
+  const hookStatus = detectHookConfig(cwd);
+
+  if (hookStatus.configured) {
+    return {
+      name: "Hooks",
+      passed: true,
+      message: `configured for ${hookStatus.platform} (${hookStatus.events.join(", ")})`,
+    };
+  }
+
+  return {
+    name: "Hooks",
+    passed: true,
+    message: "not configured",
+    suggestion: "Run `corgispec hooks generate --platform <name>` to enable hooks.",
+  };
 }
 
 function printResults(results: CheckResult[]): void {

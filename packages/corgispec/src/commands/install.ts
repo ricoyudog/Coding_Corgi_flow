@@ -138,6 +138,12 @@ export function createInstallCommand(): Command {
       console.log(
         `\n${dryRun ? "Would install" : "Installed"} ${totalInstalled} skill(s) across ${platforms.length} platform(s).`
       );
+
+      if (!dryRun && totalInstalled > 0) {
+        console.log(
+          "\n💡 Tip: Run `corgispec hooks generate` to enable auto context injection & security guards."
+        );
+      }
     });
 
   return cmd;

@@ -320,6 +320,87 @@ export function checkTaskGroupPostconditions(
   return null;
 }
 
+// ─── Hook Configuration Detection ───────────────────────────────────────
+
+export interface HookConfigStatus {
+  configured: boolean;
+  platform: "claude" | "opencode" | "codex" | null;
+  events: string[];
+  configFile: string | null;
+}
+
+/**
+ * Detect whether hook configuration is present for any supported platform.
+ * Checks Claude Code, OpenCode (deep), and Codex configs in priority order.
+ */
+export function detectHookConfig(cwd: string): HookConfigStatus {
+  // 1. Claude Code / OpenCode bridge: .claude/settings.json with "hooks" key
+  const claudeSettingsPath = resolve(cwd, ".claude/settings.json");
+  if (existsSync(claudeSettingsPath)) {
+    try {
+      const data = JSON.parse(readFileSync(claudeSettingsPath, "utf-8"));
+      if (data.hooks && typeof data.hooks === "object") {
+        const events = Object.keys(data.hooks);
+        return {
+          configured: true,
+          platform: "claude",
+          events,
+          configFile: claudeSettingsPath,
+        };
+      }
+    } catch {
+      // Invalid JSON — treat as not configured
+    }
+  }
+
+  // 2. OpenCode deep plugin: .opencode/plugins/corgispec-deep.ts
+  const deepPluginPath = resolve(cwd, ".opencode/plugins/corgispec-deep.ts");
+  if (existsSync(deepPluginPath)) {
+    try {
+      const content = readFileSync(deepPluginPath, "utf-8");
+      if (content.includes("CorgiSpecDeep")) {
+        return {
+          configured: true,
+          platform: "opencode",
+          events: ["SessionStart", "PreToolUse", "PostToolUse", "Stop", "PostCompact"],
+          configFile: deepPluginPath,
+        };
+      }
+    } catch {
+      // Unreadable — treat as not configured
+    }
+  }
+
+  // 3. Codex: .codex/config.toml with hooks entries
+  const codexConfigPath = resolve(cwd, ".codex/config.toml");
+  if (existsSync(codexConfigPath)) {
+    try {
+      const content = readFileSync(codexConfigPath, "utf-8");
+      if (content.includes("hooks = true") || content.includes("[[hooks.")) {
+        const events: string[] = [];
+        const eventPattern = /\[\[hooks\.(\w+)\]\]/g;
+        let match: RegExpExecArray | null;
+        while ((match = eventPattern.exec(content)) !== null) {
+          const event = match[1]!;
+          if (!events.includes(event)) {
+            events.push(event);
+          }
+        }
+        return {
+          configured: true,
+          platform: "codex",
+          events,
+          configFile: codexConfigPath,
+        };
+      }
+    } catch {
+      // Unreadable — treat as not configured
+    }
+  }
+
+  return { configured: false, platform: null, events: [], configFile: null };
+}
+
 // ─── Helpers ────────────────────────────────────────────────────────────
 
 function getCurrentBranch(): string {

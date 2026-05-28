@@ -22,9 +22,9 @@
 
 ## 3. Status & Install Integration
 
-- [ ] 3.1 Update `packages/corgispec/src/commands/status.ts` to detect and report hook configuration status (configured/not configured + active events list)
-- [ ] 3.2 Update `packages/corgispec/src/commands/install.ts` to append hooks tip message: `💡 Tip: Run corgispec hooks generate to enable auto context injection & security guards.`
-- [ ] 3.3 Add `hooks` field to `corgispec doctor` output showing hook config presence and platform detection
+- [x] 3.1 Update `packages/corgispec/src/commands/status.ts` to detect and report hook configuration status (configured/not configured + active events list)
+- [x] 3.2 Update `packages/corgispec/src/commands/install.ts` to append hooks tip message: `💡 Tip: Run corgispec hooks generate to enable auto context injection & security guards.`
+- [x] 3.3 Add `hooks` field to `corgispec doctor` output showing hook config presence and platform detection
 
 ## 4. Skill Step 1 Gating
 
