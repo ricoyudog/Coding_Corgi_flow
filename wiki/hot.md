@@ -1,6 +1,6 @@
 ---
 type: wiki
-updated: 2026-05-12
+updated: 2026-05-28
 tags: [hot, entry]
 pinned: true
 ---
@@ -10,7 +10,7 @@ pinned: true
 > ~500 words | Hard cap 600 words | Updated every session | First entry point for humans and AI
 
 ## Active Changes
-- `bootstrap-install` branch exists with committed bootstrap installer work (no active worktree, no active corgi change).
+- `corgispec-hooks-system` and `corgispec-cli` changes exist in `openspec/changes/` (status unknown).
 
 ## Recent Decisions
 - Skills restructured into tier-based directories (`atoms/`, `molecules/`) across all platform dirs — two-phase discovery pattern for backward compat
@@ -27,6 +27,7 @@ pinned: true
 - (none yet — see [[memory/pitfalls]])
 
 ## Recently Shipped
+- **openspec-to-corgi-rebrand** (2026-05-28) — Replaced all user-visible "OpenSpec" brand text with "Corgi" across 126 files while preserving directory paths, identifiers, and upstream attribution
 - **fix-skill-architecture-issues** (2026-05-06) — Fixed 4 structural integrity issues: eliminated implicit cross-skill dependency, added missing package asset, restructured all directories into tier-based layout, reconciled blueprint spec
 - **plugin-marketplace-distribution** (2026-05-05) — Packaged CorgiSpec as installable plugins for Claude Code and Codex with symlink-based skill sharing from a single canonical source
 - **openspec-llm-memory** (2026-05-05) — 3-layer cross-session memory system with 4 new skills (memory-init, lint, ask, extract) and lifecycle integration into install/archive
