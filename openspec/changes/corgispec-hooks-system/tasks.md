@@ -2,23 +2,23 @@
 
 ## 1. Hook CLI Foundation
 
-- [ ] 1.1 Create `packages/corgispec/src/lib/hooks.ts` with shared utilities: config reader, context formatter, active changes scanner, worktree path resolver, `CORGISPEC_HOOKS_DISABLE` check
-- [ ] 1.2 Create `packages/corgispec/src/commands/hooks/session-start.ts` — reads config + changes, emits `hookSpecificOutput` JSON to stdout
-- [ ] 1.3 Create `packages/corgispec/src/commands/hooks/post-compact.ts` — reuses session-start context formatting, emits identical JSON structure
-- [ ] 1.4 Create `packages/corgispec/src/commands/hooks/pre-write.ts` — reads stdin JSON, validates file_path against isolation mode and worktree paths, exits 0/2
-- [ ] 1.5 Create `packages/corgispec/src/commands/hooks/pre-bash.ts` — reads stdin JSON, matches command against dangerous patterns list (rm -rf /, force push to main), exits 0/2
-- [ ] 1.6 Create `packages/corgispec/src/commands/hooks/post-write.ts` — reads stdin JSON, triggers `corgispec validate` async when file is in a change directory, always exits 0
-- [ ] 1.7 Create `packages/corgispec/src/commands/hooks/stop-check.ts` — reads stdin JSON, checks current group task completion and artifact existence, exits 0/2
-- [ ] 1.8 Register all hook subcommands in `packages/corgispec/src/bin/corgispec.ts` under `corgispec hook <name>` subcommand group
+- [x] 1.1 Create `packages/corgispec/src/lib/hooks.ts` with shared utilities: config reader, context formatter, active changes scanner, worktree path resolver, `CORGISPEC_HOOKS_DISABLE` check
+- [x] 1.2 Create `packages/corgispec/src/commands/hooks/session-start.ts` — reads config + changes, emits `hookSpecificOutput` JSON to stdout
+- [x] 1.3 Create `packages/corgispec/src/commands/hooks/post-compact.ts` — reuses session-start context formatting, emits identical JSON structure
+- [x] 1.4 Create `packages/corgispec/src/commands/hooks/pre-write.ts` — reads stdin JSON, validates file_path against isolation mode and worktree paths, exits 0/2
+- [x] 1.5 Create `packages/corgispec/src/commands/hooks/pre-bash.ts` — reads stdin JSON, matches command against dangerous patterns list (rm -rf /, force push to main), exits 0/2
+- [x] 1.6 Create `packages/corgispec/src/commands/hooks/post-write.ts` — reads stdin JSON, triggers `corgispec validate` async when file is in a change directory, always exits 0
+- [x] 1.7 Create `packages/corgispec/src/commands/hooks/stop-check.ts` — reads stdin JSON, checks current group task completion and artifact existence, exits 0/2
+- [x] 1.8 Register all hook subcommands in `packages/corgispec/src/bin/corgispec.ts` under `corgispec hook <name>` subcommand group
 
 ## 2. Hook Config Generation
 
-- [ ] 2.1 Create `packages/corgispec/src/commands/hooks/generate.ts` — `corgispec hooks generate [--platform <name>] [--output <path>] [--force] [--deep]`
-- [ ] 2.2 Implement Claude Code config generation: output hooks key for `.claude/settings.json` mapping each event to `corgispec hook <name>`
-- [ ] 2.3 Implement OpenCode config generation: default outputs Claude Code format (bridge-compatible); `--deep` flag outputs TypeScript plugin code for `.opencode/plugins/corgispec-deep.ts`
-- [ ] 2.4 Implement Codex config generation: output `.codex/config.toml` entries + `.codex/hooks/*.py` wrapper scripts (each ~10 lines, subprocess-calling corgispec)
-- [ ] 2.5 Implement platform listing: `corgispec hooks generate` without `--platform` shows supported platforms and config locations
-- [ ] 2.6 Implement binary path resolution: `which corgispec` at generate time, fallback to `npx corgispec`
+- [x] 2.1 Create `packages/corgispec/src/commands/hooks/generate.ts` — `corgispec hooks generate [--platform <name>] [--output <path>] [--force] [--deep]`
+- [x] 2.2 Implement Claude Code config generation: output hooks key for `.claude/settings.json` mapping each event to `corgispec hook <name>`
+- [x] 2.3 Implement OpenCode config generation: default outputs Claude Code format (bridge-compatible); `--deep` flag outputs TypeScript plugin code for `.opencode/plugins/corgispec-deep.ts`
+- [x] 2.4 Implement Codex config generation: output `.codex/config.toml` entries + `.codex/hooks/*.py` wrapper scripts (each ~10 lines, subprocess-calling corgispec)
+- [x] 2.5 Implement platform listing: `corgispec hooks generate` without `--platform` shows supported platforms and config locations
+- [x] 2.6 Implement binary path resolution: `which corgispec` at generate time, fallback to `npx corgispec`
 
 ## 3. Status & Install Integration
 
