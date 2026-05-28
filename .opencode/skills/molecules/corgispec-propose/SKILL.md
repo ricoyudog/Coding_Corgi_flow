@@ -33,10 +33,9 @@ If user provided a clear name or description, derive a kebab-case name (e.g., "a
 
 ### 2. Discover: Resolve isolation and create worktree
 
-**Context Gate**: If your session context already contains:
-- `isolation.mode` value
-- Current branch
-→ **Gate passed**: Use these values. Proceed to worktree creation step.
+**Context Gate**: If session context already contains ALL of: `isolation.mode`, active changes with worktree paths, current branch
+→ Gate passed — SKIP config reading below and proceed to the next step.
+Otherwise: read `openspec/config.yaml` and proceed with discovery.
 
 If NOT available, read `openspec/config.yaml` and check `isolation.mode`:
 

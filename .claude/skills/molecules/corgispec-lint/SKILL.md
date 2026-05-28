@@ -39,6 +39,10 @@ If preconditions fail, report: "Memory structure not found. Run `/corgi-memory-i
 
 ### 1. Verify memory structure exists
 
+**Context Gate**: If session context already contains ALL of: `isolation.mode`, active changes with worktree paths, current branch
+→ Gate passed — SKIP config reading below and proceed to the next step.
+Otherwise: read `openspec/config.yaml` and proceed with discovery.
+
 Check that the following paths exist:
 - `memory/session-bridge.md`
 - `memory/pitfalls.md`

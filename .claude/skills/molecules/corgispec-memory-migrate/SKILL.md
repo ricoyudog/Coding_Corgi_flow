@@ -35,6 +35,10 @@ Do not use this skill to initialize empty memory (use `corgispec-memory-init`), 
 
 ### 1. Survey available knowledge sources
 
+**Context Gate**: If session context already contains ALL of: `isolation.mode`, active changes with worktree paths, current branch
+→ Gate passed — SKIP config reading below and proceed to the next step.
+Otherwise: read `openspec/config.yaml` and proceed with discovery.
+
 Scan the project root to determine which sources exist:
 
 1. **Agent configs**: Check for `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`

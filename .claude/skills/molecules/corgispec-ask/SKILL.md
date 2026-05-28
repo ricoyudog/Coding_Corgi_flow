@@ -47,6 +47,10 @@ Triggered by: `/corgi-ask --pending`
 
 ### 1. Determine mode and select question(s)
 
+**Context Gate**: If session context already contains ALL of: `isolation.mode`, active changes with worktree paths, current branch
+→ Gate passed — SKIP config reading below and proceed to the next step.
+Otherwise: read `openspec/config.yaml` and proceed with discovery.
+
 **If a specific file path is provided (Mode A)**:
 1. Read the specified question file
 2. Verify it has `status: pending` in frontmatter

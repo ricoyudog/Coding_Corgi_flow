@@ -28,19 +28,19 @@
 
 ## 4. Skill Step 1 Gating
 
-- [ ] 4.1 Define canonical gate text block (3 lines, platform-neutral, deterministic field list) in a reference document
-- [ ] 4.2 Add Step 1 gate to `.opencode/skills/molecules/corgispec-apply/SKILL.md` — insert before existing config-reading step
-- [ ] 4.3 Add Step 1 gate to `.opencode/skills/molecules/corgispec-archive/SKILL.md`
-- [ ] 4.4 Add Step 1 gate to `.opencode/skills/molecules/corgispec-verify/SKILL.md`
-- [ ] 4.5 Add Step 1 gate to `.opencode/skills/molecules/corgispec-review/SKILL.md`
-- [ ] 4.6 Add Step 1 gate to `.opencode/skills/molecules/corgispec-propose/SKILL.md`
-- [ ] 4.7 Add Step 1 gate to `.opencode/skills/molecules/corgispec-explore/SKILL.md`
-- [ ] 4.8 Add Step 1 gate to `.opencode/skills/molecules/corgispec-ask/SKILL.md`
-- [ ] 4.9 Add Step 1 gate to `.opencode/skills/molecules/corgispec-lint/SKILL.md`
-- [ ] 4.10 Add Step 1 gate to `.opencode/skills/molecules/corgispec-install/SKILL.md`
-- [ ] 4.11 Add Step 1 gate to `.opencode/skills/molecules/corgispec-memory-migrate/SKILL.md`
-- [ ] 4.12 Add Step 1 gate to `.opencode/skills/source-command-corgi-apply/SKILL.md` (project-level command wrapper)
-- [ ] 4.13 Sync all gated skill files to `.claude/skills/` and `.codex/skills/` (three-directory sync)
+- [x] 4.1 Define canonical gate text block (3 lines, platform-neutral, deterministic field list) in a reference document
+- [x] 4.2 Add Step 1 gate to `.opencode/skills/molecules/corgispec-apply/SKILL.md` — insert before existing config-reading step
+- [x] 4.3 Add Step 1 gate to `.opencode/skills/molecules/corgispec-archive/SKILL.md`
+- [x] 4.4 Add Step 1 gate to `.opencode/skills/molecules/corgispec-verify/SKILL.md`
+- [x] 4.5 Add Step 1 gate to `.opencode/skills/molecules/corgispec-review/SKILL.md`
+- [x] 4.6 Add Step 1 gate to `.opencode/skills/molecules/corgispec-propose/SKILL.md`
+- [x] 4.7 Add Step 1 gate to `.opencode/skills/molecules/corgispec-explore/SKILL.md`
+- [x] 4.8 Add Step 1 gate to `.opencode/skills/molecules/corgispec-ask/SKILL.md`
+- [x] 4.9 Add Step 1 gate to `.opencode/skills/molecules/corgispec-lint/SKILL.md`
+- [x] 4.10 Add Step 1 gate to `.opencode/skills/molecules/corgispec-install/SKILL.md`
+- [x] 4.11 Add Step 1 gate to `.opencode/skills/molecules/corgispec-memory-migrate/SKILL.md`
+- [x] 4.12 Add Step 1 gate to `.opencode/skills/source-command-corgi-apply/SKILL.md` (project-level command wrapper)
+- [x] 4.13 Sync all gated skill files to `.claude/skills/` and `.codex/skills/` (three-directory sync)
 
 ## 5. Tests
 
