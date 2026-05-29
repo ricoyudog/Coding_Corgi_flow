@@ -23,16 +23,16 @@
 
 ## 4. Dependency Hygiene + Runtime Schema Validation (H2, H3)
 
-- [ ] 4.1 Remove `glob` from `package.json` dependencies; verify no source file imports it
-- [ ] 4.2 Remove `@rollup/rollup-linux-x64-gnu` from `package.json` (build artifact, not a declared dependency)
-- [ ] 4.3 Add `validateSchemaShape(data: unknown)` function in `src/lib/changes.ts` that checks for `name` (string), `version` (number), `artifacts` (array); throws descriptive Error on failure
-- [ ] 4.4 Call `validateSchemaShape()` in `loadWorkflowSchema()` after parsing YAML/JSON, before returning
-- [ ] 4.5 Run `npm test` and `npm install` (verify no missing deps)
+- [x] 4.1 Remove `glob` from `package.json` dependencies; verify no source file imports it
+- [x] 4.2 Remove `@rollup/rollup-linux-x64-gnu` from `package.json` (build artifact, not a declared dependency)
+- [x] 4.3 Add `validateSchemaShape(data: unknown)` function in `src/lib/changes.ts` that checks for `name` (string), `version` (number), `artifacts` (array); throws descriptive Error on failure
+- [x] 4.4 Call `validateSchemaShape()` in `loadWorkflowSchema()` after parsing YAML/JSON, before returning
+- [x] 4.5 Run `npm test` and `npm install` (verify no missing deps)
 
 ## 5. Skill Tier Enforcement + Template Resolution (M1, M3)
 
-- [ ] 5.1 In `src/lib/skills.ts:203-207`, replace placeholder comment with tier enforcement logic: atoms must have 0 deps, molecules can only depend on atoms, compounds can depend on atoms+molecules
-- [ ] 5.2 Add descriptive error messages for tier violations (e.g., "Molecule 'X' cannot depend on molecule 'Y' — molecules may only depend on atoms")
-- [ ] 5.3 In `src/lib/instructions.ts`, add `resolveTemplateVars(text: string, vars: Record<string, string>): string` that replaces `{{key}}` with values; unknown keys → empty string + stderr warning
-- [ ] 5.4 Call `resolveTemplateVars()` on `instruction` and `template` fields before returning from the instructions command
-- [ ] 5.5 Run `npm test`; run `corgispec validate --path .` against the project's own skills to verify no false positives from tier enforcement
+- [x] 5.1 In `src/lib/skills.ts:203-207`, replace placeholder comment with tier enforcement logic: atoms must have 0 deps, molecules can only depend on atoms, compounds can depend on atoms+molecules
+- [x] 5.2 Add descriptive error messages for tier violations (e.g., "Molecule 'X' cannot depend on molecule 'Y' — molecules may only depend on atoms")
+- [x] 5.3 In `src/lib/instructions.ts`, add `resolveTemplateVars(text: string, vars: Record<string, string>): string` that replaces `{{key}}` with values; unknown keys → empty string + stderr warning
+- [x] 5.4 Call `resolveTemplateVars()` on `instruction` and `template` fields before returning from the instructions command
+- [x] 5.5 Run `npm test`; run `corgispec validate --path .` against the project's own skills to verify no false positives from tier enforcement

@@ -1,6 +1,6 @@
 ---
 type: wiki
-updated: 2026-05-12
+updated: 2026-05-29
 ---
 
 # Wiki Log
@@ -20,3 +20,4 @@ YYYY-MM-DD | action change-name | +added-file -removed-file
 2026-05-06 | archive fix-skill-architecture-issues | +wiki/sessions/fix-skill-architecture-issues.md +wiki/patterns/tiered-discovery-with-flat-fallback.md
 2026-05-12 | manual wiki-maintenance-contract | +wiki/schema.md +wiki/log.md +wiki/decisions/tier-based-directory-restructure.md +wiki/decisions/bootstrap-install-consolidation.md
 2026-05-29 | decision pre-archive-human-qa | +wiki/research/2026-05-29/pre-archive-human-qa.md +wiki/decisions/2026-05-29/pre-archive-human-qa-implementation.md
+2026-05-29 | archive corgispec-cli-p0-p1-fixes | +wiki/sessions/corgispec-cli-p0-p1-fixes.md +wiki/patterns/validate-before-cast.md

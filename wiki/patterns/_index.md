@@ -1,6 +1,6 @@
 ---
 type: wiki
-updated: 2026-05-12
+updated: 2026-05-29
 ---
 
 # Patterns Index
@@ -13,3 +13,4 @@ updated: 2026-05-12
 - [[self-compacting-memory-caps|Self-Compacting Memory with Word/Line Caps]] — 2026-05-05 — Hard caps with overflow actions to keep memory files agent-readable
 - [[three-layer-memory-architecture|Three-Layer Memory Architecture]] — 2026-05-05 — Always-loaded / on-demand / untouched layering for cross-session continuity
 - [[tiered-discovery-with-flat-fallback|Tiered Discovery with Flat Fallback]] — 2026-05-06 — Tier-based directory structure with backward-compatible flat discovery
+- [[validate-before-cast|Validate Before Cast]] — 2026-05-29 — Lightweight shape validation between YAML/JSON parsing and TypeScript type casting

@@ -1,6 +1,6 @@
 ---
 type: wiki
-updated: 2026-05-28
+updated: 2026-05-29
 tags: [hot, entry]
 pinned: true
 ---
@@ -10,7 +10,7 @@ pinned: true
 > ~500 words | Hard cap 600 words | Updated every session | First entry point for humans and AI
 
 ## Active Changes
-- `corgispec-cli` exists in `openspec/changes/` (all groups done, not yet archived)
+- (none)
 
 ## Recent Decisions
 - Hook exit code contract: 0=allow, 1=error/disabled, 2=block (stderr message)
@@ -28,5 +28,6 @@ pinned: true
 - (none yet — see [[memory/pitfalls]])
 
 ## Recently Shipped
+- **corgispec-cli-p0-p1-fixes** (2026-05-29) — All P0/P1 code review fixes: exit codes, Node 18 compat, error handling, dep hygiene, tier enforcement, template resolution
 - **corgispec-hooks-system** (2026-05-29) — Complete AI platform hook system: 6 runtime hooks, config generation for Claude/OpenCode/Codex, canonical context gates in all skills, 63 integration tests
 - **openspec-to-corgi-rebrand** (2026-05-28) — Replaced all user-visible "OpenSpec" brand text with "Corgi" across 126 files while preserving directory paths, identifiers, and upstream attribution

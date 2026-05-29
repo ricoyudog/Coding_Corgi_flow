@@ -1,6 +1,6 @@
 ---
 type: wiki
-updated: 2026-05-05
+updated: 2026-05-29
 ---
 
 # Corgi GitFlow Wiki Index
@@ -18,6 +18,7 @@ updated: 2026-05-05
 - [[wiki/patterns/self-compacting-memory-caps|Self-Compacting Memory with Word/Line Caps]]
 - [[wiki/patterns/tiered-discovery-with-flat-fallback|Tiered Discovery with Flat Fallback]]
 - [[wiki/patterns/multi-platform-brand-replacement|Multi-Platform Brand Text Replacement]]
+- [[wiki/patterns/validate-before-cast|Validate Before Cast]]
 
 ## Research
 - [[wiki/research/_index|Research Index]]
@@ -27,6 +28,7 @@ updated: 2026-05-05
 
 ## Session History
 - [[wiki/sessions/_index|Session Index]]
+- [[wiki/sessions/corgispec-cli-p0-p1-fixes|corgispec-cli-p0-p1-fixes]]
 - [[wiki/sessions/corgispec-hooks-system|corgispec-hooks-system]]
 - [[wiki/sessions/openspec-to-corgi-rebrand|openspec-to-corgi-rebrand]]
 - [[wiki/sessions/fix-skill-architecture-issues|fix-skill-architecture-issues]]
