@@ -44,11 +44,11 @@
 
 ## 5. Tests
 
-- [ ] 5.1 Create `packages/corgispec/test/hooks/session-start.test.ts` — covers: project with worktree, project with no isolation, no config, hooks disabled
-- [ ] 5.2 Create `packages/corgispec/test/hooks/pre-write.test.ts` — covers: write to worktree allowed, write to main blocked, isolation none allowed, hooks disabled
-- [ ] 5.3 Create `packages/corgispec/test/hooks/pre-bash.test.ts` — covers: dangerous commands blocked, safe commands allowed, hooks disabled
-- [ ] 5.4 Create `packages/corgispec/test/hooks/post-write.test.ts` — covers: triggers validation on change file, skips on unrelated file
-- [ ] 5.5 Create `packages/corgispec/test/hooks/stop-check.test.ts` — covers: all tasks complete, incomplete tasks blocked, no active change passes
-- [ ] 5.6 Create `packages/corgispec/test/hooks/post-compact.test.ts` — covers: context matches session-start format
-- [ ] 5.7 Create `packages/corgispec/test/hooks/generate.test.ts` — covers: Claude Code format, OpenCode format, Codex format, platform listing, existing config warning
-- [ ] 5.8 Add `corgispec validate` gate check: verify all skill files with Step 1 contain the canonical gate text pattern
+- [x] 5.1 Create `packages/corgispec/test/hooks/session-start.test.ts` — covers: project with worktree, project with no isolation, no config, hooks disabled
+- [x] 5.2 Create `packages/corgispec/test/hooks/pre-write.test.ts` — covers: write to worktree allowed, write to main blocked, isolation none allowed, hooks disabled
+- [x] 5.3 Create `packages/corgispec/test/hooks/pre-bash.test.ts` — covers: dangerous commands blocked, safe commands allowed, hooks disabled
+- [x] 5.4 Create `packages/corgispec/test/hooks/post-write.test.ts` — covers: triggers validation on change file, skips on unrelated file
+- [x] 5.5 Create `packages/corgispec/test/hooks/stop-check.test.ts` — covers: all tasks complete, incomplete tasks blocked, no active change passes
+- [x] 5.6 Create `packages/corgispec/test/hooks/post-compact.test.ts` — covers: context matches session-start format
+- [x] 5.7 Create `packages/corgispec/test/hooks/generate.test.ts` — covers: Claude Code format, OpenCode format, Codex format, platform listing, existing config warning
+- [x] 5.8 Add `corgispec validate` gate check: verify all skill files with Step 1 contain the canonical gate text pattern
