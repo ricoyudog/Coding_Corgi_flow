@@ -9,9 +9,9 @@
 
 ## 2. Node 18 Compatibility + Doctor Schema Validation (C2, M2)
 
-- [ ] 2.1 In `src/commands/doctor.ts:186-187`, replace `import.meta.dirname` with `dirname(fileURLToPath(import.meta.url))` pattern; add imports for `fileURLToPath` from `node:url` and `dirname` from `node:path`
-- [ ] 2.2 Fix doctor's schema validation to target the schema definition file (`openspec/schemas/<name>/schema.yaml`) instead of `config.yaml`; verify it checks for required fields (`name`, `version`, `artifacts`)
-- [ ] 2.3 Run `npm test` and verify doctor-related tests pass
+- [x] 2.1 In `src/commands/doctor.ts:186-187`, replace `import.meta.dirname` with `dirname(fileURLToPath(import.meta.url))` pattern; add imports for `fileURLToPath` from `node:url` and `dirname` from `node:path`
+- [x] 2.2 Fix doctor's schema validation to target the schema definition file (`openspec/schemas/<name>/schema.yaml`) instead of `config.yaml`; verify it checks for required fields (`name`, `version`, `artifacts`)
+- [x] 2.3 Run `npm test` and verify doctor-related tests pass
 
 ## 3. Error Handling Consistency (C3, H1)
 

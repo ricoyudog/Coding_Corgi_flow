@@ -1,5 +1,6 @@
 import { Command } from "commander";
-import { resolve } from "node:path";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { existsSync, accessSync, constants, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { findConfigPath, loadConfig } from "../lib/config.js";
@@ -181,10 +182,11 @@ function checkPlatforms(): CheckResult[] {
 
 function checkSchemas(cwd: string): CheckResult {
   // Check project schemas first, then bundled schemas
+  const __dirname = dirname(fileURLToPath(import.meta.url));
   const schemaDirs = [
     resolve(cwd, "openspec/schemas"),
-    resolve(import.meta.dirname ?? ".", "../assets/schemas"),
-    resolve(import.meta.dirname ?? ".", "../../assets/schemas"),
+    resolve(__dirname, "../assets/schemas"),
+    resolve(__dirname, "../../assets/schemas"),
   ];
 
   let schemasDir: string | null = null;
@@ -231,6 +233,11 @@ function checkSchemas(cwd: string): CheckResult {
 
         if (!parsed.name || typeof parsed.name !== "string") {
           errors.push(`${name}/schema.yaml missing required 'name' field`);
+          continue;
+        }
+
+        if (parsed.version == null || typeof parsed.version !== "number") {
+          errors.push(`${name}/schema.yaml missing required 'version' field (must be a number)`);
           continue;
         }
 
