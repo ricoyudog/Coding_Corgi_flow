@@ -96,11 +96,18 @@ export function resolveArtifactInstruction(
   // Get per-artifact rules
   const rules = getArtifactRules(config, artifactId);
 
+  const templateVars: Record<string, string> = {
+    changeName,
+    outputPath,
+    artifactId,
+    schemaName: schema.name,
+  };
+
   return {
     changeName,
     artifactId,
-    template,
-    instruction: artifact.instruction,
+    template: resolveTemplateVars(template, templateVars),
+    instruction: resolveTemplateVars(artifact.instruction, templateVars),
     outputPath,
     dependencies: artifact.requires,
     contextFiles,
@@ -249,6 +256,19 @@ export function resolveArchiveInstruction(
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────
+
+function resolveTemplateVars(
+  text: string,
+  vars: Record<string, string>
+): string {
+  return text.replace(/\{\{(\w+)\}\}/g, (match, key: string) => {
+    if (key in vars) {
+      return vars[key]!;
+    }
+    console.error(`[template] Warning: unknown variable '${key}' replaced with empty string`);
+    return "";
+  });
+}
 
 function gatherContextFiles(
   changeDir: string,
