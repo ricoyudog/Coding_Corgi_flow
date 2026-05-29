@@ -370,7 +370,7 @@ function generateCodexOutput(
     process.stdout.write(toml);
     console.log("");
     for (const hook of HOOK_EVENTS) {
-      const scriptName = hook.subcommand.replace(/-/g, "_");
+      const scriptName = `corgispec_${hook.subcommand.replace(/-/g, "_")}`;
       console.log(`=== .codex/hooks/${scriptName}.py ===`);
       process.stdout.write(buildPythonWrapper(hook.subcommand, binaryPath));
       console.log("");
@@ -396,7 +396,7 @@ function generateCodexOutput(
   console.log(`Wrote ${configTomlPath}`);
 
   for (const hook of HOOK_EVENTS) {
-    const scriptName = hook.subcommand.replace(/-/g, "_");
+    const scriptName = `corgispec_${hook.subcommand.replace(/-/g, "_")}`;
     const scriptPath = resolve(hooksDir, `${scriptName}.py`);
     const code = buildPythonWrapper(hook.subcommand, binaryPath);
     writeFileSync(scriptPath, code);

@@ -186,17 +186,17 @@ describe("hooks generate", () => {
       );
 
       expect(existsSync(resolve(outputDir, "config.toml"))).toBe(true);
-      expect(existsSync(resolve(outputDir, "hooks/session_start.py"))).toBe(true);
-      expect(existsSync(resolve(outputDir, "hooks/pre_write.py"))).toBe(true);
-      expect(existsSync(resolve(outputDir, "hooks/pre_bash.py"))).toBe(true);
-      expect(existsSync(resolve(outputDir, "hooks/post_write.py"))).toBe(true);
-      expect(existsSync(resolve(outputDir, "hooks/stop_check.py"))).toBe(true);
-      expect(existsSync(resolve(outputDir, "hooks/post_compact.py"))).toBe(true);
+      expect(existsSync(resolve(outputDir, "hooks/corgispec_session_start.py"))).toBe(true);
+      expect(existsSync(resolve(outputDir, "hooks/corgispec_pre_write.py"))).toBe(true);
+      expect(existsSync(resolve(outputDir, "hooks/corgispec_pre_bash.py"))).toBe(true);
+      expect(existsSync(resolve(outputDir, "hooks/corgispec_post_write.py"))).toBe(true);
+      expect(existsSync(resolve(outputDir, "hooks/corgispec_stop_check.py"))).toBe(true);
+      expect(existsSync(resolve(outputDir, "hooks/corgispec_post_compact.py"))).toBe(true);
 
       const toml = readFileSync(resolve(outputDir, "config.toml"), "utf-8");
       expect(toml).toContain("hooks = true");
 
-      const wrapper = readFileSync(resolve(outputDir, "hooks/pre_bash.py"), "utf-8");
+      const wrapper = readFileSync(resolve(outputDir, "hooks/corgispec_pre_bash.py"), "utf-8");
       expect(wrapper).toContain("hook");
       expect(wrapper).toContain("pre-bash");
     });
