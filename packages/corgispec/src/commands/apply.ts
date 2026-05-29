@@ -69,11 +69,12 @@ export function createApplyCommand(): Command {
             }
           }
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
         if (opts.json) {
-          console.log(JSON.stringify({ error: err.message }, null, 2));
+          console.log(JSON.stringify({ error: msg }, null, 2));
         } else {
-          console.error(`Error: ${err.message}`);
+          console.error(`Error: ${msg}`);
         }
         process.exitCode = 1;
       }

@@ -96,7 +96,8 @@ function readInstalledAtIfPresent(manifestPath: string): string | undefined {
   try {
     const parsed = JSON.parse(readFileSync(manifestPath, "utf-8")) as InstallManifest;
     return parsed.installedAt;
-  } catch {
+  } catch (err: unknown) {
+    console.error(`[bootstrap] Failed to read install manifest ${manifestPath}: ${err instanceof Error ? err.message : String(err)}`);
     return undefined;
   }
 }

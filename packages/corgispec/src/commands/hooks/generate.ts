@@ -73,8 +73,8 @@ function resolveBinaryPath(): string {
       stdio: ["pipe", "pipe", "pipe"],
     }).trim();
     if (path && existsSync(path)) return path;
-  } catch {
-    // not found globally
+  } catch (err: unknown) {
+    console.error(`[generate] corgispec not found in PATH: ${err instanceof Error ? err.message : String(err)}`);
   }
   return "npx corgispec";
 }

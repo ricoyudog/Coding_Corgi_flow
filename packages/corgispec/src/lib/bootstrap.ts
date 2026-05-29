@@ -455,7 +455,8 @@ function readIsolation(target: string): { mode: "none" | "worktree"; root?: stri
   try {
     const config = loadConfigFromDir(target);
     return config.isolation ?? { mode: "none" };
-  } catch {
+  } catch (err: unknown) {
+    console.error(`[bootstrap] Failed to read isolation config: ${err instanceof Error ? err.message : String(err)}`);
     return { mode: "none" };
   }
 }

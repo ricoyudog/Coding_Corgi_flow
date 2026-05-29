@@ -15,11 +15,11 @@
 
 ## 3. Error Handling Consistency (C3, H1)
 
-- [ ] 3.1 In `src/commands/apply.ts:72`, change `err: any` to proper `unknown` type with `instanceof Error` narrowing
-- [ ] 3.2 Identify all empty `catch {}` blocks across: `src/lib/skills.ts`, `src/lib/hooks.ts`, `src/lib/bootstrap.ts`, `src/commands/doctor.ts`, `src/commands/generate.ts` (and any others found via grep)
-- [ ] 3.3 Replace each empty catch with `console.error(`[${contextName}] ${err instanceof Error ? err.message : String(err)}`)` — use operation/function name as context
-- [ ] 3.4 Classify catches: critical-path errors also set `process.exitCode = 1`, non-critical errors log and continue
-- [ ] 3.5 Run `npm test` to confirm no regressions
+- [x] 3.1 In `src/commands/apply.ts:72`, change `err: any` to proper `unknown` type with `instanceof Error` narrowing
+- [x] 3.2 Identify all empty `catch {}` blocks across: `src/lib/skills.ts`, `src/lib/hooks.ts`, `src/lib/bootstrap.ts`, `src/commands/doctor.ts`, `src/commands/generate.ts` (and any others found via grep)
+- [x] 3.3 Replace each empty catch with `console.error(`[${contextName}] ${err instanceof Error ? err.message : String(err)}`)` — use operation/function name as context
+- [x] 3.4 Classify catches: critical-path errors also set `process.exitCode = 1`, non-critical errors log and continue
+- [x] 3.5 Run `npm test` to confirm no regressions
 
 ## 4. Dependency Hygiene + Runtime Schema Validation (H2, H3)
 

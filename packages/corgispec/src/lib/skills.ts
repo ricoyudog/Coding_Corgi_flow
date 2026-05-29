@@ -78,7 +78,8 @@ export function discoverSkills(skillsDir: string): DiscoveredSkill[] {
       const hasSkillMd = existsSync(resolve(skillDir, "SKILL.md"));
 
       skills.push({ slug: name, dir: skillDir, meta, hasSkillMd });
-    } catch {
+    } catch (err: unknown) {
+      console.error(`[skills] Failed to parse ${metaPath}: ${err instanceof Error ? err.message : String(err)}`);
       skills.push({
         slug: name,
         dir: skillDir,
@@ -105,8 +106,8 @@ export function discoverSkills(skillsDir: string): DiscoveredSkill[] {
       for (const entry of entries) {
         if (entry.isDirectory()) loadEntry(tierPath, entry.name);
       }
-    } catch {
-      // tier dir unreadable, skip
+    } catch (err: unknown) {
+      console.error(`[skills] Cannot read tier directory ${tierPath}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -118,8 +119,8 @@ export function discoverSkills(skillsDir: string): DiscoveredSkill[] {
       if (tierDirs.includes(entry.name)) continue;
       loadEntry(skillsDir, entry.name);
     }
-  } catch {
-    // root unreadable, skip
+  } catch (err: unknown) {
+    console.error(`[skills] Cannot read skills directory ${skillsDir}: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   return skills;
