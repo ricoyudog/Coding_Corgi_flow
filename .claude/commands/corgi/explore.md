@@ -1,5 +1,5 @@
 ---
-name: "OPSX: Explore"
+name: "Corgi: Explore"
 description: Think through ideas, investigate problems, or clarify requirements
 category: Workflow
 tags: [workflow, explore, experimental]

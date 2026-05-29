@@ -24,7 +24,7 @@ export interface RulesConfig {
 }
 
 /**
- * The parsed and validated OpenSpec config.
+ * The parsed and validated Corgi config.
  */
 export interface OpenSpecConfig {
   schema: SchemaType;
@@ -66,7 +66,7 @@ export function findConfigPath(cwd: string): string | null {
 }
 
 /**
- * Load and validate the OpenSpec config from a file path.
+ * Load and validate the Corgi config from a file path.
  * Throws ConfigError if the file is missing, unparseable, or invalid.
  */
 export function loadConfig(configPath: string): OpenSpecConfig {

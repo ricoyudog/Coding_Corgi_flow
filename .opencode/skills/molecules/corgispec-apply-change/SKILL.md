@@ -1,15 +1,15 @@
 ---
 name: corgispec-apply-change
-description: Implement tasks from an OpenSpec change. Use when the user wants to start implementing, continue implementation, or work through tasks.
+description: Implement tasks from a Corgi change. Use when the user wants to start implementing, continue implementation, or work through tasks.
 license: MIT
 compatibility: Requires corgispec CLI.
 metadata:
-  author: openspec
+  author: corgispec
   version: "2.0"
   generatedBy: "1.3.0"
 ---
 
-Implement tasks from an OpenSpec change — one Task Group at a time, with subagent delegation.
+Implement tasks from a Corgi change — one Task Group at a time, with subagent delegation.
 
 ## Preconditions (VERIFY BEFORE STARTING)
 
@@ -31,7 +31,9 @@ Implement tasks from an OpenSpec change — one Task Group at a time, with subag
 
 ### 1. Discover: Select change and resolve worktree
 
-Read `openspec/config.yaml` for `isolation` settings.
+**Context Gate**: If session context already contains ALL of: `isolation.mode`, active changes with worktree paths, current branch
+→ Gate passed — SKIP config reading below and proceed to the next step.
+Otherwise: read `openspec/config.yaml` and proceed with discovery.
 
 **If `isolation.mode: worktree`**: Changes live inside worktrees, not the main checkout. Read `references/worktree-discovery.md` for the full discovery procedure. Quick summary:
 1. `openspec list --json` — if it returns changes, use them
@@ -84,7 +86,7 @@ After all tasks in the group are complete, close out the group without doing new
 3. Update parent issue progress if tracked
 4. Prepare the group for review handoff
 5. **Memory writes (if memory/ and wiki/ exist)**:
-   - Update `memory/session-bridge.md`: set Active opsx Change to current change/phase/branch, update Done with completed tasks, update Waiting with next group info
+   - Update `memory/session-bridge.md`: set Active corgi Change to current change/phase/branch, update Done with completed tasks, update Waiting with next group info
    - If any pitfalls were discovered during this group: append to `memory/pitfalls.md` Active section with source link `(source: [[openspec/changes/<name>/tasks]])`
    - If any implicit rules or architectural insights emerged: append to `wiki/architecture/implicit-contracts.md`
    - Update `wiki/hot.md` Recent Decisions if significant decisions were made

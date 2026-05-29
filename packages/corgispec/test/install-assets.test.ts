@@ -65,7 +65,7 @@ describe("bundle-assets", () => {
       "memory-init/templates/session-memory-protocol.md",
       resolve(
         REPO_ROOT,
-        ".opencode/skills/corgispec-memory-init/templates/session-memory-protocol.md"
+        ".opencode/skills/atoms/corgispec-memory-init/templates/session-memory-protocol.md"
       )
     );
     expectBundledFile(
@@ -73,13 +73,13 @@ describe("bundle-assets", () => {
       "memory-init/templates/memory/session-bridge.md",
       resolve(
         REPO_ROOT,
-        ".opencode/skills/corgispec-memory-init/templates/memory/session-bridge.md"
+        ".opencode/skills/atoms/corgispec-memory-init/templates/memory/session-bridge.md"
       )
     );
     expectBundledFile(
       bundleRoot,
       "memory-init/templates/wiki/hot.md",
-      resolve(REPO_ROOT, ".opencode/skills/corgispec-memory-init/templates/wiki/hot.md")
+      resolve(REPO_ROOT, ".opencode/skills/atoms/corgispec-memory-init/templates/wiki/hot.md")
     );
 
     expect(existsSync(resolve(ASSETS_ROOT, "schemas/skill-meta.schema.json"))).toBe(true);

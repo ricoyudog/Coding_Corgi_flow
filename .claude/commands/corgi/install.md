@@ -1,11 +1,11 @@
 ---
-name: "OPSX: Install"
-description: Install, update, or verify OpenSpec GitFlow assets in a target project
+name: "Corgi: Install"
+description: Install, update, or verify Corgi GitFlow assets in a target project
 category: Workflow
 tags: [workflow, install, experimental]
 ---
 
-Install, update, or verify project-local OpenSpec GitFlow assets.
+Install, update, or verify project-local Corgi GitFlow assets.
 
 **Dispatches to**: `corgispec-install`
 

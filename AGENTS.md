@@ -2,7 +2,7 @@
 
 ## What this repo is
 
-A workflow/skills toolkit (not an app) that turns AI coding assistants into structured engineering workflows via OpenSpec. It ships skills, schemas, CLI tooling, and slash commands for Claude Code, OpenCode, and Codex.
+A workflow/skills toolkit (not an app) that turns AI coding assistants into structured engineering workflows via Corgi. It ships skills, schemas, CLI tooling, and slash commands for Claude Code, OpenCode, and Codex.
 
 There is no application code to build or deploy. The "product" is the skill files and their metadata.
 

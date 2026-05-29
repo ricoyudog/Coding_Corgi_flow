@@ -1,5 +1,5 @@
 ---
-name: "OPSX: Review"
+name: "Corgi: Review"
 description: Review a completed Task Group with quality checks and approve/reject flow
 category: Workflow
 tags: [workflow, review, experimental]

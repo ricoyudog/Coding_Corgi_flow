@@ -4,7 +4,7 @@ description: Extract reusable patterns and session summaries from completed chan
 license: MIT
 compatibility: Requires memory/ and wiki/ directories. Called by corgispec-archive before change closure.
 metadata:
-  author: openspec
+  author: corgispec
   version: "1.0"
   generatedBy: "1.0.0"
 ---
@@ -157,7 +157,7 @@ Update `memory/session-bridge.md`:
 3. Clear entries in `## Waiting` that relate to the archived change
 4. Clear entries in `## New Pitfalls` that relate to the archived change (they're already in pitfalls.md)
 5. Clear entries in `## New Discoveries` that relate to the archived change
-6. Update `## Active opsx Change`:
+6. Update `## Active corgi Change`:
    - If another change is active: set to that change's info
    - If no other change: reset to `none`/`none`/`main`
 

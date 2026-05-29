@@ -4,7 +4,7 @@ description: Answer human questions from Obsidian vault using early-stop retriev
 license: MIT
 compatibility: Requires memory/ and wiki/ directories (created by corgispec-memory-init).
 metadata:
-  author: openspec
+  author: corgispec
   version: "1.0"
   generatedBy: "1.0.0"
 ---
@@ -46,6 +46,10 @@ Triggered by: `/corgi-ask --pending`
 ## Steps
 
 ### 1. Determine mode and select question(s)
+
+**Context Gate**: If session context already contains ALL of: `isolation.mode`, active changes with worktree paths, current branch
+→ Gate passed — SKIP config reading below and proceed to the next step.
+Otherwise: read `openspec/config.yaml` and proceed with discovery.
 
 **If a specific file path is provided (Mode A)**:
 1. Read the specified question file

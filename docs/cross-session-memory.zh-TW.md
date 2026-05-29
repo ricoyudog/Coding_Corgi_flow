@@ -2,7 +2,7 @@
 
 # 跨 Session 記憶
 
-AI coding sessions 預設是無狀態的 — 每個新 session 都從零開始。OpenSpec GitFlow 加入了 **三層記憶系統**，讓 AI agent 跨 session 保持延續性，同時控制在嚴格的 token 預算內（啟動 ~2900 tokens）。
+AI coding sessions 預設是無狀態的 — 每個新 session 都從零開始。Corgi GitFlow 加入了 **三層記憶系統**，讓 AI agent 跨 session 保持延續性，同時控制在嚴格的 token 預算內（啟動 ~2900 tokens）。
 
 ## 問題
 
@@ -169,7 +169,7 @@ Layer 3: docs/            ← 既有專案文件（不動）
 
 ### 既有專案（無先前知識）
 
-為已使用 OpenSpec 的專案加入記憶：
+為已使用 Corgi 的專案加入記憶：
 
 ```text
 /corgi-memory-init

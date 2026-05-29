@@ -1,12 +1,13 @@
 import { Command } from "commander";
 import { resolve } from "node:path";
 import { discoverChanges, getChangeInfo } from "../lib/changes.js";
+import { detectHookConfig } from "../lib/hooks.js";
 
 export function createStatusCommand(): Command {
   const cmd = new Command("status");
 
   cmd
-    .description("Show artifact completion state for an OpenSpec change")
+    .description("Show artifact completion state for a Corgi change")
     .argument("[name]", "Change name (auto-selects if only one exists)")
     .option("--json", "Output as JSON")
     .option("--path <dir>", "Working directory", ".")
@@ -33,6 +34,7 @@ export function createStatusCommand(): Command {
         }
 
         const info = getChangeInfo(cwd, changeName);
+        const hookStatus = detectHookConfig(cwd);
 
         if (opts.json) {
           const output = {
@@ -42,6 +44,11 @@ export function createStatusCommand(): Command {
             isComplete: info.isComplete,
             artifacts: info.artifacts,
             taskGroups: info.taskGroups,
+            hooks: {
+              configured: hookStatus.configured,
+              platform: hookStatus.platform,
+              events: hookStatus.events,
+            },
           };
           console.log(JSON.stringify(output, null, 2));
           return;
@@ -50,6 +57,15 @@ export function createStatusCommand(): Command {
         // Human-readable output
         console.log(`Change: ${info.name} (state: ${info.state})`);
         console.log(`Schema: ${info.schemaName}`);
+        if (hookStatus.configured) {
+          console.log(
+            `Hooks: ✅ configured (${hookStatus.events.join(", ")})`
+          );
+        } else {
+          console.log(
+            "Hooks: ❌ not configured → run corgispec hooks generate"
+          );
+        }
         console.log();
 
         // Artifacts

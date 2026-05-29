@@ -1,7 +1,7 @@
 {
   "name": "corgispec",
   "version": "0.1.1",
-  "description": "Unified CLI for OpenSpec workflow — skill management, validation, and AI instruction generation",
+  "description": "Unified CLI for Corgi workflow — skill management, validation, and AI instruction generation",
   "type": "module",
   "bin": {
     "corgispec": "./dist/corgispec.js"
@@ -21,7 +21,8 @@
     "assets"
   ],
   "keywords": [
-    "openspec",
+    "corgispec",
+    "corgi-workflow",
     "cli",
     "workflow",
     "ai",

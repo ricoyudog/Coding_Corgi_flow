@@ -61,7 +61,7 @@ export function createInitCommand(): Command {
   const cmd = new Command("init");
 
   cmd
-    .description("Initialize OpenSpec directory structure in a project")
+    .description("Initialize Corgi directory structure in a project")
     .argument("[path]", "Target directory (default: current directory)")
     .option(
       "--schema <schema>",
@@ -79,7 +79,7 @@ export function createInitCommand(): Command {
         // Check if already initialized
         const configPath = resolve(target, "openspec/config.yaml");
         if (existsSync(configPath)) {
-          console.log("OpenSpec already initialized");
+          console.log("Corgi already initialized");
           return;
         }
 
@@ -98,7 +98,7 @@ export function createInitCommand(): Command {
           bundledSchemasDir: findBundledSchemas(),
         });
 
-        console.log(`Initialized OpenSpec in ${target}`);
+        console.log(`Initialized Corgi in ${target}`);
         console.log(`  Schema: ${schema}`);
         console.log(`  Config: openspec/config.yaml`);
         console.log(`  Changes: openspec/changes/`);

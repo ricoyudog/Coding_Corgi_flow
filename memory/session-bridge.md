@@ -1,6 +1,6 @@
 ---
 type: memory
-updated: 2026-05-06
+updated: 2026-05-29
 ---
 
 # Session Bridge
@@ -13,18 +13,20 @@ updated: 2026-05-06
 - **Branch**: main
 
 ## Done (last session completed)
-- Archived: fix-skill-architecture-issues — 4 groups, 37 tasks, delta specs synced, memory extracted
+- corgispec-hooks-system archived (2026-05-29)
 
 ## Waiting (next steps / blockers)
-- _None_
+- `corgispec-cli` change exists in `openspec/changes/` — all groups done, ready for archive
+- Bug fix `d549960` pushed: Codex filename mismatch resolved
 
 ## New Pitfalls
-- _None_
+- Codex generate: TOML references must match written filenames (prefix consistency)
+- Malformed JSON stdin to hook commands causes unhandled stack trace (enhancement opportunity)
+- `CORGISPEC_HOOKS_DISABLE` only recognizes exact string `"1"` — document this clearly
 
 ## New Discoveries
-- Tiered discovery with flat fallback pattern — useful for any flat→hierarchical migration
-- `.codex/` symlinks need 3 levels of `../` when tier subdirs add nesting depth
-- `git add -f` needed for files under gitignored parent directories (e.g., `docs/`)
+- Hook exit code contract (0/1/2) works cleanly across all platforms
+- Integration tests via execSync + tmpdir are reliable and fast (~24s for 177 tests)
 
 ## Next Session Start
 1. Read this file ← you are here

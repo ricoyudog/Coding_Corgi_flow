@@ -16,6 +16,14 @@ import { createReviewCommand } from "../commands/review.js";
 import { createArchiveCommand } from "../commands/archive.js";
 import { createInitCommand } from "../commands/init.js";
 import { createDoctorCommand } from "../commands/doctor.js";
+import { createHookSessionStartCommand } from "../commands/hooks/session-start.js";
+import { createHookPostCompactCommand } from "../commands/hooks/post-compact.js";
+import { createHookPreWriteCommand } from "../commands/hooks/pre-write.js";
+import { createHookPreBashCommand } from "../commands/hooks/pre-bash.js";
+import { createHookPostWriteCommand } from "../commands/hooks/post-write.js";
+import { createHookStopCheckCommand } from "../commands/hooks/stop-check.js";
+import { createHookCommand } from "../commands/hooks/index.js";
+import { createHooksGenerateCommand } from "../commands/hooks/generate.js";
 
 // Guard: exit early if Node version is too low
 checkNodeVersion();
@@ -30,7 +38,7 @@ const program = new Command();
 program
   .name("corgispec")
   .description(
-    "Unified CLI for OpenSpec workflow — skill management, validation, and AI instruction generation"
+    "Unified CLI for Corgi workflow — skill management, validation, and AI instruction generation"
   )
   .version(pkg.version)
   .option("--no-color", "Disable color output");
@@ -56,5 +64,14 @@ program.addCommand(createProposeCommand());
 program.addCommand(createApplyCommand());
 program.addCommand(createReviewCommand());
 program.addCommand(createArchiveCommand());
+
+// Hook subcommands (corgispec hook <name>)
+program.addCommand(createHookCommand());
+
+// Hook config generation (corgispec hooks generate)
+const hooksCmd = new Command("hooks");
+hooksCmd.description("Hook configuration management for AI platforms");
+hooksCmd.addCommand(createHooksGenerateCommand());
+program.addCommand(hooksCmd);
 
 program.parse();

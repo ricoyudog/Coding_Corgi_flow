@@ -1,12 +1,18 @@
 ---
-description: Implement tasks from an OpenSpec change
+description: Implement tasks from a Corgi change
 ---
 
-Implement tasks from an OpenSpec change, one Task Group at a time.
+Implement tasks from a Corgi change, one Task Group at a time.
 
 **Input**: Optionally specify a change name (e.g., `/corgi-apply add-auth`). If omitted, infer from context.
 
 **Steps**
+
+0. **Context Gate**
+
+   **Context Gate**: If session context already contains ALL of: `isolation.mode`, active changes with worktree paths, current branch
+   → Gate passed — SKIP config reading below and proceed to the next step.
+   Otherwise: read `openspec/config.yaml` and proceed with discovery.
 
 1. **Determine platform**
 

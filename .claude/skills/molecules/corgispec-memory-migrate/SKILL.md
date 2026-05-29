@@ -4,7 +4,7 @@ description: Migrate existing project knowledge into the memory/wiki structure f
 license: MIT
 compatibility: Requires memory/ and wiki/ directories (run corgispec-memory-init first).
 metadata:
-  author: openspec
+  author: corgispec
   version: "1.0"
   generatedBy: "1.0.0"
 ---
@@ -13,7 +13,7 @@ Migrate existing project knowledge into the memory/wiki structure.
 
 ## Overview
 
-When applying memory to an existing project, the `memory-init` skill creates empty templates. This skill fills them with knowledge already present in the project — extracting from agent config files, archived OpenSpec changes, docs/ directory, and any existing Obsidian vault pages.
+When applying memory to an existing project, the `memory-init` skill creates empty templates. This skill fills them with knowledge already present in the project — extracting from agent config files, archived Corgi changes, docs/ directory, and any existing Obsidian vault pages.
 
 The migration is **hybrid**: obvious items are auto-populated, ambiguous items prompt the user for categorization. Source files are never moved or deleted — migration creates wiki entries that reference originals.
 
@@ -34,6 +34,10 @@ Do not use this skill to initialize empty memory (use `corgispec-memory-init`), 
 ## Steps
 
 ### 1. Survey available knowledge sources
+
+**Context Gate**: If session context already contains ALL of: `isolation.mode`, active changes with worktree paths, current branch
+→ Gate passed — SKIP config reading below and proceed to the next step.
+Otherwise: read `openspec/config.yaml` and proceed with discovery.
 
 Scan the project root to determine which sources exist:
 

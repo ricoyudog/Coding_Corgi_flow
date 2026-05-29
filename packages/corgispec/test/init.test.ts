@@ -24,7 +24,7 @@ describe("init command", () => {
   it("initializes in a fresh directory with default schema", () => {
     const result = execSync(`node ${CLI} init ${targetDir}`, { encoding: "utf-8" });
 
-    expect(result).toContain("Initialized OpenSpec");
+    expect(result).toContain("Initialized Corgi");
     expect(existsSync(resolve(targetDir, "openspec/config.yaml"))).toBe(true);
     const config = readFileSync(resolve(targetDir, "openspec/config.yaml"), "utf-8");
     expect(config).toContain("schema: github-tracked");
@@ -47,7 +47,7 @@ describe("init command", () => {
 
     const result = execSync(`node ${CLI} init ${targetDir}`, { encoding: "utf-8" });
 
-    expect(result).toContain("OpenSpec already initialized");
+    expect(result).toContain("Corgi already initialized");
     const config = readFileSync(resolve(configDir, "config.yaml"), "utf-8");
     expect(config).toBe("schema: custom\n");
   });

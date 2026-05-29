@@ -2,7 +2,7 @@
 
 CorgiSpec currently distributes skills via `install-skills.sh`, which copies `.opencode/skills/` (canonical) to Claude Code and OpenCode user-level directories. Physical copies of all 17 skills also exist in `.codex/skills/` — introducing sync drift risk.
 
-Both Codex (v0.117.0+) and Claude Code (v2.0.12+) now support a native Plugin system with Marketplace distribution (see `wiki/research/codex-claude-plugin-distribution-research.md`). This change adds the Plugin packaging layer on top of the existing skill files — it does not modify the skills themselves.
+Both Codex (v0.117.0+) and Claude Code (v2.0.12+) now support a native Plugin system with Marketplace distribution (see `wiki/research/2026-05-05/codex-claude-plugin-distribution-research.md`). This change adds the Plugin packaging layer on top of the existing skill files — it does not modify the skills themselves.
 
 **Constraint**: `.opencode/skills/` is the source of truth per AGENTS.md convention. The existing `skill.meta.json` files already declare `installation.targets: ["opencode", "claude", "codex"]`.
 

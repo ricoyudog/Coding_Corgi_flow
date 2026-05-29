@@ -9,5 +9,11 @@ updated: 2026-05-04
 
 ## Topics
 
-- [[codex-claude-plugin-distribution-research|Codex Plugin + Claude Code Plugin 分發研究]] — 2026-05-05
-- [[addyosmani-agent-skills-verify-vs-review|addyosmani/agent-skills: VERIFY vs REVIEW 階段對比]] — 2026-05-04
+### 2026-05-26
+- [[2026-05-26/hook-study/corgispec-hook-strategy|CorgiSpec 跨平台統一 Hook 策略]]
+
+### 2026-05-05
+- [[2026-05-05/codex-claude-plugin-distribution-research|Codex Plugin + Claude Code Plugin 分發研究]]
+
+### 2026-05-04
+- [[2026-05-04/addyosmani-agent-skills-verify-vs-review|addyosmani/agent-skills: VERIFY vs REVIEW 階段對比]]

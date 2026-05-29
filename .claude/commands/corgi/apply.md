@@ -1,11 +1,11 @@
 ---
-name: "OPSX: Apply"
-description: Implement tasks from an OpenSpec change, one Task Group at a time
+name: "Corgi: Apply"
+description: Implement tasks from a Corgi change, one Task Group at a time
 category: Workflow
 tags: [workflow, apply, experimental]
 ---
 
-Implement tasks from an OpenSpec change, one Task Group at a time.
+Implement tasks from a Corgi change, one Task Group at a time.
 
 **Input**: Optionally specify a change name (e.g., `/corgi:apply add-auth`). If omitted, infer from context.
 

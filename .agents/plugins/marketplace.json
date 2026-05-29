@@ -1,7 +1,7 @@
 {
   "name": "corgispec-marketplace",
   "interface": {
-    "displayName": "CorgiSpec - OpenSpec GitFlow"
+    "displayName": "Corgi"
   },
   "plugins": [
     {

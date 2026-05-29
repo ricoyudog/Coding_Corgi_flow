@@ -4,7 +4,7 @@ description: Archive a completed change in the experimental workflow. Use when t
 license: MIT
 compatibility: Requires corgispec CLI.
 metadata:
-  author: openspec
+  author: corgispec
   version: "1.0"
   generatedBy: "1.3.0"
 ---
@@ -17,7 +17,9 @@ Archive a completed change in the experimental workflow.
 
 1. **Select change and resolve worktree**
 
-   Read `openspec/config.yaml` for `isolation` settings.
+   **Context Gate**: If session context already contains ALL of: `isolation.mode`, active changes with worktree paths, current branch
+   → Gate passed — SKIP config reading below and proceed to the next step.
+   Otherwise: read `openspec/config.yaml` and proceed with discovery.
 
    **If `isolation.mode: worktree`**: Changes live inside worktrees, not the main checkout. Read `references/worktree-discovery.md` for the full discovery procedure. Quick summary:
    1. `openspec list --json` — if it returns changes, use them
