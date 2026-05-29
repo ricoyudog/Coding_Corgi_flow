@@ -127,7 +127,7 @@ export function createGraphCommand(): Command {
 
       if (allSkills.length === 0) {
         console.error("No skills found.");
-        process.exit(1);
+        process.exitCode = 1; return;
       }
 
       // Filter

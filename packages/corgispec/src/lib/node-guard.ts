@@ -9,9 +9,9 @@ export function checkNodeVersion(): void {
   const major = parseInt(current.split(".")[0]!, 10);
 
   if (major < MIN_NODE_MAJOR) {
-    process.stderr.write(
-      `Error: Node.js >= ${MIN_NODE_MAJOR} required (current: v${current})\n`
+    process.exitCode = 1;
+    throw new Error(
+      `Node.js >= ${MIN_NODE_MAJOR} required (current: v${current})`
     );
-    process.exit(1);
   }
 }

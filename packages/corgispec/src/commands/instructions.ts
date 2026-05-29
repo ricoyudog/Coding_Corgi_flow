@@ -20,7 +20,7 @@ export function createInstructionsCommand(): Command {
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
         console.error(message);
-        process.exit(1);
+        process.exitCode = 1; return;
       }
     });
 

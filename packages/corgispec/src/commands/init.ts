@@ -89,7 +89,7 @@ export function createInitCommand(): Command {
           console.error(
             `Error: Invalid schema '${opts.schema}'. Supported: ${VALID_SCHEMAS.join(", ")}`
           );
-          process.exit(1);
+          process.exitCode = 1; return;
         }
 
         initializeOpenSpec({
@@ -122,7 +122,7 @@ export function createInitCommand(): Command {
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error(`Error: ${msg}`);
-        process.exit(1);
+        process.exitCode = 1; return;
       }
     });
 

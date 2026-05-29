@@ -21,14 +21,14 @@ export function createReviewCommand(): Command {
           const changes = discoverChanges(cwd);
           if (changes.length === 0) {
             console.error("Error: No changes found.");
-            process.exit(1);
+            process.exitCode = 1; return;
           }
           if (changes.length > 1) {
             console.error(
               "Error: Multiple changes found. Specify one:\n" +
                 changes.map((c) => `  - ${c}`).join("\n")
             );
-            process.exit(1);
+            process.exitCode = 1; return;
           }
           changeName = changes[0];
         }
@@ -63,7 +63,7 @@ export function createReviewCommand(): Command {
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error(`Error: ${msg}`);
-        process.exit(1);
+        process.exitCode = 1; return;
       }
     });
 
