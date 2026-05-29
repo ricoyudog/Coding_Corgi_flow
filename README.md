@@ -71,6 +71,7 @@ Coding Corgi Flow is the **community extension** of [OpenSpec](https://github.co
 | 🧠 **Cross-Session Memory** | 3-layer system — your AI remembers across sessions (≤3000 tokens at startup) |
 | 🌿 **Worktree Isolation** | Parallel changes, each in its own git worktree (opt-in) |
 | 🧩 **Composable Skills** | Atoms → Molecules → Compounds with validated metadata |
+| 🪝 **Session Hooks** | Lifecycle hooks (pre-write, pre-bash, session-start…) with context gates |
 | 📦 **One-command Install** | `npm i -g corgispec` → `corgispec bootstrap` → done |
 
 It ships as an npm CLI (`corgispec`), a Claude Code / Codex plugin, and a set of slash commands for OpenCode, Claude Code, and Codex.
@@ -152,7 +153,7 @@ Then: `apply` → `verify` → `review` → `archive`. One Task Group at a time.
 | `/corgi-install` | Project-local asset install, update, or verify |
 | `/corgi-memory-init` | Initialize 3-layer memory (`memory/` + `wiki/`) |
 | `/corgi-migrate` | Import existing knowledge into memory/wiki |
-| `/corgi-lint` | 11-check memory health validation |
+| `/corgi-lint` | 14-check memory health validation |
 | `/corgi-ask` | Answer questions from the vault with budget-aware retrieval |
 
 > Claude Code uses `/corgi:<command>` syntax (e.g., `/corgi:propose`). Platform auto-detected from `config.yaml`.
@@ -235,6 +236,46 @@ flowchart LR
 | Health check | `/corgi-lint` |
 
 → **[Full Memory Documentation](docs/cross-session-memory.md)**
+
+---
+
+## 🪝 Session Hooks
+
+Hooks give you **lifecycle control** over AI sessions — validate context before execution, guard dangerous operations, and enforce memory compaction rules.
+
+### CLI Commands
+
+```bash
+corgispec hooks generate   # Generate hook config (TOML) for your project
+corgispec hooks install    # Install hooks into .opencode/hooks/
+corgispec hooks status     # Show current hook state
+corgispec hooks doctor     # Diagnose hook configuration issues
+```
+
+### Available Hooks
+
+| Hook | Fires when | Purpose |
+|---|---|---|
+| `session-start` | Session begins | Load memory, validate environment |
+| `pre-write` | Before any file write | Guard protected paths, enforce patterns |
+| `post-write` | After file write | Trigger lint, sync mirrors |
+| `pre-bash` | Before shell commands | Block destructive ops, enforce allowlists |
+| `post-compact` | After context compaction | Ensure session-bridge is updated |
+| `stop-check` | Before session ends | Validate shutdown state, flush memory |
+
+### Context Gates
+
+Every molecule skill includes a **context gate** — a structured pre-execution check that validates required context (config, worktree state, issue references) is present before the skill runs. This prevents partial execution in incomplete environments.
+
+```text
+# Example: corgispec-apply checks for:
+✓ openspec/config.yaml exists
+✓ Active change directory found
+✓ tasks.md has uncompleted groups
+✓ Issue tracker reachable
+```
+
+Hooks are **opt-in** — existing projects work without them. Run `corgispec hooks generate` to get started.
 
 ---
 
@@ -350,8 +391,9 @@ Set `schema: my-schema` in `config.yaml`.
 | Worktree isolation | None | Opt-in parallel dev via git worktrees |
 | Cross-session memory | None | 3-layer system with self-compaction |
 | Knowledge migration | None | Guided import from docs, archives, vault pages |
-| Memory health | None | 11-check lint (freshness, caps, links, extraction) |
+| Memory health | None | 14-check lint (freshness, caps, links, extraction) |
 | Skill architecture | Flat files | Atoms → Molecules → Compounds with schema validation |
+| Session hooks | None | Lifecycle hooks (pre-write, pre-bash, session-start…) + context gates |
 | Plugin marketplace | None | Claude Code `/plugin install` + Codex marketplace |
 
 ---
@@ -396,6 +438,7 @@ schemas/
 
 packages/corgispec/                   # Unified CLI (npm publishable)
 ├── src/                              # TypeScript source
+│   └── commands/hooks/               # Hook subcommands (generate, install, status, doctor)
 ├── dist/                             # Built output
 └── assets/                           # Bundled assets
 

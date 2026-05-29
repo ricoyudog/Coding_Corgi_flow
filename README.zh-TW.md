@@ -71,6 +71,7 @@ Coding Corgi Flow 是 [OpenSpec](https://github.com/Fission-AI/OpenSpec)（由 [
 | 🧠 **跨 Session 記憶** | 三層系統 — AI 能在多次 session 間記住上下文（啟動 ≤3000 token） |
 | 🌿 **Worktree 隔離** | 平行處理多個 change，各自在獨立 git worktree（opt-in） |
 | 🧩 **可組合 Skill** | Atoms → Molecules → Compounds，附帶驗證過的 metadata |
+| 🪝 **Session Hooks** | 生命週期 hooks（pre-write、pre-bash、session-start…）搭配 context gates |
 | 📦 **一行指令安裝** | `npm i -g corgispec` → `corgispec bootstrap` → 完成 |
 
 以 npm CLI（`corgispec`）、Claude Code / Codex plugin，以及 OpenCode、Claude Code、Codex 的 slash command 形式發佈。
@@ -152,7 +153,7 @@ Fetch and follow instructions from https://raw.githubusercontent.com/ricoyudog/C
 | `/corgi-install` | 安裝、更新或驗證 project-local 資產 |
 | `/corgi-memory-init` | 初始化三層記憶（`memory/` + `wiki/`） |
 | `/corgi-migrate` | 將既有知識匯入 memory/wiki |
-| `/corgi-lint` | 11 項記憶健康檢查 |
+| `/corgi-lint` | 14 項記憶健康檢查 |
 | `/corgi-ask` | 從 vault 中以預算感知檢索回答問題 |
 
 > Claude Code 使用 `/corgi:<command>` 格式（如 `/corgi:propose`）。平台從 `config.yaml` 自動偵測。
@@ -235,6 +236,46 @@ flowchart LR
 | 健康檢查 | `/corgi-lint` |
 
 → **[完整記憶文件](docs/cross-session-memory.zh-TW.md)**
+
+---
+
+## 🪝 Session Hooks
+
+Hooks 讓你對 AI session 擁有 **生命週期控制** — 在執行前驗證上下文、阻擋危險操作、強制記憶壓縮規則。
+
+### CLI 指令
+
+```bash
+corgispec hooks generate   # 為專案產生 hook 設定（TOML）
+corgispec hooks install    # 安裝 hooks 到 .opencode/hooks/
+corgispec hooks status     # 顯示當前 hook 狀態
+corgispec hooks doctor     # 診斷 hook 設定問題
+```
+
+### 可用 Hooks
+
+| Hook | 觸發時機 | 用途 |
+|---|---|---|
+| `session-start` | Session 開始 | 載入記憶、驗證環境 |
+| `pre-write` | 檔案寫入前 | 保護路徑、強制模式 |
+| `post-write` | 檔案寫入後 | 觸發 lint、同步鏡像 |
+| `pre-bash` | Shell 指令前 | 阻擋破壞性操作、強制白名單 |
+| `post-compact` | 上下文壓縮後 | 確保 session-bridge 已更新 |
+| `stop-check` | Session 結束前 | 驗證關閉狀態、flush 記憶 |
+
+### Context Gates
+
+每個 molecule skill 都包含一個 **context gate** — 結構化的預執行檢查，驗證所需上下文（config、worktree 狀態、issue 參照）存在後才執行。防止在不完整環境中部分執行。
+
+```text
+# 範例：corgispec-apply 檢查：
+✓ openspec/config.yaml 存在
+✓ 找到活躍的 change 目錄
+✓ tasks.md 有未完成的 group
+✓ Issue tracker 可連線
+```
+
+Hooks 是 **opt-in** — 現有專案不需要 hooks 也能正常運作。執行 `corgispec hooks generate` 開始使用。
 
 ---
 
@@ -350,8 +391,9 @@ apply:
 | Worktree 隔離 | 無 | 可選平行開發（git worktree） |
 | 跨 session 記憶 | 無 | 三層系統，自動壓縮 |
 | 知識遷移 | 無 | 從 docs、archives、vault 頁面導入 |
-| 記憶健康 | 無 | 11 項 lint（新鮮度、上限、連結、萃取） |
+| 記憶健康 | 無 | 14 項 lint（新鮮度、上限、連結、萃取） |
 | Skill 架構 | 扁平檔案 | Atoms → Molecules → Compounds + schema 驗證 |
+| Session hooks | 無 | 生命週期 hooks（pre-write、pre-bash、session-start…）+ context gates |
 | Plugin 市集 | 無 | Claude Code `/plugin install` + Codex marketplace |
 
 ---
