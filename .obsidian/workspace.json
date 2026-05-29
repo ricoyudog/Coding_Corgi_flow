@@ -62,9 +62,79 @@
               "icon": "lucide-file",
               "title": "Openspec 1.0 参考"
             }
+          },
+          {
+            "id": "5ba95661b7140b8f",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "wiki/research/2026-05-29/pre-archive-human-qa.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "pre-archive-human-qa"
+            }
+          },
+          {
+            "id": "4ae3f426c739e498",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "wiki/research/2026-05-04/addyosmani-agent-skills-verify-vs-review.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "addyosmani-agent-skills-verify-vs-review"
+            }
+          },
+          {
+            "id": "09d51815e06a631e",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "wiki/research/2026-05-29/pre-archive-human-qa.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "pre-archive-human-qa"
+            }
+          },
+          {
+            "id": "d6c0f99b1152a869",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "wiki/research/2026-05-29/pre-archive-human-qa.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "pre-archive-human-qa"
+            }
+          },
+          {
+            "id": "c632c16c31defd09",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "wiki/decisions/2026-05-29/corgispec-cli-v1-review.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "corgispec-cli-v1-review"
+            }
           }
         ],
-        "currentTab": 3
+        "currentTab": 8
       }
     ],
     "direction": "vertical"
@@ -238,44 +308,44 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "34604a0fa0ac6ddf",
+  "active": "a9a33ff17c042bf2",
   "lastOpenFiles": [
-    "packages/corgispec/vitest.config.ts.timestamp-1779868952997-f09dff1af08b5.mjs",
-    "packages/corgispec/vitest.config.ts.timestamp-1779862147092-cbb23c3b7cde98.mjs",
-    "packages/corgispec/dist/corgispec.js.map",
-    "packages/corgispec/dist/corgispec.js",
-    "packages/corgispec/tsup.config.bundled_omyoy2u863q.mjs",
-    "wiki/decisions/2026-05-26/openspec-to-corgi-rebrand.md",
-    "未命名 1.base",
-    "未命名.base",
-    "wiki/research/2026-05-27/Openspec 1.0 参考.md",
-    "wiki/research/2026-05-27",
-    "wiki/research/2026-05-05/sedEyIACs",
-    "packages/corgispec/vitest.config.ts.timestamp-1779855511364-65b858b5c3ca4.mjs",
-    "packages/corgispec/vitest.config.ts.timestamp-1779855261461-bb55cc346547b.mjs",
-    "wiki/research/2026-05-26/hook-study/corgispec-hook-strategy.md",
-    "wiki/research/2026-05-05/codex-claude-plugin-distribution-research.md",
-    "wiki/research/2026-05-04/addyosmani-agent-skills-verify-vs-review.md",
-    "openspec/changes/openspec-to-corgi-rebrand/tasks.md",
-    "openspec/changes/openspec-to-corgi-rebrand/specs/corgi-brand-consistency/spec.md",
-    "wiki/decisions/2026-05-26/hooks-augment-not-replace-skills.md",
-    "openspec/changes/openspec-to-corgi-rebrand/design.md",
-    "openspec/changes/openspec-to-corgi-rebrand/proposal.md",
-    "openspec/changes/corgispec-hooks-system/tasks.md",
-    "openspec/changes/corgispec-hooks-system/design.md",
-    "openspec/changes/corgispec-hooks-system/specs/session-context-format/spec.md",
-    "openspec/changes/corgispec-hooks-system/specs/hooks-generate/spec.md",
-    "openspec/changes/corgispec-hooks-system/specs/skill-gating/spec.md",
-    "openspec/changes/corgispec-hooks-system/specs/hook-cli/spec.md",
-    "openspec/changes/corgispec-hooks-system/proposal.md",
-    "wiki/research/hook-study/corgispec-hook-strategy.md",
-    "wiki/decisions/_index.md",
+    "packages/corgispec/tsup.config.bundled_x88r7an2x3.mjs",
+    "packages/corgispec/vitest.config.ts.timestamp-1780046847774-237b7a515cbd6.mjs",
+    "packages/corgispec/tsup.config.bundled_va4u7faswrs.mjs",
+    "packages/corgispec/vitest.config.ts.timestamp-1780046180957-0de691ec1d32b.mjs",
+    "packages/corgispec/tsup.config.bundled_k6uzjgqhf1.mjs",
+    "packages/corgispec/vitest.config.ts.timestamp-1780045049637-2ae02d3b1cf3d8.mjs",
+    "packages/corgispec/vitest.config.ts.timestamp-1780044955055-fd76220fd84bf8.mjs",
+    "packages/corgispec/tsup.config.bundled_zae5oq4omwq.mjs",
+    "packages/corgispec/vitest.config.ts.timestamp-1780043852283-b8ddcacd82cbb8.mjs",
+    "openspec/changes/corgispec-cli-p0-p1-fixes/tasks.md",
+    "openspec/changes/corgispec-cli-p0-p1-fixes/design.md",
+    "openspec/changes/corgispec-cli-p0-p1-fixes/specs/dependency-hygiene/spec.md",
+    "openspec/changes/corgispec-cli-p0-p1-fixes/specs/template-resolution/spec.md",
+    "openspec/changes/corgispec-cli-p0-p1-fixes/specs/skill-tier-enforcement/spec.md",
+    "openspec/changes/corgispec-cli-p0-p1-fixes/specs/doctor-robustness/spec.md",
+    "openspec/changes/corgispec-cli-p0-p1-fixes/specs/status-json-compliance/spec.md",
+    "openspec/changes/corgispec-cli-p0-p1-fixes/specs/cli-error-handling/spec.md",
+    "openspec/changes/corgispec-cli-p0-p1-fixes/specs/dependency-hygiene",
+    "openspec/changes/corgispec-cli-p0-p1-fixes/specs/template-resolution",
+    "openspec/changes/corgispec-cli-p0-p1-fixes/proposal.md",
+    "wiki/decisions/2026-05-29/pre-archive-human-qa-implementation.md",
+    "wiki/decisions/2026-05-29/corgispec-cli-v1-review.md",
+    "omx_wiki/log.md",
+    "wiki/research/2026-05-29/pre-archive-human-qa.md",
     "wiki/decisions/bootstrap-install-consolidation.md",
     "wiki/decisions/corgispec-review-verify-upgrade.md",
     "wiki/decisions/tier-based-directory-restructure.md",
-    "wiki/research/agentmemory-gbrain-memory-lessons.md",
-    "wiki/decisions/2026-05-14/readme-visual-upgrade.md",
-    "wiki/decisions/2026-05-12/wiki-maintenance-contract.md",
+    "wiki/research/2026-05-04/addyosmani-agent-skills-verify-vs-review.md",
+    "wiki/research/_index.md",
+    "wiki/research/2026-05-27/Openspec 1.0 参考.md",
+    "wiki/decisions/2026-05-26/openspec-to-corgi-rebrand.md",
+    "wiki/research/2026-05-26/hook-study/corgispec-hook-strategy.md",
+    "wiki/research/2026-05-05/codex-claude-plugin-distribution-research.md",
+    "openspec/changes/openspec-to-corgi-rebrand/tasks.md",
+    "openspec/changes/openspec-to-corgi-rebrand/specs/corgi-brand-consistency/spec.md",
+    "wiki/decisions/2026-05-26/hooks-augment-not-replace-skills.md",
     "docs/articles/corgi_developer_chaos.png",
     "docs/articles/images/task_list.png",
     "docs/articles/images/issue_card_example.png",

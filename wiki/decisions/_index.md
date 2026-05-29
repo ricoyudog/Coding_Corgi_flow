@@ -7,6 +7,13 @@ updated: 2026-05-26
 
 > Key decisions made during reviews and implementation.
 
+## 2026-05-29
+
+- [[2026-05-29/corgispec-cli-v1-review|corgispec-cli v0.1.1 审查结果与修复计划]] — 2026-05-29 — proposed
+  - 4-agent 并行审查：spec 合规 85%、代码质量良好、测试覆盖 52%、设计评分 7/10。7 CRITICAL/HIGH 待修复。
+- [[2026-05-29/pre-archive-human-qa-implementation|Human QA 阶段实现计划（Skill Graph 2.0）]] — 2026-05-29 — proposed
+  - Molecule + 6 Atoms 架构：smoke gate → 类型专项 walkthrough（UI/Backend/API/CLI）→ SBTM exploratory session（12 Test Tours）。18 文件，~5.5h
+
 ## 2026-05-26
 
 - [[2026-05-26/openspec-to-corgi-rebrand|OpenSpec → Corgi Branding 全面替换]] — 2026-05-26 — proposed

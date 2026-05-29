@@ -9,6 +9,9 @@ updated: 2026-05-04
 
 ## Topics
 
+### 2026-05-29
+- [[2026-05-29/pre-archive-human-qa|Pre-Archive Human QA 技能研究]]
+
 ### 2026-05-26
 - [[2026-05-26/hook-study/corgispec-hook-strategy|CorgiSpec 跨平台統一 Hook 策略]]
 

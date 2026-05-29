@@ -78,6 +78,30 @@ export interface ChangeInfo {
 // ─── Schema Loading ─────────────────────────────────────────────────────
 
 /**
+ * Validate that a parsed schema has the required shape before casting.
+ * Throws a descriptive Error on failure.
+ */
+export function validateSchemaShape(data: unknown): void {
+  if (!data || typeof data !== "object") {
+    throw new Error("Schema file is not a valid YAML/JSON object");
+  }
+
+  const obj = data as Record<string, unknown>;
+
+  if (!obj.name || typeof obj.name !== "string") {
+    throw new Error("Schema missing required 'name' field (must be a string)");
+  }
+
+  if (obj.version == null || typeof obj.version !== "number") {
+    throw new Error("Schema missing required 'version' field (must be a number)");
+  }
+
+  if (!Array.isArray(obj.artifacts)) {
+    throw new Error("Schema missing required 'artifacts' field (must be an array)");
+  }
+}
+
+/**
  * Load the active workflow schema based on config.yaml.
  */
 export function loadWorkflowSchema(cwd: string): WorkflowSchema {
@@ -92,7 +116,9 @@ export function loadWorkflowSchema(cwd: string): WorkflowSchema {
   }
 
   const raw = readFileSync(schemaPath, "utf-8");
-  const schema = yaml.load(raw) as WorkflowSchema;
+  const parsed = yaml.load(raw);
+  validateSchemaShape(parsed);
+  const schema = parsed as WorkflowSchema;
 
   // Ensure all artifacts have requires array
   for (const artifact of schema.artifacts) {

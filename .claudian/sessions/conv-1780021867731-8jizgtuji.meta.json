@@ -1,0 +1,25 @@
+{
+  "id": "conv-1780021867731-8jizgtuji",
+  "providerId": "codex",
+  "title": "Research human-review QA skill",
+  "titleGenerationStatus": "success",
+  "createdAt": 1780021867731,
+  "updatedAt": 1780032217553,
+  "lastResponseAt": 1780022596690,
+  "sessionId": "019e7192-3e98-7672-aced-7d68ad59b610",
+  "providerState": {
+    "threadId": "019e7192-3e98-7672-aced-7d68ad59b610",
+    "sessionFilePath": "C:\\Users\\yuri3\\.codex\\sessions\\2026\\05\\29\\rollout-2026-05-29T10-31-15-019e7192-3e98-7672-aced-7d68ad59b610.jsonl",
+    "transcriptRootPath": "C:\\Users\\yuri3\\.codex\\sessions"
+  },
+  "usage": {
+    "inputTokens": 114382,
+    "cacheCreationInputTokens": 0,
+    "cacheReadInputTokens": 114048,
+    "contextWindow": 237500,
+    "contextWindowIsAuthoritative": true,
+    "contextTokens": 114382,
+    "percentage": 48,
+    "model": "gpt-5.5"
+  }
+}

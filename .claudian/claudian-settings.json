@@ -73,20 +73,26 @@
   "settingsProvider": "claude",
   "savedProviderModel": {
     "claude": "opus",
-    "opencode": "opencode:github-copilot/claude-opus-4.6"
+    "opencode": "opencode:github-copilot/claude-opus-4.6",
+    "codex": "gpt-5.5"
   },
   "savedProviderEffort": {
     "claude": "max",
-    "opencode": "default"
+    "opencode": "default",
+    "codex": "xhigh"
   },
-  "savedProviderServiceTier": {},
+  "savedProviderServiceTier": {
+    "codex": "default"
+  },
   "savedProviderThinkingBudget": {
     "claude": "medium",
-    "opencode": "off"
+    "opencode": "off",
+    "codex": "medium"
   },
   "savedProviderPermissionMode": {
     "claude": "yolo",
-    "opencode": "yolo"
+    "opencode": "yolo",
+    "codex": "yolo"
   },
   "lastCustomModel": "",
   "maxTabs": 3,
