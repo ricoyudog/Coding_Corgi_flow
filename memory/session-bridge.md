@@ -1,6 +1,6 @@
 ---
 type: memory
-updated: 2026-05-28
+updated: 2026-05-29
 ---
 
 # Session Bridge
@@ -13,16 +13,20 @@ updated: 2026-05-28
 - **Branch**: main
 
 ## Done (last session completed)
-- openspec-to-corgi-rebrand archived (2026-05-28)
+- corgispec-hooks-system archived (2026-05-29)
 
 ## Waiting (next steps / blockers)
-- `corgispec-hooks-system` and `corgispec-cli` changes exist in `openspec/changes/` — status unknown, not started this session
+- `corgispec-cli` change exists in `openspec/changes/` — all groups done, ready for archive
+- Bug fix `d549960` pushed: Codex filename mismatch resolved
 
 ## New Pitfalls
-- (none this session)
+- Codex generate: TOML references must match written filenames (prefix consistency)
+- Malformed JSON stdin to hook commands causes unhandled stack trace (enhancement opportunity)
+- `CORGISPEC_HOOKS_DISABLE` only recognizes exact string `"1"` — document this clearly
 
 ## New Discoveries
-- (none this session)
+- Hook exit code contract (0/1/2) works cleanly across all platforms
+- Integration tests via execSync + tmpdir are reliable and fast (~24s for 177 tests)
 
 ## Next Session Start
 1. Read this file ← you are here

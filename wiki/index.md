@@ -27,6 +27,7 @@ updated: 2026-05-05
 
 ## Session History
 - [[wiki/sessions/_index|Session Index]]
+- [[wiki/sessions/corgispec-hooks-system|corgispec-hooks-system]]
 - [[wiki/sessions/openspec-to-corgi-rebrand|openspec-to-corgi-rebrand]]
 - [[wiki/sessions/fix-skill-architecture-issues|fix-skill-architecture-issues]]
 - [[wiki/sessions/plugin-marketplace-distribution|plugin-marketplace-distribution]]
