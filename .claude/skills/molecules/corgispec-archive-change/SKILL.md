@@ -41,6 +41,27 @@ Archive a completed change in the experimental workflow.
 
    Read `tasks.md` if it exists. Warn if incomplete tasks remain.
 
+3.5 **Check Human QA status**
+
+   Read `openspec/changes/<name>/qa-report.md` if it exists.
+
+   If EXISTS:
+     - Extract status from the "QA Conclusion" section:
+       - ✅ passed → continue to Step 4
+       - ❌ failed → STOP:
+         "❌ Human QA failed for this change.
+          Issues: <summary from qa-report.md>
+          Fix the reported issues, re-run /corgi-human-qa, then archive."
+       - ⏭️ skipped → continue, note in archive summary:
+         "QA skipped: <reason from report>"
+
+   If NOT EXISTS:
+     - WARN: "⚠️ No qa-report.md found. Human QA has not been performed.
+       Archive without QA? This is not recommended. (y/n)"
+     - If user confirms → continue with warning in archive summary:
+       "⚠️ Archived without Human QA — no qa-report.md found"
+     - If user declines → STOP
+
 4. **Assess delta spec sync state**
 
    Check for delta specs at `openspec/changes/<name>/specs/` and prompt whether to sync before archive.

@@ -1,12 +1,90 @@
 {
-  "active_plan": "/mnt/e/code/openspec_gitflow_modified/.sisyphus/plans/corgispec-review-verify-upgrade.md",
-  "started_at": "2026-05-04T14:30:08.491Z",
+  "active_plan": "/mnt/e/code/openspec_gitflow_modified/.sisyphus/plans/human-qa-skills.md",
+  "started_at": "2026-05-31T15:18:29.637Z",
   "session_ids": [
-    "ses_20da343f1ffer7Z1N0pUN3z5cr"
+    "ses_181bd3553ffeaAr1Mk0a3Obk8u",
+    "ses_1815f5007ffe4gAzn4LGt1hsTH",
+    "ses_1815f396effeDKH6c2Y1E4GIvz",
+    "ses_1815f22d8ffebmgZJYhZzbHrz9",
+    "ses_1815f0c14ffecEO5m9fNkIjuqw",
+    "ses_1815ef639ffe1fXGu9nACeBCCI",
+    "ses_1815e2b3bffeJgt92TC7XHxJuq",
+    "ses_1815a3d0dffeIBwXwrTVjiRoIM",
+    "ses_1815a2b5affecG7VsMqWl7tI83",
+    "ses_181561bcfffePeh3dLhQEZ0B2O",
+    "ses_181560767ffezuO2TfZmZx9EbV",
+    "ses_181532752ffed5MiTd0pdmAk2g",
+    "ses_1815315c3ffemNzGSF4x1kJ5KB",
+    "ses_18152fbd0ffeeO5ZWu4c32MNwP",
+    "ses_18152e990ffeIn9KZynGDLxmLa"
   ],
   "session_origins": {
-    "ses_20da343f1ffer7Z1N0pUN3z5cr": "direct"
+    "ses_181bd3553ffeaAr1Mk0a3Obk8u": "direct",
+    "ses_1815f5007ffe4gAzn4LGt1hsTH": "appended",
+    "ses_1815f396effeDKH6c2Y1E4GIvz": "appended",
+    "ses_1815f22d8ffebmgZJYhZzbHrz9": "appended",
+    "ses_1815f0c14ffecEO5m9fNkIjuqw": "appended",
+    "ses_1815ef639ffe1fXGu9nACeBCCI": "appended",
+    "ses_1815e2b3bffeJgt92TC7XHxJuq": "appended",
+    "ses_1815a3d0dffeIBwXwrTVjiRoIM": "appended",
+    "ses_1815a2b5affecG7VsMqWl7tI83": "appended",
+    "ses_181561bcfffePeh3dLhQEZ0B2O": "appended",
+    "ses_181560767ffezuO2TfZmZx9EbV": "appended",
+    "ses_181532752ffed5MiTd0pdmAk2g": "appended",
+    "ses_1815315c3ffemNzGSF4x1kJ5KB": "appended",
+    "ses_18152fbd0ffeeO5ZWu4c32MNwP": "appended",
+    "ses_18152e990ffeIn9KZynGDLxmLa": "appended"
   },
-  "plan_name": "corgispec-review-verify-upgrade",
-  "agent": "atlas"
+  "plan_name": "human-qa-skills",
+  "agent": "atlas",
+  "task_sessions": {
+    "todo:1": {
+      "task_key": "todo:1",
+      "task_label": "1",
+      "task_title": "Create `corgispec-qa-smoke` atom skill",
+      "session_id": "ses_1815e2b3bffeJgt92TC7XHxJuq",
+      "agent": "build",
+      "updated_at": "2026-05-31T15:25:24.391Z"
+    },
+    "todo:7": {
+      "task_key": "todo:7",
+      "task_label": "7",
+      "task_title": "Create `corgispec-human-qa` molecule skill",
+      "session_id": "ses_1815a3d0dffeIBwXwrTVjiRoIM",
+      "agent": "build",
+      "updated_at": "2026-05-31T15:29:40.406Z"
+    },
+    "todo:8": {
+      "task_key": "todo:8",
+      "task_label": "8",
+      "task_title": "Create command wrapper `corgi-human-qa.md`",
+      "session_id": "ses_18157c8fdffeZuGfhXLFjnOPLa",
+      "agent": "build",
+      "updated_at": "2026-05-31T15:30:58.298Z"
+    },
+    "todo:10": {
+      "task_key": "todo:10",
+      "task_label": "10",
+      "task_title": "Add QA gate to GitLab archive skill",
+      "session_id": "ses_181560767ffezuO2TfZmZx9EbV",
+      "agent": "build",
+      "updated_at": "2026-05-31T15:32:09.116Z"
+    },
+    "todo:12": {
+      "task_key": "todo:12",
+      "task_label": "12",
+      "task_title": "Sync all new skills to `.claude/` and `.codex/` directories",
+      "session_id": "ses_181549150ffeM0gwbqoalInxjL",
+      "agent": "build",
+      "updated_at": "2026-05-31T15:34:26.152Z"
+    },
+    "final-wave:f1": {
+      "task_key": "final-wave:f1",
+      "task_label": "F1",
+      "task_title": "**Plan Compliance Audit** — `oracle`",
+      "session_id": "ses_181532752ffed5MiTd0pdmAk2g",
+      "agent": "build",
+      "updated_at": "2026-05-31T15:37:01.295Z"
+    }
+  }
 }

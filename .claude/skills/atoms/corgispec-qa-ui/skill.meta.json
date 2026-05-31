@@ -1,0 +1,13 @@
+{
+  "slug": "corgispec-qa-ui",
+  "tier": "atom",
+  "version": "1.0.0",
+  "description": "UI walkthrough — real user path verification with screenshots, component state checks, keyboard navigation, and cross-browser testing",
+  "depends_on": [],
+  "platform": "universal",
+  "tags": ["qa", "ui", "walkthrough"],
+  "installation": {
+    "targets": ["opencode", "claude", "codex"],
+    "base_path": "atoms/corgispec-qa-ui"
+  }
+}
