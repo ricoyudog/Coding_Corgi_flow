@@ -1,1 +1,0 @@
-TASK 5 PASS: corgispec-verify skill validates (17 skills, 0 errors), listed in ds-skills list, no graph cycles.

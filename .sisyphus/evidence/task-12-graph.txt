@@ -1,1 +1,0 @@
-T12 PASS: Dependency graph clean — no cycles.

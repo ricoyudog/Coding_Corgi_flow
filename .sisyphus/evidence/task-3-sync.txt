@@ -1,3 +1,0 @@
-TASK 3 PASS: 3-directory sync verified — opencode/claude/codex all identical.
-Summary format: 🔴 N Critical | 🟡 N Important | 🔵 N Suggestions | ⚪ N Nits | ℹ️ N FYI
-Severity markers: 9 lines

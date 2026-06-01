@@ -22,3 +22,33 @@ Thumbs.db
 
 # Local settings (Claude Code permissions)
 .claude/settings.local.json
+
+# ===== Development-only (not for public-facing master) =====
+# AI agent configs & sessions
+.agents/
+.claudian/
+.opencode/
+.sisyphus/
+
+# AI platform skill mirrors & plugins (product is shipped via npm/plugin marketplace)
+.claude/
+.claude-plugin/
+.codex/
+.codex-plugin/
+
+# Dev workspace & memory
+.obsidian/
+memory/
+openspec/
+wiki/
+
+# Dev instructions
+AGENTS.md
+
+# Legacy dev tools (replaced by corgispec CLI)
+tools/
+install-skills.sh
+setup.sh
+
+# Misc artifacts
+未命名*.base

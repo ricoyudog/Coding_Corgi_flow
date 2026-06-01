@@ -1,2 +1,0 @@
-TASK 6 PASS: 7 section references (Test Execution, Spec Coverage, Lint/Build, Report Composition all present).
-14 framework pattern references (pytest, npm, bun, go, cargo, make all covered).

@@ -1,7 +1,0 @@
-TASK 4 PASS: All 6 skill.meta.json files bumped from 1.0.0 to 1.1.0
-.opencode/skills/corgispec-review/skill.meta.json: "version": "1.1.0"
-.opencode/skills/corgispec-gh-review/skill.meta.json: "version": "1.1.0"
-.claude/skills/corgispec-review/skill.meta.json: "version": "1.1.0"
-.claude/skills/corgispec-gh-review/skill.meta.json: "version": "1.1.0"
-.codex/skills/corgispec-review/skill.meta.json: "version": "1.1.0"
-.codex/skills/corgispec-gh-review/skill.meta.json: "version": "1.1.0"

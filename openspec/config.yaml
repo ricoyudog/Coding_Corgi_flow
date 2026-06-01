@@ -1,6 +1,0 @@
-schema: gitlab-tracked
-isolation:
-  mode: none
-installer:
-  version: 1
-  managed_at: '2026-05-05T01:46:31.919Z'
