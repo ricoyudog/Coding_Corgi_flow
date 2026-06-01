@@ -27,7 +27,6 @@ Thumbs.db
 # AI agent configs & sessions
 .agents/
 .claudian/
-.opencode/
 .sisyphus/
 
 # AI platform skill mirrors & plugins (product is shipped via npm/plugin marketplace)
