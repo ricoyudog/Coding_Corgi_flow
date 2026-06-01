@@ -92,9 +92,9 @@ describe("validateSkill", () => {
   it("returns no issues for a valid skill", () => {
     createValidSkill(TEST_DIR, "valid-skill");
     const skills = discoverSkills(TEST_DIR);
-    const allSlugs = new Set(skills.map((s) => s.slug));
+    const allSkills = new Map(skills.map((s) => [s.slug, s.meta.tier] as [string, string]));
 
-    const issues = validateSkill(skills[0]!, allSlugs);
+    const issues = validateSkill(skills[0]!, allSkills);
     expect(issues).toEqual([]);
   });
 
@@ -115,8 +115,8 @@ describe("validateSkill", () => {
     );
 
     const skills = discoverSkills(TEST_DIR);
-    const allSlugs = new Set(skills.map((s) => s.slug));
-    const issues = validateSkill(skills[0]!, allSlugs);
+    const allSkills = new Map(skills.map((s) => [s.slug, s.meta.tier] as [string, string]));
+    const issues = validateSkill(skills[0]!, allSkills);
 
     expect(issues).toContain("Missing SKILL.md");
   });
@@ -124,9 +124,9 @@ describe("validateSkill", () => {
   it("reports slug mismatch", () => {
     createValidSkill(TEST_DIR, "dir-name", { slug: "different-slug" });
     const skills = discoverSkills(TEST_DIR);
-    const allSlugs = new Set(skills.map((s) => s.slug));
+    const allSkills = new Map(skills.map((s) => [s.slug, s.meta.tier] as [string, string]));
 
-    const issues = validateSkill(skills[0]!, allSlugs);
+    const issues = validateSkill(skills[0]!, allSkills);
     expect(issues.some((i) => i.includes("Slug mismatch"))).toBe(true);
   });
 
@@ -136,9 +136,9 @@ describe("validateSkill", () => {
       depends_on: ["some-other"],
     });
     const skills = discoverSkills(TEST_DIR);
-    const allSlugs = new Set(skills.map((s) => s.slug));
+    const allSkills = new Map(skills.map((s) => [s.slug, s.meta.tier] as [string, string]));
 
-    const issues = validateSkill(skills[0]!, allSlugs);
+    const issues = validateSkill(skills[0]!, allSkills);
     expect(issues).toContain("Atom skills must not have dependencies");
   });
 
@@ -148,9 +148,9 @@ describe("validateSkill", () => {
       depends_on: ["nonexistent-dep"],
     });
     const skills = discoverSkills(TEST_DIR);
-    const allSlugs = new Set(skills.map((s) => s.slug));
+    const allSkills = new Map(skills.map((s) => [s.slug, s.meta.tier] as [string, string]));
 
-    const issues = validateSkill(skills[0]!, allSlugs);
+    const issues = validateSkill(skills[0]!, allSkills);
     expect(issues).toContain("Dependency 'nonexistent-dep' not found");
   });
 });

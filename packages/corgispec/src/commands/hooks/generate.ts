@@ -43,7 +43,7 @@ export function createHooksGenerateCommand(): Command {
         console.error(
           `Unsupported platform '${opts.platform}'. Supported: ${SUPPORTED_PLATFORMS.join(", ")}`
         );
-        process.exit(1);
+        process.exitCode = 1; return;
       }
 
       const binaryPath = resolveBinaryPath();
@@ -73,8 +73,8 @@ function resolveBinaryPath(): string {
       stdio: ["pipe", "pipe", "pipe"],
     }).trim();
     if (path && existsSync(path)) return path;
-  } catch {
-    // not found globally
+  } catch (err: unknown) {
+    console.error(`[generate] corgispec not found in PATH: ${err instanceof Error ? err.message : String(err)}`);
   }
   return "npx corgispec";
 }
@@ -198,7 +198,7 @@ function generateClaudeOutput(
       console.error(
         `Error: ${outputPath} already contains a 'hooks' key. Use --force to overwrite.`
       );
-      process.exit(1);
+      process.exitCode = 1; return;
     }
 
     const merged = { ...existing, ...config };
@@ -386,7 +386,7 @@ function generateCodexOutput(
     console.error(
       `Error: ${configTomlPath} already exists. Use --force to overwrite.`
     );
-    process.exit(1);
+    process.exitCode = 1; return;
   }
 
   mkdirSync(hooksDir, { recursive: true });
@@ -422,7 +422,7 @@ function writeOutput(
     console.error(
       `Error: ${resolved} already exists. Use --force to overwrite.`
     );
-    process.exit(1);
+    process.exitCode = 1; return;
   }
 
   mkdirSync(dirname(resolved), { recursive: true });

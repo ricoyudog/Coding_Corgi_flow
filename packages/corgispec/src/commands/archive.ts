@@ -20,13 +20,13 @@ export function createArchiveCommand(): Command {
             changeName = changes[0]!;
           } else if (changes.length === 0) {
             console.error("Error: No changes found.");
-            process.exit(1);
+            process.exitCode = 1; return;
           } else {
             console.error(
               "Error: Multiple changes found. Specify one:\n" +
                 changes.map((c) => `  - ${c}`).join("\n")
             );
-            process.exit(1);
+            process.exitCode = 1; return;
           }
         }
 
@@ -34,7 +34,7 @@ export function createArchiveCommand(): Command {
 
         if (!result.isReady) {
           console.error(result.reason ?? "Change not ready for archive");
-          process.exit(1);
+          process.exitCode = 1; return;
         }
 
         if (opts.json) {
@@ -50,7 +50,7 @@ export function createArchiveCommand(): Command {
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error(`Error: ${msg}`);
-        process.exit(1);
+        process.exitCode = 1; return;
       }
     });
 

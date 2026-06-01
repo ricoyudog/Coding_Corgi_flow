@@ -78,7 +78,8 @@ export function discoverSkills(skillsDir: string): DiscoveredSkill[] {
       const hasSkillMd = existsSync(resolve(skillDir, "SKILL.md"));
 
       skills.push({ slug: name, dir: skillDir, meta, hasSkillMd });
-    } catch {
+    } catch (err: unknown) {
+      console.error(`[skills] Failed to parse ${metaPath}: ${err instanceof Error ? err.message : String(err)}`);
       skills.push({
         slug: name,
         dir: skillDir,
@@ -105,8 +106,8 @@ export function discoverSkills(skillsDir: string): DiscoveredSkill[] {
       for (const entry of entries) {
         if (entry.isDirectory()) loadEntry(tierPath, entry.name);
       }
-    } catch {
-      // tier dir unreadable, skip
+    } catch (err: unknown) {
+      console.error(`[skills] Cannot read tier directory ${tierPath}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -118,8 +119,8 @@ export function discoverSkills(skillsDir: string): DiscoveredSkill[] {
       if (tierDirs.includes(entry.name)) continue;
       loadEntry(skillsDir, entry.name);
     }
-  } catch {
-    // root unreadable, skip
+  } catch (err: unknown) {
+    console.error(`[skills] Cannot read skills directory ${skillsDir}: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   return skills;
@@ -153,7 +154,7 @@ export function discoverSkillsFromRepo(repoRoot: string): DiscoveredSkill[] {
  */
 export function validateSkill(
   skill: DiscoveredSkill,
-  allSlugs: Set<string>,
+  allSkills: Map<string, SkillTier>,
   schemasDir?: string
 ): string[] {
   const issues: string[] = [];
@@ -195,15 +196,21 @@ export function validateSkill(
 
   // 5. Dependencies exist
   for (const dep of skill.meta.depends_on) {
-    if (!allSlugs.has(dep)) {
+    if (!allSkills.has(dep)) {
       issues.push(`Dependency '${dep}' not found`);
     }
   }
 
-  // 6. Tier hierarchy: molecules only depend on atoms, compounds on anything
+  // 6. Tier hierarchy: molecules only depend on atoms, compounds on molecules/atoms
   if (skill.meta.tier === "molecule") {
-    // Would need to look up dep tiers — simplified check: just ensure deps exist
-    // Full tier validation requires the full skill map
+    for (const dep of skill.meta.depends_on) {
+      const depTier = allSkills.get(dep);
+      if (depTier && depTier !== "atom") {
+        issues.push(
+          `Molecule '${skill.slug}' cannot depend on ${depTier}-tier '${dep}' (only atoms allowed)`
+        );
+      }
+    }
   }
 
   return issues;
@@ -217,11 +224,13 @@ export function validateAllSkills(
   schemasDir?: string
 ): SkillValidationIssue[] {
   const skills = discoverSkills(skillsDir);
-  const allSlugs = new Set(skills.map((s) => s.slug));
+  const allSkills = new Map<string, SkillTier>(
+    skills.map((s) => [s.slug, s.meta.tier])
+  );
   const results: SkillValidationIssue[] = [];
 
   for (const skill of skills) {
-    const issues = validateSkill(skill, allSlugs, schemasDir);
+    const issues = validateSkill(skill, allSkills, schemasDir);
     if (issues.length > 0) {
       results.push({ slug: skill.slug, dir: skill.dir, issues });
     }

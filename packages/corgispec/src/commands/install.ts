@@ -100,7 +100,7 @@ export function createInstallCommand(): Command {
         console.error(
           `Error: Invalid platform '${platformFilter}'. Choose: claude, opencode, codex`
         );
-        process.exit(1);
+        process.exitCode = 1; return;
       }
 
       let sourceDir: string;
@@ -110,7 +110,7 @@ export function createInstallCommand(): Command {
         console.error(
           err instanceof Error ? err.message : "Failed to locate bundled skills"
         );
-        process.exit(1);
+        process.exitCode = 1; return;
       }
 
       const platforms: Platform[] = platformFilter

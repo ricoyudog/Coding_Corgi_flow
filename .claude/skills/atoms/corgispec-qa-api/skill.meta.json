@@ -1,0 +1,13 @@
+{
+  "slug": "corgispec-qa-api",
+  "tier": "atom",
+  "version": "1.0.0",
+  "description": "API walkthrough — endpoint verification with auth pyramid, CRUD coverage, request/response validation, and edge case probing",
+  "depends_on": [],
+  "platform": "universal",
+  "tags": ["qa", "api", "walkthrough"],
+  "installation": {
+    "targets": ["opencode", "claude", "codex"],
+    "base_path": "atoms/corgispec-qa-api"
+  }
+}

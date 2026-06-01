@@ -41,7 +41,7 @@ export function createValidateCommand(): Command {
         console.error(
           `No skills found in ${rootDir} or its .opencode/skills/, .claude/skills/, .codex/skills/ subdirectories.`
         );
-        process.exit(1);
+        process.exitCode = 1; return;
       }
 
       const skills = discoverSkills(skillsDir);
@@ -67,7 +67,7 @@ export function createValidateCommand(): Command {
         console.error(
           `\n${issues.length} skill(s) with issues, ${skills.length - issues.length} valid.`
         );
-        process.exit(1);
+        process.exitCode = 1; return;
       }
     });
 

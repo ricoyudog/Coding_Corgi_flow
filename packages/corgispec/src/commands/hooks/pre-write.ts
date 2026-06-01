@@ -38,7 +38,8 @@ export function createHookPreWriteCommand(): Command {
       let config;
       try {
         config = loadConfig(configPath);
-      } catch {
+      } catch (err: unknown) {
+        console.error(`[pre-write] Failed to load config: ${err instanceof Error ? err.message : String(err)}`);
         process.stdout.write(JSON.stringify({ continue: true }));
         process.exit(0);
       }

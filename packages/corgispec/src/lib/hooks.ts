@@ -69,7 +69,8 @@ export function gatherSessionContext(cwd: string): SessionContext | null {
   let config: OpenSpecConfig;
   try {
     config = loadConfig(configPath);
-  } catch {
+  } catch (err: unknown) {
+    console.error(`[hooks] Failed to load config ${configPath}: ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }
 
@@ -348,8 +349,8 @@ export function detectHookConfig(cwd: string): HookConfigStatus {
           configFile: claudeSettingsPath,
         };
       }
-    } catch {
-      // Invalid JSON — treat as not configured
+    } catch (err: unknown) {
+      console.error(`[hooks] Failed to parse ${claudeSettingsPath}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -366,8 +367,8 @@ export function detectHookConfig(cwd: string): HookConfigStatus {
           configFile: deepPluginPath,
         };
       }
-    } catch {
-      // Unreadable — treat as not configured
+    } catch (err: unknown) {
+      console.error(`[hooks] Failed to read ${deepPluginPath}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -393,8 +394,8 @@ export function detectHookConfig(cwd: string): HookConfigStatus {
           configFile: codexConfigPath,
         };
       }
-    } catch {
-      // Unreadable — treat as not configured
+    } catch (err: unknown) {
+      console.error(`[hooks] Failed to read ${codexConfigPath}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -409,7 +410,8 @@ function getCurrentBranch(): string {
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
     }).trim();
-  } catch {
+  } catch (err: unknown) {
+    console.error(`[hooks] Failed to detect git branch: ${err instanceof Error ? err.message : String(err)}`);
     return "(unknown)";
   }
 }

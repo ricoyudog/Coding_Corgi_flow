@@ -15,18 +15,18 @@ export function createHookSessionStartCommand(): Command {
     .option("--path <dir>", "Working directory", ".")
     .action(async (opts) => {
       if (isHooksDisabled()) {
-        process.exit(1);
+        process.exitCode = 1; return;
       }
 
       const cwd = resolve(opts.path);
       const projectRoot = findProjectRoot(cwd);
       if (!projectRoot) {
-        process.exit(1);
+        process.exitCode = 1; return;
       }
 
       const ctx = gatherSessionContext(projectRoot);
       if (!ctx) {
-        process.exit(1);
+        process.exitCode = 1; return;
       }
 
       process.stdout.write(formatHookOutput("SessionStart", ctx));

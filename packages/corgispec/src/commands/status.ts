@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import { resolve } from "node:path";
-import { discoverChanges, getChangeInfo } from "../lib/changes.js";
+import { discoverChanges, getChangeInfo, loadWorkflowSchema } from "../lib/changes.js";
 import { detectHookConfig } from "../lib/hooks.js";
 
 export function createStatusCommand(): Command {
@@ -21,20 +21,21 @@ export function createStatusCommand(): Command {
           const changes = discoverChanges(cwd);
           if (changes.length === 0) {
             console.error("Error: No changes found.");
-            process.exit(1);
+            process.exitCode = 1; return;
           }
           if (changes.length > 1) {
             console.error(
               "Error: Multiple changes found. Specify one:\n" +
                 changes.map((c) => `  - ${c}`).join("\n")
             );
-            process.exit(1);
+            process.exitCode = 1; return;
           }
           changeName = changes[0];
         }
 
         const info = getChangeInfo(cwd, changeName);
         const hookStatus = detectHookConfig(cwd);
+        const schema = loadWorkflowSchema(cwd);
 
         if (opts.json) {
           const output = {
@@ -42,6 +43,7 @@ export function createStatusCommand(): Command {
             schemaName: info.schemaName,
             state: info.state,
             isComplete: info.isComplete,
+            applyRequires: schema.apply?.requires || [],
             artifacts: info.artifacts,
             taskGroups: info.taskGroups,
             hooks: {
@@ -115,7 +117,7 @@ export function createStatusCommand(): Command {
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error(`Error: ${msg}`);
-        process.exit(1);
+        process.exitCode = 1; return;
       }
     });
 

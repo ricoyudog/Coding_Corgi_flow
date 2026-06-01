@@ -1,0 +1,13 @@
+{
+  "slug": "corgispec-qa-smoke",
+  "tier": "atom",
+  "version": "1.0.0",
+  "description": "Smoke test gate — verifies the application launches and critical paths are accessible before deeper QA",
+  "depends_on": [],
+  "platform": "universal",
+  "tags": ["qa", "smoke", "gate"],
+  "installation": {
+    "targets": ["opencode", "claude", "codex"],
+    "base_path": "atoms/corgispec-qa-smoke"
+  }
+}

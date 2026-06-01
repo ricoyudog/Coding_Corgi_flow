@@ -31,10 +31,8 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@rollup/rollup-linux-x64-gnu": "^4.60.2",
     "ajv": "^8.17.1",
     "commander": "^13.1.0",
-    "glob": "^11.0.0",
     "js-yaml": "^4.1.0"
   },
   "devDependencies": {
