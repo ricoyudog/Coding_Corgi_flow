@@ -247,12 +247,10 @@ Hooks give you **lifecycle control** over AI sessions — validate context befor
 
 ### CLI Commands
 
-```bash
-corgispec hooks generate   # Generate hook config (TOML) for your project
-corgispec hooks install    # Install hooks into .opencode/hooks/
-corgispec hooks status     # Show current hook state
-corgispec hooks doctor     # Diagnose hook configuration issues
-```
+| Command | Purpose |
+|---|---|
+| `corgispec hooks generate` | Generate hook config (TOML) for AI platforms: Claude Code, OpenCode, Codex |
+| `corgispec hook <name>` | Invoke a runtime hook where `name` is one of: `session-start`, `pre-write`, `post-write`, `pre-bash`, `post-compact`, `stop-check` |
 
 ### Available Hooks
 

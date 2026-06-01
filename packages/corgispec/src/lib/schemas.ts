@@ -10,7 +10,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
  * In the built package: dist/ → ../assets/
  * In dev (src/lib/): ../../assets/
  */
-function getAssetsDir(): string {
+export function getAssetsDir(): string {
   // Try relative to dist/ first (production)
   const fromDist = resolve(__dirname, "../assets");
   if (existsSync(fromDist)) {
