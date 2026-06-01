@@ -1,6 +1,8 @@
 import { Command } from "commander";
 import { resolve } from "node:path";
+import { existsSync } from "node:fs";
 import { discoverSkills, validateAllSkills } from "../lib/skills.js";
+import { getAssetsDir } from "../lib/schemas.js";
 
 export function createValidateCommand(): Command {
   const cmd = new Command("validate");
@@ -48,7 +50,11 @@ export function createValidateCommand(): Command {
       console.log(`Validating ${skills.length} skill(s) in ${skillsDir}\n`);
 
       // Find schemas directory for validation
-      const schemasDir = resolve(rootDir, "schemas");
+      let schemasDir = resolve(rootDir, "schemas");
+      if (!existsSync(schemasDir)) {
+        const bundledSchemas = resolve(getAssetsDir(), "schemas");
+        schemasDir = existsSync(bundledSchemas) ? bundledSchemas : schemasDir;
+      }
       const issues = validateAllSkills(
         skillsDir,
         schemasDir
