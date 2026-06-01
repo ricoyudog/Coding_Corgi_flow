@@ -51,7 +51,8 @@ flowchart LR
     I -->|Yes, more groups| D
     I -->|Rejected| J["Fix tasks added"]
     J --> D
-    I -->|All done| K["/corgi-archive"]
+    I -->|All done| K["/corgi-human-qa"]
+    K -->|Pass| L["/corgi-archive"]
 ```
 
 </details>
@@ -136,7 +137,7 @@ Fetch and follow instructions from https://raw.githubusercontent.com/ricoyudog/C
 /corgi:propose Add user authentication with JWT and refresh tokens
 ```
 
-Then: `apply` → `verify` → `review` → `archive`. One Task Group at a time.
+Then: `apply` → `verify` → `review` → `human-qa` → `archive`. One Task Group at a time.
 
 ---
 
@@ -148,6 +149,7 @@ Then: `apply` → `verify` → `review` → `archive`. One Task Group at a time.
 | `/corgi-apply` | Execute one Task Group, sync closeout, pause for review |
 | `/corgi-verify` | Automated quality gate — lint, build, tests, spec coverage |
 | `/corgi-review` | 5-axis review with evidence gathering, approve/reject/discuss |
+| `/corgi-human-qa` | Human QA gate — route to specialized QA atoms (smoke, UI, API, CLI, backend, exploratory) |
 | `/corgi-archive` | Close issues, sync delta specs, extract knowledge, cleanup |
 | `/corgi-explore` | Thinking partner — explore ideas, clarify requirements |
 | `/corgi-install` | Project-local asset install, update, or verify |
@@ -387,6 +389,7 @@ Set `schema: my-schema` in `config.yaml`.
 | Progress sync | Local checkboxes only | Rich summaries posted to issues |
 | Workflow labels | None | `backlog → todo → in-progress → review → done` |
 | Review | None | 5-axis automated checks + verify gate + decision loop |
+| Human QA | None | Structured QA with 6 specialized atoms (smoke, UI, API, CLI, backend, exploratory) |
 | Spec format | Generic | Delta ops (ADDED/MODIFIED/REMOVED/RENAMED) |
 | Worktree isolation | None | Opt-in parallel dev via git worktrees |
 | Cross-session memory | None | 3-layer system with self-compaction |
