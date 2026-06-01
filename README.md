@@ -114,7 +114,7 @@ codex plugin install corgispec
 Paste this into your agent:
 
 ```text
-Fetch and follow instructions from https://raw.githubusercontent.com/ricoyudog/Coding_Corgi_flow/main/.opencode/INSTALL.md
+Fetch and follow instructions from https://raw.githubusercontent.com/ricoyudog/Coding_Corgi_flow/master/.opencode/INSTALL.md
 ```
 
 ### Initialize Memory (recommended)
