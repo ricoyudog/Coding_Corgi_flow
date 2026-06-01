@@ -1,0 +1,23 @@
+{
+  "slug": "corgispec-memory-migrate",
+  "tier": "molecule",
+  "version": "1.0.0",
+  "description": "Migrate existing project knowledge into the memory/wiki structure from docs, archived changes, agent configs, and vault files",
+  "depends_on": [
+    "corgispec-memory-init"
+  ],
+  "platform": "universal",
+  "tags": [
+    "lifecycle",
+    "memory",
+    "migration"
+  ],
+  "installation": {
+    "targets": [
+      "opencode",
+      "claude",
+      "codex"
+    ],
+    "base_path": "molecules/corgispec-memory-migrate"
+  }
+}

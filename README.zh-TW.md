@@ -113,7 +113,7 @@ codex plugin install corgispec
 把這段貼進你的 agent：
 
 ```text
-Fetch and follow instructions from https://raw.githubusercontent.com/ricoyudog/Coding_Corgi_flow/main/.opencode/INSTALL.md
+Fetch and follow instructions from https://raw.githubusercontent.com/ricoyudog/Coding_Corgi_flow/master/.opencode/INSTALL.md
 ```
 
 ### 初始化記憶（建議）

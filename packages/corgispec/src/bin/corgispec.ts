@@ -70,7 +70,7 @@ program.addCommand(createHookCommand());
 
 // Hook config generation (corgispec hooks generate)
 const hooksCmd = new Command("hooks");
-hooksCmd.description("Hook configuration management for AI platforms");
+hooksCmd.description("Generate hook configuration for AI platforms (use 'hooks generate')");
 hooksCmd.addCommand(createHooksGenerateCommand());
 program.addCommand(hooksCmd);
 

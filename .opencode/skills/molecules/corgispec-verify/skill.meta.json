@@ -1,0 +1,20 @@
+{
+  "slug": "corgispec-verify",
+  "tier": "molecule",
+  "version": "1.0.0",
+  "description": "Automated verification gate between apply and review \u2014 runs tests, checks spec coverage, validates lint/build",
+  "depends_on": [],
+  "platform": "universal",
+  "tags": [
+    "lifecycle",
+    "verify"
+  ],
+  "installation": {
+    "targets": [
+      "opencode",
+      "claude",
+      "codex"
+    ],
+    "base_path": "molecules/corgispec-verify"
+  }
+}

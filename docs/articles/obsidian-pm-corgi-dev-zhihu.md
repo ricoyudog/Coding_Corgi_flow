@@ -386,7 +386,7 @@ Obsidian 做的則是把**人類的思考過程**結構化——讓它不再是�
 # 或使用 bootstrap 安裝（適用於任何 LLM agent）
 # 複製以下 prompt 給你的 agent：
 # Fetch and follow instructions from
-# https://raw.githubusercontent.com/ricoyudog/Coding_Corgi_flow/main/.opencode/INSTALL.md
+# https://raw.githubusercontent.com/ricoyudog/Coding_Corgi_flow/master/.opencode/INSTALL.md
 ```
 
 然後在你的 Obsidian vault（就是你的專案目錄）中初始化記憶系統：

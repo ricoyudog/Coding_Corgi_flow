@@ -114,7 +114,7 @@ codex plugin install corgispec
 Paste this into your agent:
 
 ```text
-Fetch and follow instructions from https://raw.githubusercontent.com/ricoyudog/Coding_Corgi_flow/main/.opencode/INSTALL.md
+Fetch and follow instructions from https://raw.githubusercontent.com/ricoyudog/Coding_Corgi_flow/master/.opencode/INSTALL.md
 ```
 
 ### Initialize Memory (recommended)
@@ -249,7 +249,7 @@ Hooks give you **lifecycle control** over AI sessions — validate context befor
 
 | Command | Purpose |
 |---|---|
-| `corgispec hooks generate` | Generate hook config (TOML) for AI platforms: Claude Code, OpenCode, Codex |
+| `corgispec hooks generate` | Generate hook config for AI platforms: Claude Code (JSON), OpenCode (JSON/TS), Codex (TOML+Python) |
 | `corgispec hook <name>` | Invoke a runtime hook where `name` is one of: `session-start`, `pre-write`, `post-write`, `pre-bash`, `post-compact`, `stop-check` |
 
 ### Available Hooks
@@ -439,7 +439,7 @@ schemas/
 
 packages/corgispec/                   # Unified CLI (npm publishable)
 ├── src/                              # TypeScript source
-│   └── commands/hooks/               # Hook subcommands (generate, install, status, doctor)
+│   └── commands/hooks/               # Hook subcommand (generate)
 ├── dist/                             # Built output
 └── assets/                           # Bundled assets
 
