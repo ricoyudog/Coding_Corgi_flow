@@ -1,19 +1,22 @@
 import { Command } from "commander";
 import { resolve } from "node:path";
-import { existsSync, readdirSync, statSync, readFileSync } from "node:fs";
+import { existsSync, statSync, readFileSync } from "node:fs";
 import {
   discoverSkills,
   filterSkills,
   type SkillTier,
   type SkillPlatform,
 } from "../lib/skills.js";
+import { discoverAllChanges } from "../lib/changes.js";
 
 /**
  * List active changes in openspec/changes/.
+ * When worktree isolation is configured, discovers changes across all worktrees.
  */
 function listChanges(cwd: string, json: boolean): void {
-  const changesDir = resolve(cwd, "openspec/changes");
-  if (!existsSync(changesDir)) {
+  const discovered = discoverAllChanges(cwd);
+
+  if (discovered.length === 0) {
     if (json) {
       console.log(JSON.stringify([]));
     } else {
@@ -22,17 +25,16 @@ function listChanges(cwd: string, json: boolean): void {
     return;
   }
 
-  const entries = readdirSync(changesDir, { withFileTypes: true });
   const changes: Array<{
     name: string;
+    path: string;
     lastModified: string;
     completedTasks: number;
     totalTasks: number;
   }> = [];
 
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const changeDir = resolve(changesDir, entry.name);
+  for (const dc of discovered) {
+    const changeDir = resolve(dc.path, "openspec/changes", dc.name);
     const tasksPath = resolve(changeDir, "tasks.md");
 
     let completedTasks = 0;
@@ -54,7 +56,8 @@ function listChanges(cwd: string, json: boolean): void {
     const stat = statSync(changeDir);
 
     changes.push({
-      name: entry.name,
+      name: dc.name,
+      path: dc.path,
       lastModified: stat.mtime.toISOString(),
       completedTasks,
       totalTasks,
@@ -75,7 +78,7 @@ function listChanges(cwd: string, json: boolean): void {
           ? Math.round((change.completedTasks / change.totalTasks) * 100)
           : 0;
       console.log(
-        `  ${change.name}  ${change.completedTasks}/${change.totalTasks} tasks (${pct}%)  modified: ${change.lastModified.split("T")[0]}`
+        `  ${change.name}  ${change.completedTasks}/${change.totalTasks} tasks (${pct}%)  path: ${change.path}  modified: ${change.lastModified.split("T")[0]}`
       );
     }
   }
