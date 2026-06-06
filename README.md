@@ -101,16 +101,16 @@ Options: `--platform <platforms>` (claude, opencode, codex; default: all), `--sc
 
 ```bash
 # Basic (all platforms, global scope)
-corgispec bootstrap --path /path/to/your-project --schema github-tracked
+corgispec bootstrap --target /path/to/your-project --schema github-tracked
 
 # Specific platforms
-corgispec bootstrap --path /path/to/your-project --platform opencode --schema github-tracked
+corgispec bootstrap --target /path/to/your-project --platform opencode --schema github-tracked
 
 # Local scope only
-corgispec bootstrap --path /path/to/your-project --scope local --schema github-tracked
+corgispec bootstrap --target /path/to/your-project --scope local --schema github-tracked
 
 # Interactive mode
-corgispec bootstrap --path /path/to/your-project
+corgispec bootstrap --target /path/to/your-project
 ```
 
 **B. Claude Code / Codex Plugin**
