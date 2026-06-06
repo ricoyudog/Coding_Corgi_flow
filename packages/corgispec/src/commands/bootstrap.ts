@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { runBootstrap } from "../lib/bootstrap.js";
 import type { SchemaType } from "../lib/config.js";
@@ -38,10 +39,28 @@ export function createBootstrapCommand(): Command {
     .option("--no-memory", "Skip initializing project memory files")
     .option("--json", "Output bootstrap result as JSON")
     .action(async (opts: BootstrapCommandOptions) => {
+      const isInteractive = !opts.json && !opts.yes && process.stdin.isTTY;
+
+      let platformInput = opts.platform;
+      if (isInteractive && platformInput === undefined) {
+        platformInput = await promptInput(
+          "Select platforms to install for (comma-separated: claude, opencode, codex) [all]:",
+          "claude,opencode,codex"
+        );
+      }
+
+      let scopeInput = opts.scope;
+      if (isInteractive && scopeInput === undefined) {
+        scopeInput = await promptInput(
+          "Install scope? (global, local, both) [global]:",
+          "global"
+        );
+      }
+
       const schema = validateSchema(opts.schema);
       const mode = validateMode(opts.mode);
-      const platforms = validatePlatform(opts.platform);
-      const scope = validateScope(opts.scope);
+      const platforms = validatePlatform(platformInput);
+      const scope = validateScope(scopeInput);
 
       if (!schema.ok || !mode.ok || !platforms.ok || !scope.ok) {
         process.exitCode = 1;
@@ -143,6 +162,14 @@ function validateScope(scope: string | undefined): ValidationResult<string | und
 
   console.log(`Invalid scope '${scope}'. Supported: ${VALID_SCOPES.join(", ")}`);
   return { ok: false };
+}
+
+async function promptInput(query: string, defaultValue: string): Promise<string> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const answer = await rl.question(query);
+  rl.close();
+  const trimmed = answer.trim();
+  return trimmed === "" ? defaultValue : trimmed;
 }
 
 function printBootstrapSummary(result: Awaited<ReturnType<typeof runBootstrap>>): void {

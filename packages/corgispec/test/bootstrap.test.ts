@@ -500,7 +500,7 @@ describe("bootstrap library", () => {
   it("rejects an invalid scope before running bootstrap", () => {
     try {
       execSync(
-        \`node \${CLI} bootstrap --target \${JSON.stringify(targetDir)} --scope invalid-scope\`,
+        `node ${CLI} bootstrap --target ${JSON.stringify(targetDir)} --scope invalid-scope`,
         {
           encoding: "utf-8",
           env: bootstrapEnv(process.env["PATH"]),
@@ -514,16 +514,13 @@ describe("bootstrap library", () => {
   });
 
   it("shows --scope option in bootstrap help output", () => {
-    const output = execSync(\`node \${CLI} bootstrap --help\`, { encoding: "utf-8" });
+    const output = execSync(`node ${CLI} bootstrap --help`, { encoding: "utf-8" });
 
     expect(output).toContain("--scope");
   });
 
   it("passes scope option through to runBootstrap", async () => {
-    writeFileSync(resolve(targetDir, "README.md"), "# Scope Project
-
-Bootstrap target.
-");
+    writeFileSync(resolve(targetDir, "README.md"), "# Scope Project\n\nBootstrap target.\n");
 
     const result = await runBootstrap({
       target: targetDir,
@@ -541,10 +538,7 @@ Bootstrap target.
   });
 
   it("defaults to global scope when not specified", async () => {
-    writeFileSync(resolve(targetDir, "README.md"), "# Default Scope Project
-
-Bootstrap target.
-");
+    writeFileSync(resolve(targetDir, "README.md"), "# Default Scope Project\n\nBootstrap target.\n");
 
     const result = await runBootstrap({
       target: targetDir,
