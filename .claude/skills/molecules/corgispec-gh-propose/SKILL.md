@@ -71,7 +71,7 @@ After explicit review of the proposal/spec/design/tasks package, continue with /
 
 3. **Check for an existing change directory and issue tracking**
 
-   Before running `openspec new change`, check whether `openspec/changes/<name>/` already exists.
+   Before running `corgispec propose`, check whether `openspec/changes/<name>/` already exists.
 
    - If the change exists and has `.github.yaml`, announce that GitHub tracking is already configured and skip GitHub issue creation later.
    - If the change exists without `.github.yaml`, reuse the change directory and allow Step 6 to create issues later.
@@ -79,14 +79,14 @@ After explicit review of the proposal/spec/design/tasks package, continue with /
 
 4. **Create or reuse the change directory**
    ```bash
-   openspec new change "<name>"
+   corgispec propose "<name>"
    ```
    If the change does not already exist, this creates a scaffolded change at `openspec/changes/<name>/` with `.openspec.yaml`.
    If it already exists, reuse the existing change directory instead of creating a new one.
 
 5. **Develop: Get the artifact build order and build the artifact package**
    ```bash
-   openspec status --change "<name>" --json
+   corgispec status "<name>" --json
    ```
    Parse the JSON to get:
    - `applyRequires`: array of artifact IDs needed before implementation (e.g., `["tasks"]`)
@@ -101,7 +101,7 @@ After explicit review of the proposal/spec/design/tasks package, continue with /
    a. **For each artifact that is `ready` (dependencies satisfied)**:
       - Get instructions:
         ```bash
-        openspec instructions <artifact-id> --change "<name>" --json
+        corgispec instructions <artifact-id> --change <name> --json
         ```
       - The instructions JSON includes:
         - `context`: Project background (constraints for you - do NOT include in output)
@@ -116,7 +116,7 @@ After explicit review of the proposal/spec/design/tasks package, continue with /
       - Show brief progress: "Created <artifact-id>"
 
     b. **Continue until all `applyRequires` artifacts are complete**
-       - After creating each artifact, re-run `openspec status --change "<name>" --json`
+       - After creating each artifact, re-run `corgispec status "<name>" --json`
        - Check if every artifact ID in `applyRequires` has `status: "done"` in the artifacts array
        - Stop when all `applyRequires` artifacts are done
 
@@ -128,7 +128,7 @@ After explicit review of the proposal/spec/design/tasks package, continue with /
 
 7. **Closeout: Show final status and prepare handoff state**
     ```bash
-    openspec status --change "<name>"
+    corgispec status "<name>"
     ```
 
     After the artifacts are complete, prepare the local handoff state that later phases consume. The planning artifact package remains the primary output; tracker setup and worktree metadata are closeout work layered on top of it.
@@ -236,7 +236,7 @@ After completing all artifacts, summarize:
 
 **Artifact Creation Guidelines**
 
-- Follow the `instruction` field from `openspec instructions` for each artifact type
+- Follow the `instruction` field from `corgispec instructions` for each artifact type
 - The schema defines what each artifact should contain - follow it
 - Read dependency artifacts for context before creating new ones
 - Use `template` as the structure for your output file - fill in its sections

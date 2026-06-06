@@ -26,18 +26,18 @@ Archive a completed change in the experimental workflow with GitHub integration.
    If ANY is missing, read `openspec/config.yaml` for `isolation` settings.
 
    **If `isolation.mode: worktree`**: Changes live inside worktrees, not the main checkout. Read `references/worktree-discovery.md` for the full discovery procedure. Quick summary:
-   1. `openspec list --json` — if it returns changes, use them
+   1. `corgispec list --json` — if it returns changes, use them
    2. If empty (new session from main checkout): scan `<isolation.root>/` directories, verify each with `git worktree list` and check `openspec/changes/<name>/` exists inside
    3. Auto-select if one found, prompt if multiple
    4. ALL subsequent work uses the worktree as workdir
 
-   **If no isolation**: `openspec list --json` directly. Auto-select if one, prompt if multiple.
+   **If no isolation**: `corgispec list --json` directly. Auto-select if one, prompt if multiple.
 
    If name provided by user, use it directly.
 
 2. **Check artifact completion status**
 
-   Run `openspec status --change "<name>" --json` and warn if artifacts are incomplete.
+   Run `corgispec status "<name>" --json` and warn if artifacts are incomplete.
 
 3. **Check task completion status**
 
@@ -141,7 +141,7 @@ Archive a completed change in the experimental workflow with GitHub integration.
 
 **Guardrails**
 - Always prompt for change selection if not provided
-- Use `openspec status --json` for completion checking
+- Use `corgispec status --json` for completion checking
 - Don't block archive on warnings; inform and confirm
 - Preserve `.openspec.yaml` and `.github.yaml` by moving the full directory
 - If delta specs exist, always assess sync before archive

@@ -16,7 +16,7 @@ Implement tasks from a Corgi change using GitHub Issues — one Task Group at a 
 - [ ] `openspec/config.yaml` is readable
 - [ ] Change name resolved (from input, context, or user prompt)
 - [ ] If `isolation.mode` is `worktree` → worktree MUST exist (created by propose). If missing, STOP.
-- [ ] `openspec status --change "<name>" --json` does NOT return `state: "blocked"`
+- [ ] `corgispec status "<name>" --json` does NOT return `state: "blocked"`
 
 ## Forbidden Actions
 
@@ -40,20 +40,20 @@ Implement tasks from a Corgi change using GitHub Issues — one Task Group at a 
 If ANY is missing, read `openspec/config.yaml` for `isolation` settings.
 
 **If `isolation.mode: worktree`**: Changes live inside worktrees, not the main checkout. Read `references/worktree-discovery.md` for the full discovery procedure. Quick summary:
-1. `openspec list --json` — if it returns changes, use them
+1. `corgispec list --json` — if it returns changes, use them
 2. If empty (new session from main checkout): scan `<isolation.root>/` directories, verify each with `git worktree list` and check `openspec/changes/<name>/` exists inside
 3. Auto-select if one found, prompt if multiple
 4. ALL subsequent work uses the worktree as workdir
 
-**If no isolation**: `openspec list --json` directly. Auto-select if one, prompt if multiple.
+**If no isolation**: `corgispec list --json` directly. Auto-select if one, prompt if multiple.
 
 If name provided by user, use it directly. Announce: `Using change: <name>` (and worktree path if applicable).
 
 ### 2. Discover: Get status and apply instructions
 
 ```bash
-openspec status --change "<name>" --json
-openspec instructions apply --change "<name>" --json
+corgispec status "<name>" --json
+corgispec apply <name> --json
 ```
 
 Handle states: `blocked` → stop. `all_done` → suggest review/archive. Otherwise → proceed.
@@ -113,7 +113,7 @@ Run `/corgi-review` to review this group, or `/corgi-apply` to continue.
 ## Postconditions (VERIFY BEFORE REPORTING DONE)
 
 - [ ] All tasks in the current group are marked `[x]` in `tasks.md`
-- [ ] `openspec instructions apply --change "<name>" --json` reflects updated progress
+- [ ] `corgispec apply <name> --json` reflects updated progress
 - [ ] If tracked: child issue moved to review label, body updated with rich summary
 - [ ] If tracked: parent issue progress updated
 - [ ] The skill STOPPED after reporting one completed group
