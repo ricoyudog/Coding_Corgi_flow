@@ -552,5 +552,79 @@ describe("bootstrap library", () => {
     });
 
     expect(result.status).toBe("success");
+
+  it("installs to specific platform with local scope", async () => {
+    writeFileSync(resolve(targetDir, "README.md"), "# Platform+Scope\n\nTest.\n");
+
+    const result = await runBootstrap({
+      target: targetDir,
+      schema: "github-tracked",
+      mode: "auto",
+      yes: true,
+      noMemory: true,
+      json: false,
+      assetsRoot: ASSETS_ROOT,
+      userSkillDirs: userSkillDirs(userSkillRoot),
+      platforms: ["opencode"],
+      scope: "local",
+    });
+
+    expect(result.status).toBe("success");
+    expect(existsSync(resolve(targetDir, ".opencode/commands/corgi-propose.md"))).toBe(true);
+  });
+
+  it("global scope does not sync project-local files", async () => {
+    writeFileSync(resolve(targetDir, "README.md"), "# Global\n\nTest.\n");
+
+    const result = await runBootstrap({
+      target: targetDir,
+      schema: "github-tracked",
+      mode: "auto",
+      yes: true,
+      noMemory: true,
+      json: false,
+      assetsRoot: ASSETS_ROOT,
+      userSkillDirs: userSkillDirs(userSkillRoot),
+      platforms: ["claude"],
+      scope: "global",
+    });
+
+    expect(result.status).toBe("success");
+    expect(existsSync(resolve(targetDir, ".opencode/commands/corgi-propose.md"))).toBe(false);
+  });
+
+  it("runs bootstrap CLI with platform and scope flags", () => {
+    writeFileSync(resolve(targetDir, "README.md"), "# CLI Platform+Scope\n\nTest.\n");
+    const fakeBin = createFakeGhBin(targetDir);
+
+    const output = execSync(
+      `node ${CLI} bootstrap --target ${JSON.stringify(targetDir)} --platform claude,opencode --scope local --mode verify --json`,
+      {
+        encoding: "utf-8",
+        env: bootstrapEnv(`${fakeBin}:${process.env["PATH"] ?? ""}`),
+      }
+    );
+
+    const parsed = JSON.parse(output) as Record<string, unknown>;
+    expect(parsed.status).toBe("success");
+  });
+
+  it("both scope installs to user and project", async () => {
+    writeFileSync(resolve(targetDir, "README.md"), "# Both\n\nTest.\n");
+
+    const result = await runBootstrap({
+      target: targetDir,
+      schema: "github-tracked",
+      mode: "auto",
+      yes: true,
+      noMemory: true,
+      json: false,
+      assetsRoot: ASSETS_ROOT,
+      userSkillDirs: userSkillDirs(userSkillRoot),
+      platforms: ["claude"],
+      scope: "both",
+    });
+
+    expect(result.status).toBe("success");
   });
 });
