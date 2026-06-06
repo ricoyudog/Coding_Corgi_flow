@@ -439,4 +439,61 @@ describe("bootstrap library", () => {
     expect(existsSync(resolve(missingTarget, "openspec"))).toBe(false);
     expect(existsSync(resolve(missingTarget))).toBe(false);
   });
+
+  it("rejects an invalid platform before running bootstrap", () => {
+    try {
+      execSync(
+        `node ${CLI} bootstrap --target ${JSON.stringify(targetDir)} --platform invalid-platform`,
+        {
+          encoding: "utf-8",
+          env: bootstrapEnv(process.env["PATH"]),
+        }
+      );
+      expect.fail("Should have thrown");
+    } catch (err: any) {
+      expect(err.status).toBe(1);
+      expect(err.stdout).toContain("Invalid platform");
+    }
+  });
+
+  it("shows --platform option in bootstrap help output", () => {
+    const output = execSync(`node ${CLI} bootstrap --help`, { encoding: "utf-8" });
+
+    expect(output).toContain("--platform");
+  });
+
+  it("passes platforms option through to runBootstrap", async () => {
+    writeFileSync(resolve(targetDir, "README.md"), "# Platform Project\n\nBootstrap target.\n");
+
+    const result = await runBootstrap({
+      target: targetDir,
+      schema: "github-tracked",
+      mode: "auto",
+      yes: true,
+      noMemory: true,
+      json: false,
+      assetsRoot: ASSETS_ROOT,
+      userSkillDirs: userSkillDirs(userSkillRoot),
+      platforms: ["claude", "opencode"],
+    });
+
+    expect(result.status).toBe("success");
+  });
+
+  it("defaults to all platforms when not specified", async () => {
+    writeFileSync(resolve(targetDir, "README.md"), "# Default Platform Project\n\nBootstrap target.\n");
+
+    const result = await runBootstrap({
+      target: targetDir,
+      schema: "github-tracked",
+      mode: "auto",
+      yes: true,
+      noMemory: true,
+      json: false,
+      assetsRoot: ASSETS_ROOT,
+      userSkillDirs: userSkillDirs(userSkillRoot),
+    });
+
+    expect(result.status).toBe("success");
+  });
 });

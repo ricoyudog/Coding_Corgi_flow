@@ -9,6 +9,8 @@ import type { BootstrapMode } from "../lib/install-assets.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const VALID_SCHEMAS = ["github-tracked", "gitlab-tracked"] as const;
 const VALID_MODES = ["auto", "fresh", "update", "legacy", "verify"] as const;
+const VALID_PLATFORMS = ["claude", "opencode", "codex"] as const;
+const VALID_SCOPES = ["global", "local", "both"] as const;
 type ValidationResult<T> = { ok: true; value: T } | { ok: false };
 
 interface BootstrapCommandOptions {
@@ -18,6 +20,8 @@ interface BootstrapCommandOptions {
   yes?: boolean;
   memory?: boolean;
   json?: boolean;
+  platform?: string;
+  scope?: string;
 }
 
 export function createBootstrapCommand(): Command {
@@ -28,14 +32,18 @@ export function createBootstrapCommand(): Command {
     .option("--target <path>", "Target project directory", ".")
     .option("--schema <schema>", "Schema to use (github-tracked or gitlab-tracked)")
     .option("--mode <mode>", "Bootstrap mode (auto, fresh, update, legacy, verify)", "auto")
+    .option("--platform <platforms>", "Comma-separated platforms to install for (claude, opencode, codex)")
+    .option("--scope <scope>", "Install scope (global, local, both)")
     .option("--yes", "Approve destructive legacy migration steps")
     .option("--no-memory", "Skip initializing project memory files")
     .option("--json", "Output bootstrap result as JSON")
     .action(async (opts: BootstrapCommandOptions) => {
       const schema = validateSchema(opts.schema);
       const mode = validateMode(opts.mode);
+      const platforms = validatePlatform(opts.platform);
+      const scope = validateScope(opts.scope);
 
-      if (!schema.ok || !mode.ok) {
+      if (!schema.ok || !mode.ok || !platforms.ok || !scope.ok) {
         process.exitCode = 1;
         return;
       }
@@ -48,6 +56,8 @@ export function createBootstrapCommand(): Command {
         noMemory: opts.memory === false,
         json: opts.json ?? false,
         assetsRoot: resolveBootstrapAssetsRoot(),
+        platforms: platforms.value,
+        scope: scope.value,
       });
 
       if (opts.json) {
@@ -102,6 +112,36 @@ function validateMode(mode: string | undefined): ValidationResult<BootstrapMode>
   }
 
   console.log(`Invalid mode '${candidate}'. Supported: ${VALID_MODES.join(", ")}`);
+  return { ok: false };
+}
+
+function validatePlatform(platform: string | undefined): ValidationResult<string[] | undefined> {
+  if (platform === undefined) {
+    return { ok: true, value: undefined };
+  }
+
+  const platforms = platform.split(",").map((p) => p.trim()).filter(Boolean);
+
+  for (const p of platforms) {
+    if (!(VALID_PLATFORMS as readonly string[]).includes(p)) {
+      console.log(`Invalid platform '${p}'. Supported: ${VALID_PLATFORMS.join(", ")}`);
+      return { ok: false };
+    }
+  }
+
+  return { ok: true, value: platforms };
+}
+
+function validateScope(scope: string | undefined): ValidationResult<string | undefined> {
+  if (scope === undefined) {
+    return { ok: true, value: undefined };
+  }
+
+  if ((VALID_SCOPES as readonly string[]).includes(scope)) {
+    return { ok: true, value: scope };
+  }
+
+  console.log(`Invalid scope '${scope}'. Supported: ${VALID_SCOPES.join(", ")}`);
   return { ok: false };
 }
 
