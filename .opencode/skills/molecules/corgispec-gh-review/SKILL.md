@@ -41,12 +41,12 @@ Review a completed Task Group with quality checks and interactive approval.
 If ANY is missing, read `openspec/config.yaml` for `isolation` settings.
 
 **If `isolation.mode: worktree`**: Changes live inside worktrees, not the main checkout. Read `references/worktree-discovery.md` for the full discovery procedure. Quick summary:
-1. `openspec list --json`, if it returns changes, use them
+1. `corgispec list --json`, if it returns changes, use them
 2. If empty (new session from main checkout): scan `<isolation.root>/` directories, verify each with `git worktree list` and check `openspec/changes/<name>/` exists inside
 3. Auto-select if one found, prompt if multiple
 4. ALL subsequent work uses the worktree as workdir
 
-**If no isolation**: `openspec list --json` directly. Auto-select if one, prompt if multiple.
+**If no isolation**: `corgispec list --json` directly. Auto-select if one, prompt if multiple.
 
 If name provided by user, use it directly.
 
