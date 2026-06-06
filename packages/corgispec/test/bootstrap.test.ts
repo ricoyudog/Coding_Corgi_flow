@@ -496,4 +496,67 @@ describe("bootstrap library", () => {
 
     expect(result.status).toBe("success");
   });
+
+  it("rejects an invalid scope before running bootstrap", () => {
+    try {
+      execSync(
+        \`node \${CLI} bootstrap --target \${JSON.stringify(targetDir)} --scope invalid-scope\`,
+        {
+          encoding: "utf-8",
+          env: bootstrapEnv(process.env["PATH"]),
+        }
+      );
+      expect.fail("Should have thrown");
+    } catch (err: any) {
+      expect(err.status).toBe(1);
+      expect(err.stdout).toContain("Invalid scope");
+    }
+  });
+
+  it("shows --scope option in bootstrap help output", () => {
+    const output = execSync(\`node \${CLI} bootstrap --help\`, { encoding: "utf-8" });
+
+    expect(output).toContain("--scope");
+  });
+
+  it("passes scope option through to runBootstrap", async () => {
+    writeFileSync(resolve(targetDir, "README.md"), "# Scope Project
+
+Bootstrap target.
+");
+
+    const result = await runBootstrap({
+      target: targetDir,
+      schema: "github-tracked",
+      mode: "auto",
+      yes: true,
+      noMemory: true,
+      json: false,
+      assetsRoot: ASSETS_ROOT,
+      userSkillDirs: userSkillDirs(userSkillRoot),
+      scope: "local",
+    });
+
+    expect(result.status).toBe("success");
+  });
+
+  it("defaults to global scope when not specified", async () => {
+    writeFileSync(resolve(targetDir, "README.md"), "# Default Scope Project
+
+Bootstrap target.
+");
+
+    const result = await runBootstrap({
+      target: targetDir,
+      schema: "github-tracked",
+      mode: "auto",
+      yes: true,
+      noMemory: true,
+      json: false,
+      assetsRoot: ASSETS_ROOT,
+      userSkillDirs: userSkillDirs(userSkillRoot),
+    });
+
+    expect(result.status).toBe("success");
+  });
 });
