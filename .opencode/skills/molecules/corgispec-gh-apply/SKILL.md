@@ -53,7 +53,7 @@ If name provided by user, use it directly. Announce: `Using change: <name>` (and
 
 ```bash
 corgispec status "<name>" --json
-corgispec apply "<name>" --json
+corgispec apply <name> --json
 ```
 
 Handle states: `blocked` → stop. `all_done` → suggest review/archive. Otherwise → proceed.
@@ -113,7 +113,7 @@ Run `/corgi-review` to review this group, or `/corgi-apply` to continue.
 ## Postconditions (VERIFY BEFORE REPORTING DONE)
 
 - [ ] All tasks in the current group are marked `[x]` in `tasks.md`
-- [ ] `corgispec apply "<name>" --json` reflects updated progress
+- [ ] `corgispec apply <name> --json` reflects updated progress
 - [ ] If tracked: child issue moved to review label, body updated with rich summary
 - [ ] If tracked: parent issue progress updated
 - [ ] The skill STOPPED after reporting one completed group

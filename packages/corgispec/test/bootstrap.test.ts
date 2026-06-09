@@ -553,6 +553,7 @@ describe("bootstrap library", () => {
 
     expect(result.status).toBe("success");
 
+  });
   it("installs to specific platform with local scope", async () => {
     writeFileSync(resolve(targetDir, "README.md"), "# Platform+Scope\n\nTest.\n");
 

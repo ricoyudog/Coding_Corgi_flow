@@ -79,7 +79,7 @@ After explicit review of the proposal/spec/design/tasks package, continue with /
 
 4. **Create or reuse the change directory**
    ```bash
-   corgispec propose <name>
+   corgispec propose "<name>"
    ```
    If the change does not already exist, this creates a scaffolded change at `openspec/changes/<name>/` with `.openspec.yaml`.
    If it already exists, reuse the existing change directory instead of creating a new one.
