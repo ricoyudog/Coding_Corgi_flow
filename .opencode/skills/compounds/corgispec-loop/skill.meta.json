@@ -1,0 +1,14 @@
+{
+  "name": "corgispec-loop",
+  "tier": "compound",
+  "version": "1.0.0",
+  "platform": "universal",
+  "description": "Corgi Loop executor — runs one full Task Group bundle (apply → verify → review-evidence) per invocation, writes structured artifacts, delegates lifecycle decisions to the hook.",
+  "dependencies": {
+    "molecules": ["corgispec-apply-change", "corgispec-verify", "corgispec-review-loop"]
+  },
+  "installation": {
+    "targets": ["opencode", "claude", "codex"],
+    "base_path": "compounds/corgispec-loop"
+  }
+}

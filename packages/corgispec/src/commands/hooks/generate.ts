@@ -161,6 +161,15 @@ function buildClaudeConfig(
             },
           ],
         },
+        {
+          hooks: [
+            {
+              type: "command",
+              command: `${binaryPath} hook loop-check`,
+              timeout: 30,
+            },
+          ],
+        },
       ],
       PostCompact: [
         {
