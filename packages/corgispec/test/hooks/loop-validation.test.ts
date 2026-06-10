@@ -17,6 +17,7 @@ import type {
   EvidenceEntry,
   FindingDetail,
   Verdict,
+  Severity,
 } from "../../src/lib/loop-types.js";
 
 // ─── Shared Fixtures ────────────────────────────────────────────────────
