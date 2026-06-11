@@ -20,11 +20,11 @@ Run automated quality checks for a completed Task Group and write a machine-read
 
 ## Forbidden Actions
 
-- NEVER ask the user for approval, rejection, or discussion
-- NEVER skip posting the review report to the child issue (if tracked) — issue visibility is required
 - NEVER ask for human approval — approval is automatic based on finding severity
-- NEVER commit or push changes — commit/push is the loop skill's responsibility
+- NEVER skip posting the review report to the child issue (if tracked)
+- NEVER commit or push changes — commit/push is the loop skill's responsibility, not review-loop's
 - NEVER implement fixes during review
+- NEVER present results to the user or wait for input
 - NEVER present human-gate decision options to the user
 
 ---
@@ -33,8 +33,10 @@ Run automated quality checks for a completed Task Group and write a machine-read
 
 ### 1. Discover: resolve change, group, and platform
 
-**Context Gate**: If session context already contains ALL of: change name, group number, platform, and the loop state directory path
+**Context Gate**: If session context already contains ALL of: change name, group number, platform, worktree path (if isolation.mode is worktree), and the loop state directory path
 → Gate passed — SKIP discovery below and proceed to Step 2.
+
+**Worktree Path Resolution**: If a `worktreePath` parameter is provided (from corgispec-loop caller), resolve all file paths (`tasks.md`, spec files, implementation files) relative to `worktreePath` instead of the current working directory. If no `worktreePath` is provided, use the current working directory as normal.
 
 Otherwise, resolve:
 
@@ -45,7 +47,15 @@ Otherwise, resolve:
    - OpenCode / `.opencode`: output to `.opencode/corgi-loop/<change>/groups/<N>/review.json`
    - If uncertain, default to `.claude/corgi-loop/<change>/groups/<N>/review.json`
 
-Read `openspec/changes/<change>/tasks.md` to identify the group's task list. Confirm all tasks for group N are marked `[x]` before proceeding.
+4. **Worktree path** (only if `isolation.mode` is `worktree` in `openspec/config.yaml`):
+   - Run `git worktree list` to find the current worktree
+   - Set `worktreePath` to the absolute path of the current worktree (e.g., `/path/to/.worktrees/loop-corgi-edit/`)
+   - **When `worktreePath` is set, resolve all relative paths in subsequent steps against `worktreePath`**:
+     - `review.json` output path → `<worktreePath>/<platform>/corgi-loop/<change>/groups/<N>/review.json`
+     - `tasks.md` path → `<worktreePath>/openspec/changes/<change>/tasks.md`
+     - All `specs/` and change directory paths → prefix with `<worktreePath>/`
+
+Read `<worktreePath>/openspec/changes/<change>/tasks.md` to identify the group's task list. Confirm all tasks for group N are marked `[x]` before proceeding.
 
 ### 2. Run quality checks (same 5-axis as corgispec-review)
 
@@ -131,16 +141,44 @@ Use the exact schema below. `finding_details[]` MUST be a JSON array. Every find
 
 Top-level count fields (`critical`, `important`) are optional. If present they are redundant summaries — the hook recomputes counts from `finding_details[]` directly.
 
+### 3b. Post review report to child issue (if tracked)
+
+After writing review.json, post the review report to the tracked child issue:
+
+1. **Assemble review report** from `finding_details[]` in the format:
+   - Severity summary line: 🔴 N Critical | 🟡 N Important | 🔵 N Suggestions | ⚪ N Nits | ℹ️ N FYI
+   - Code Quality table (file, finding, severity, comment) — one line per finding
+   - Architecture check summary
+   - Performance/Security check summary
+   - Spec coverage summary
+   - Decision recommendation (approve or fix)
+
+2. **Find child issue number**: Read the tracking file at `openspec/changes/<change>/<change>/.github.yaml` (GitHub) or `.gitlab.yaml` (GitLab). Extract the child issue number for the current group.
+
+3. **Post to child issue**:
+   - GitHub: `gh issue comment <child_number> --body "$REVIEW_REPORT"`
+   - GitLab: `glab issue note <child_iid> --message "$REVIEW_REPORT"`
+
+4. If no tracking file exists, skip issue posting silently.
+
+### 3c. Severity-based decision output
+
+After posting (or skipping), output a decision recommendation based on severity counts from `finding_details[]`:
+
+- If `finding_details` has zero `critical` AND zero `important` findings → output `{ "decision": "approve" }` (the loop skill will then commit + push + label `done`)
+- If any `critical` or `important` findings exist → output `{ "decision": "fix" }` (the loop skill will enter the fixing phase)
+
+This is a recommendation only — the loop skill reads review.json directly and makes the final decision.
+
 ### 4. Exit
 
-After writing `review.json`, the skill terminates. Do NOT:
+After posting the review report (if tracked) and outputting the decision recommendation, the skill terminates. Do NOT:
 - Ask for user feedback
 - Present a summary to the user
-- Post to issue trackers
-- Change labels
-- Commit or push
+- Commit or push changes
+- Close issues — only output the decision recommendation
 
-The loop hook reads `review.json`, validates it, and decides whether to advance, block, or terminate.
+The loop skill reads `review.json`, the posted review report, and the decision recommendation to auto-approve or enter a fix loop.
 
 ---
 
@@ -150,6 +188,7 @@ The loop hook reads `review.json`, validates it, and decides whether to advance,
 - [ ] `review.json` is valid JSON with correct schema
 - [ ] All findings have valid severity values from the allowed enum
 - [ ] `finding_details` is a non-null array
+- [ ] Review report was posted to child issue (if tracked)
+- [ ] Decision recommendation was output ({ "decision": "approve" } or { "decision": "fix" })
 - [ ] No human interaction was performed
-- [ ] No issue labels were changed
 - [ ] No commits or pushes were made
