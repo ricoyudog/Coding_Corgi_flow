@@ -1,0 +1,22 @@
+{
+  "slug": "corgispec-memory-extract",
+  "tier": "atom",
+  "version": "1.0.0",
+  "description": "Extract reusable patterns and session summaries from completed changes into wiki long-term memory",
+  "depends_on": [],
+  "platform": "universal",
+  "tags": [
+    "lifecycle",
+    "memory",
+    "extract",
+    "archive"
+  ],
+  "installation": {
+    "targets": [
+      "opencode",
+      "claude",
+      "codex"
+    ],
+    "base_path": "atoms/corgispec-memory-extract"
+  }
+}

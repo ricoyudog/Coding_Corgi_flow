@@ -54,7 +54,7 @@ Stop hook evaluates artifacts and either stops or injects next group bundle
 
 ## Forbidden Actions
 
-- NEVER ask for human approval — approve/reject is automatic based on review.json severity counts
+- NEVER make lifecycle decisions — the hook decides continue/stop/advance/terminal
 - NEVER auto-approve a group without explicit hook instruction
 - NEVER continue to the next group unless the hook explicitly instructs you to do so
 - NEVER run multiple groups in one invocation
@@ -64,7 +64,7 @@ Stop hook evaluates artifacts and either stops or injects next group bundle
 - NEVER modify tasks.md during fix passes (no appending, no unchecking)
 - NEVER delegate fix passes to corgispec-apply-change (fixes are implemented directly)
 - NEVER implement changes beyond the scope of the reported findings
-- NEVER skip posting verify report or review report to child issue (if tracked)
+- Issue sync is performed by the apply delegate during closeout (Step 5). The loop skill itself does not post to issue trackers directly — it delegates the full closeout to the apply skill.
 
 ---
 
@@ -76,11 +76,10 @@ Before executing any work, verify all required context is present. If any check 
 
 **Required context:**
 1. **config.yaml valid**: `openspec/config.yaml` exists and has `schema` field
-2. **isolation.mode resolved**: Read `openspec/config.yaml` and check `isolation.mode`. If `isolation.mode: worktree`, follow `references/worktree-discovery.md` for the full discovery procedure. If `isolation.mode: none` or missing, skip worktree discovery.
-3. **Change directory exists**: `openspec/changes/<name>/` exists
-4. **tasks.md present**: `openspec/changes/<name>/tasks.md` exists and contains at least one `## N.` Task Group heading
-5. **Worktree valid** (if `isolation.mode: worktree`): worktree directory exists and is accessible
-6. **Issue tracker reachable** (if tracked): `gh` or `glab` CLI available (non-blocking warning if missing)
+2. **Change directory exists**: `openspec/changes/<name>/` exists
+3. **tasks.md present**: `openspec/changes/<name>/tasks.md` exists and contains at least one `## N.` Task Group heading
+4. **Worktree valid** (if `isolation.mode: worktree`): worktree directory exists and is accessible
+5. **Issue tracker reachable** (if tracked): `gh` or `glab` CLI available (non-blocking warning if missing)
 
 **Platform detection**: Read `openspec/config.yaml` `schema` field:
 - `github-tracked` → platform root: `.opencode/`, tracker: `gh`
@@ -97,18 +96,6 @@ If any check fails, report the specific failure and STOP. Do not proceed with pa
 Read `openspec/changes/<name>/tasks.md`. Count all `## N.` headings (regex: `^##\s+\d+\.`). This is `totalGroups`.
 
 If no groups found: STOP with error — nothing to loop over.
-
-#### 2.1b Resolve Worktree Path
-
-If `isolation.mode` is `worktree` (discovered in Context Gate):
-- Run the full worktree discovery procedure from `references/worktree-discovery.md`: scan `<isolation.root>/` directories, verify with `git worktree list`, check `openspec/changes/<name>/` exists inside
-- Set `worktreePath` to the absolute worktree path (e.g., `<project-root>/.worktrees/<name>`)
-- Write this path into state.json under `worktreePath`
-
-If `isolation.mode` is `none` or missing:
-- Set `worktreePath: null` in state.json
-
-The `worktreePath` field MUST be populated with the actual path or `null` — never leave it as the literal string `<path-or-null>`.
 
 #### 2.2 Determine Platform Directory
 
@@ -178,7 +165,6 @@ When the hook has directed you to execute a group bundle (either first-run block
 Read `<PLATFORM_DIR>/state.json`. Confirm:
 - `active` is `true`
 - `currentGroup` points to a valid group (1 ≤ currentGroup ≤ totalGroups)
-- If `worktreePath` is non-null, verify the directory exists: `ls <worktreePath>` or equivalent check. If the worktree has been removed, STOP with error "Worktree at <worktreePath> no longer exists. Run /corgi-loop from the worktree directory."
 
 Record current group as in-progress in session context. The hook writes state.json after evaluation.
 
@@ -207,11 +193,13 @@ The delegate handles: task execution, marking checkboxes in `tasks.md`, closeout
 
 After apply succeeds, delegate verification by loading and executing the `corgispec-verify` skill.
 
+**Important**: The verify delegate's normal behavior includes posting reports to issue trackers and printing user guidance. When invoked from the loop, instruct it to **only produce evidence** — no SEPARATE issue posting — issue sync is handled by the apply delegate's closeout, not by verify. Only produce evidence. The loop writes structured artifacts instead.
+
 **Input to delegate**:
 - Change name from state
 - Task Group number from state
 - Worktree path (if applicable)
-- Flag: `--from-loop` (the verify delegate runs its FULL normal flow including posting the verify report to the child issue if tracked. Do NOT suppress issue posting.)
+- Flag: `--loop-mode` (suppress user-facing output, produce structured evidence)
 
 Collect the verify verdict and evidence from the delegate's output.
 
@@ -222,45 +210,10 @@ After verify, delegate review evidence collection by loading and executing the `
 **Input to delegate**:
 - Change name from state
 - Group number from state
-- Worktree path: `state.worktreePath` (from state.json, for file path resolution in worktree-isolated changes)
 - Platform root: `<PLATFORM_DIR>`
 - The skill will read `tasks.md` and run quality checks autonomously
 
 The review-loop delegate runs the same 5-axis quality checks (Code Quality, Spec Verification, Functional Verification, Architecture, Performance/Security) as normal review but without any human gate. It writes its findings into `finding_details[]`.
-
-**After review.json is written, post the review report to the child issue (if tracked):**
-1. Read the tracking file: `openspec/changes/<change>/<change>/.github.yaml` (GitHub) or `.gitlab.yaml` (GitLab)
-2. Assemble a review report from `review.json` findings in the format:
-   - Severity summary: 🔴 N Critical | 🟡 N Important | 🔵 N Suggestions | ⚪ N Nits | ℹ️ N FYI
-   - Code Quality table (file, finding, severity, comment)
-   - Architecture check status
-   - Performance check status  
-   - Spec coverage status
-3. Post to child issue:
-   - GitHub: `gh issue comment <child_number> --body "$REVIEW_REPORT"`
-   - GitLab: `glab issue note <child_iid> --message "$REVIEW_REPORT"`
-4. If no tracking file exists, skip issue posting silently.
-
-**Auto-Approve / Auto-Fix Decision (replaces human gate):**
-
-Read `review.json` `finding_details[]` and count severities:
-
-**Auto-Approve** (zero critical AND zero important findings):
-1. Commit all changes: `git add -A && git commit -m "feat(<change-name>): complete Group N - auto-approved"`
-2. Push: `git push`
-3. Change child issue label to `done`:
-   - GitHub: `gh issue edit <child_number> --remove-label "review" --add-label "done"`  
-   - GitLab: `glab issue update <child_iid> --unlabel "workflow::review" --label "workflow::done"`
-4. Update parent issue progress
-5. Post a note to child issue: "✅ Auto-approved. No critical or important findings."
-
-**Auto-Fix Loop** (any critical or important findings):
-1. Post a note to child issue: "🔄 Auto-fix triggered. Found N critical/important findings. Entering fix loop..."
-2. Enter the existing fixing phase (Section 3.6b/3.6c)
-3. The fixing loop implements fixes directly (NOT via tasks.md fix tasks), re-runs verify, re-runs review, and re-evaluates
-4. Continue fix loop until auto-approve conditions are met OR circuit breaker triggers
-
-**Core principle**: The review's human gate is replaced by severity-based automatic decision. Zero critical+important = approve. Any critical+important = fix loop.
 
 #### 3.5 Write Artifacts
 

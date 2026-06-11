@@ -1,0 +1,125 @@
+import { Command } from "commander";
+import { resolve } from "node:path";
+import { discoverChanges, getChangeInfo, loadWorkflowSchema } from "../lib/changes.js";
+import { detectHookConfig } from "../lib/hooks.js";
+
+export function createStatusCommand(): Command {
+  const cmd = new Command("status");
+
+  cmd
+    .description("Show artifact completion state for a Corgi change")
+    .argument("[name]", "Change name (auto-selects if only one exists)")
+    .option("--json", "Output as JSON")
+    .option("--path <dir>", "Working directory", ".")
+    .action(async (name: string | undefined, opts) => {
+      const cwd = resolve(opts.path);
+
+      try {
+        let changeName = name;
+
+        if (!changeName) {
+          const changes = discoverChanges(cwd);
+          if (changes.length === 0) {
+            console.error("Error: No changes found.");
+            process.exitCode = 1; return;
+          }
+          if (changes.length > 1) {
+            console.error(
+              "Error: Multiple changes found. Specify one:\n" +
+                changes.map((c) => `  - ${c}`).join("\n")
+            );
+            process.exitCode = 1; return;
+          }
+          changeName = changes[0];
+        }
+
+        const info = getChangeInfo(cwd, changeName);
+        const hookStatus = detectHookConfig(cwd);
+        const schema = loadWorkflowSchema(cwd);
+
+        if (opts.json) {
+          const output = {
+            changeName: info.name,
+            schemaName: info.schemaName,
+            state: info.state,
+            isComplete: info.isComplete,
+            applyRequires: schema.apply?.requires || [],
+            artifacts: info.artifacts,
+            taskGroups: info.taskGroups,
+            hooks: {
+              configured: hookStatus.configured,
+              platform: hookStatus.platform,
+              events: hookStatus.events,
+            },
+          };
+          console.log(JSON.stringify(output, null, 2));
+          return;
+        }
+
+        // Human-readable output
+        console.log(`Change: ${info.name} (state: ${info.state})`);
+        console.log(`Schema: ${info.schemaName}`);
+        if (hookStatus.configured) {
+          console.log(
+            `Hooks: ✅ configured (${hookStatus.events.join(", ")})`
+          );
+        } else {
+          console.log(
+            "Hooks: ❌ not configured → run corgispec hooks generate"
+          );
+        }
+        console.log();
+
+        // Artifacts
+        console.log("Artifacts:");
+        for (const a of info.artifacts) {
+          let icon: string;
+          if (a.exists) {
+            icon = "✓";
+          } else if (a.blocked) {
+            icon = "✗";
+          } else if (a.ready) {
+            icon = "○";
+          } else {
+            icon = "○";
+          }
+          let suffix = "";
+          if (a.blocked && a.blockedBy.length > 0) {
+            suffix = ` (blocked by: ${a.blockedBy.join(", ")})`;
+          }
+          console.log(`  ${icon} ${a.id} — ${a.description}${suffix}`);
+        }
+        console.log();
+
+        // Task groups
+        if (info.taskGroups.length > 0) {
+          console.log("Task Groups:");
+          for (const tg of info.taskGroups) {
+            const pct =
+              tg.totalTasks > 0
+                ? Math.round((tg.completedTasks / tg.totalTasks) * 100)
+                : 0;
+            console.log(
+              `  ${tg.number}. ${tg.name}  ${tg.completedTasks}/${tg.totalTasks} (${pct}%)  [${tg.status}]`
+            );
+          }
+          console.log();
+        }
+
+        // Overall
+        const overallPct =
+          info.totalTasks > 0
+            ? Math.round((info.completedTasks / info.totalTasks) * 100)
+            : 0;
+        console.log(
+          `Overall: ${info.completedTasks}/${info.totalTasks} tasks (${overallPct}%) — ${info.isComplete ? "complete" : "in progress"}`
+        );
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`Error: ${msg}`);
+        process.exitCode = 1; return;
+      }
+    });
+
+  return cmd;
+}

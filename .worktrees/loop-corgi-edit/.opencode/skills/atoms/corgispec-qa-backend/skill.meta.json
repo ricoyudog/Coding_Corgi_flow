@@ -1,0 +1,13 @@
+{
+  "slug": "corgispec-qa-backend",
+  "tier": "atom",
+  "version": "1.0.0",
+  "description": "Backend logic walkthrough — traces call chain from real entry points, verifies data integrity across layers",
+  "depends_on": [],
+  "platform": "universal",
+  "tags": ["qa", "backend", "walkthrough"],
+  "installation": {
+    "targets": ["opencode", "claude", "codex"],
+    "base_path": "atoms/corgispec-qa-backend"
+  }
+}
