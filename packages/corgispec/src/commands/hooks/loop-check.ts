@@ -127,11 +127,18 @@ export function createHookLoopCheckCommand(): Command {
       if (!projectRoot) {
         process.exit(0);
       }
+      const root = projectRoot; // Narrowed: non-null after exit guard
 
-      await readStdinJson();
+      const hookInput = await readStdinJson();
+      // stop_hook_active guard: prevent re-entry into already-active hook cycle
+      // (The state machine's circuit breaker handles consecutive block limits)
+      if (hookInput.stop_hook_active) {
+        // Re-entry after a previous block — still evaluate to check for new artifacts
+        // Falls through to normal processing below
+      }
 
       // Discover active loop state across both platform directories
-      const found = findActiveState(projectRoot);
+      const found = findActiveState(root);
       if (!found) {
         process.stdout.write(JSON.stringify({ decision: "proceed" }));
         process.exit(0);
@@ -142,14 +149,14 @@ export function createHookLoopCheckCommand(): Command {
 
       // Read optional artifacts for the current group
       const verifyArtifact = readVerifyArtifact(
-        projectRoot,
+        root,
         platformDir,
         state.changeName,
         state.currentGroup,
       );
 
       const reviewArtifact = readReviewArtifact(
-        projectRoot,
+        root,
         platformDir,
         state.changeName,
         state.currentGroup,
@@ -160,12 +167,17 @@ export function createHookLoopCheckCommand(): Command {
 
       // Write mutated state back atomically
       const statePath = resolve(
-        projectRoot,
+        root,
         platformDir,
         state.changeName,
         "state.json",
       );
       writeStateAtomic(statePath, result.state);
+
+      // Diagnostic: log fixing phase context to stderr
+      if (result.phase === "fixing") {
+        console.error(`Fix mode: retry ${result.state.retryCount}/${result.state.maxRetries}`);
+      }
 
       // Output decision to stdout (without the state field)
       const output = {

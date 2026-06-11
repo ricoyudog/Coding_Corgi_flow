@@ -59,6 +59,9 @@ function defaultState(overrides: Partial<LoopState> = {}): LoopState {
     blockCount: 0,
     maxBlocks: 3,
     maxGroups: 5,
+    retryCount: 0,
+    maxRetries: 3,
+    selfDriven: true,
     ...overrides,
   };
 }
@@ -163,7 +166,7 @@ describe("evaluateLoopState", () => {
   // ── Category 6–8: Verdict gate ───────────────────────────────────────
 
   it("6. Verdict gate: FAIL → terminal verify_failed", () => {
-    const state = defaultState();
+    const state = defaultState({ selfDriven: false });
     const verify = defaultVerifyArtifact({ verdict: "FAIL" });
     const review = defaultReviewArtifact();
 
@@ -225,7 +228,7 @@ describe("evaluateLoopState", () => {
   // ── Category 10–12: Severity gate ────────────────────────────────────
 
   it("10. Severity gate: critical finding → terminal stopped_review_findings", () => {
-    const state = defaultState();
+    const state = defaultState({ selfDriven: false });
     const verify = defaultVerifyArtifact({ verdict: "PASS" });
     const review = defaultReviewArtifact({
       finding_details: [
@@ -242,7 +245,7 @@ describe("evaluateLoopState", () => {
   });
 
   it("11. Severity gate: important finding → terminal stopped_review_findings", () => {
-    const state = defaultState();
+    const state = defaultState({ selfDriven: false });
     const verify = defaultVerifyArtifact({ verdict: "PASS" });
     const review = defaultReviewArtifact({
       finding_details: [
@@ -518,4 +521,243 @@ describe("evaluateLoopState", () => {
     });
     expect(result.reason).toBeDefined();
   });
+
+  // ── Category: Retry scenarios ──────────────────────────────────────────
+  // RED PHASE — these tests validate retry behavior for the state machine.
+  // They are expected to FAIL until Task 4 implements retry logic in evaluateLoopState.
+  //
+  // When selfDriven=true (OpenCode platform), FAIL verdicts and critical/important
+  // findings should trigger a "fixing" phase with retry instead of immediate terminal.
+  // When selfDriven=false (Claude Code), behavior is unchanged — terminal as before.
+  // maxRetries=0 effectively disables retry.
+
+  describe("retry: verify FAIL", () => {
+    it("T-retry-1: selfDriven=true, retryCount=0 with FAIL verdict → phase=fixing, terminal=false, retryCount=1", () => {
+      const state = defaultState({
+        retryCount: 0,
+        maxRetries: 3,
+        selfDriven: true,
+      });
+      const verify = defaultVerifyArtifact({ verdict: "FAIL" });
+      const review = defaultReviewArtifact();
+
+      const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
+      expect(result).toMatchObject({
+        decision: "proceed",
+        phase: "fixing",
+        terminal: false,
+      });
+      expect(result.state.retryCount).toBe(1);
+    });
+
+    it("T-retry-2: selfDriven=true, retryCount=2 with FAIL verdict → phase=fixing, terminal=false, retryCount=3", () => {
+      const state = defaultState({
+        retryCount: 2,
+        maxRetries: 3,
+        selfDriven: true,
+      });
+      const verify = defaultVerifyArtifact({ verdict: "FAIL" });
+      const review = defaultReviewArtifact();
+
+      const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
+      expect(result).toMatchObject({
+        decision: "proceed",
+        phase: "fixing",
+        terminal: false,
+      });
+      expect(result.state.retryCount).toBe(3);
+    });
+
+    it("T-retry-3: selfDriven=true, retryCount=3 (exhausted) with FAIL verdict → phase=verify_failed, terminal=true", () => {
+      const state = defaultState({
+        retryCount: 3,
+        maxRetries: 3,
+        selfDriven: true,
+      });
+      const verify = defaultVerifyArtifact({ verdict: "FAIL" });
+      const review = defaultReviewArtifact();
+
+      const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
+      expect(result).toMatchObject({
+        decision: "proceed",
+        phase: "verify_failed",
+        terminal: true,
+      });
+    });
+
+    it("T-retry-4: selfDriven=false with FAIL verdict → phase=verify_failed, terminal=true (Claude Code unchanged)", () => {
+      const state = defaultState({
+        retryCount: 0,
+        maxRetries: 3,
+        selfDriven: false,
+      });
+      const verify = defaultVerifyArtifact({ verdict: "FAIL" });
+      const review = defaultReviewArtifact();
+
+      const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
+      expect(result).toMatchObject({
+        decision: "proceed",
+        phase: "verify_failed",
+        terminal: true,
+      });
+    });
+  });
+
+  describe("retry: review critical findings", () => {
+    it("T-retry-5: selfDriven=true, retryCount=0 with critical findings → phase=fixing, terminal=false, retryCount=1", () => {
+      const state = defaultState({
+        retryCount: 0,
+        maxRetries: 3,
+        selfDriven: true,
+      });
+      const verify = defaultVerifyArtifact({ verdict: "PASS" });
+      const review = defaultReviewArtifact({
+        finding_details: [
+          { severity: "critical", check: "Security", description: "SQL injection risk" },
+        ],
+      });
+
+      const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
+      expect(result).toMatchObject({
+        decision: "proceed",
+        phase: "fixing",
+        terminal: false,
+      });
+      expect(result.state.retryCount).toBe(1);
+    });
+
+    it("T-retry-6: selfDriven=true, retryCount=2 with critical findings → phase=fixing, terminal=false, retryCount=3", () => {
+      const state = defaultState({
+        retryCount: 2,
+        maxRetries: 3,
+        selfDriven: true,
+      });
+      const verify = defaultVerifyArtifact({ verdict: "PASS" });
+      const review = defaultReviewArtifact({
+        finding_details: [
+          { severity: "critical", check: "Security", description: "SQL injection risk" },
+        ],
+      });
+
+      const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
+      expect(result).toMatchObject({
+        decision: "proceed",
+        phase: "fixing",
+        terminal: false,
+      });
+      expect(result.state.retryCount).toBe(3);
+    });
+
+    it("T-retry-7: selfDriven=true, retryCount=3 (exhausted) with critical findings → phase=stopped_review_findings, terminal=true", () => {
+      const state = defaultState({
+        retryCount: 3,
+        maxRetries: 3,
+        selfDriven: true,
+      });
+      const verify = defaultVerifyArtifact({ verdict: "PASS" });
+      const review = defaultReviewArtifact({
+        finding_details: [
+          { severity: "critical", check: "Security", description: "SQL injection risk" },
+        ],
+      });
+
+      const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
+      expect(result).toMatchObject({
+        decision: "proceed",
+        phase: "stopped_review_findings",
+        terminal: true,
+      });
+    });
+
+    it("T-retry-8: selfDriven=false with critical findings → phase=stopped_review_findings, terminal=true (unchanged)", () => {
+      const state = defaultState({
+        retryCount: 0,
+        maxRetries: 3,
+        selfDriven: false,
+      });
+      const verify = defaultVerifyArtifact({ verdict: "PASS" });
+      const review = defaultReviewArtifact({
+        finding_details: [
+          { severity: "critical", check: "Security", description: "SQL injection risk" },
+        ],
+      });
+
+      const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
+      expect(result).toMatchObject({
+        decision: "proceed",
+        phase: "stopped_review_findings",
+        terminal: true,
+      });
+    });
+
+    it("T-retry-9: maxRetries=0 disables retry — critical findings → phase=stopped_review_findings, terminal=true", () => {
+      const state = defaultState({
+        retryCount: 0,
+        maxRetries: 0,
+        selfDriven: true,
+      });
+      const verify = defaultVerifyArtifact({ verdict: "PASS" });
+      const review = defaultReviewArtifact({
+        finding_details: [
+          { severity: "critical", check: "Security", description: "SQL injection risk" },
+        ],
+      });
+
+      const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
+      expect(result).toMatchObject({
+        decision: "proceed",
+        phase: "stopped_review_findings",
+        terminal: true,
+      });
+    });
+  });
+
+  describe("retry: non-blocking findings", () => {
+    it("T-retry-10: selfDriven=true, suggestion findings → advance normally (no retry for suggestion)", () => {
+      const state = defaultState({
+        retryCount: 1,
+        maxRetries: 3,
+        selfDriven: true,
+      });
+      const verify = defaultVerifyArtifact({ verdict: "PASS" });
+      const review = defaultReviewArtifact({
+        finding_details: [
+          { severity: "suggestion", check: "Code Quality", description: "Use optional chaining" },
+        ],
+      });
+
+      const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
+      // Retry must NOT trigger for suggestion — should advance normally
+      expect(result.phase).not.toBe("fixing");
+      expect(result.phase).not.toBe("stopped_review_findings");
+      expect(result.terminal).toBeFalsy();
+      // retryCount should reset to 0 on clean advance (even for non-blocking findings)
+      expect(result.state.retryCount).toBe(0);
+    });
+  });
+
+  describe("retry: clean advance", () => {
+    it("T-retry-11: clean advance resets retryCount to 0", () => {
+      const state = defaultState({
+        retryCount: 2,
+        maxRetries: 3,
+        selfDriven: true,
+        currentGroup: 1,
+        totalGroups: 3,
+        phase: "awaiting_group_result",
+      });
+      const verify = defaultVerifyArtifact({ verdict: "PASS" });
+      const review = defaultReviewArtifact({ finding_details: [] });
+
+      const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
+      // Clean advance should block for next group and reset retryCount
+      expect(result).toMatchObject({
+        decision: "block",
+        terminal: false,
+      });
+      expect(result.state.retryCount).toBe(0);
+      expect(result.state.currentGroup).toBe(2);
+    });
+  });
+
 });

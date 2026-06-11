@@ -37,6 +37,7 @@ const VALID_PHASES: ReadonlySet<string> = new Set([
   "init",
   "awaiting_group_result",
   "awaiting_finalize",
+  "fixing",
   "done",
   "verify_failed",
   "stopped_review_findings",
@@ -481,4 +482,49 @@ export function validateExitCodeConsistency(
 function isObjectOrNull(value: unknown): value is Record<string, unknown> | null {
   if (value === null) return true;
   return typeof value === "object" && !Array.isArray(value);
+}
+
+// ─── RetryCount Validator ───────────────────────────────────────────────
+
+/**
+ * Validates retryCount is a non-negative integer.
+ * undefined is valid (backward compat: old state.json files won't have this field).
+ */
+export function validateRetryCount(value: unknown): ValidationResult {
+  if (value === undefined) return ok(); // backward compat
+  if (value === null) return fail(["retryCount must not be null"]);
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+    return fail(["retryCount must be a non-negative integer"]);
+  }
+  return ok();
+}
+
+// ─── MaxRetries Validator ───────────────────────────────────────────────
+
+/**
+ * Validates maxRetries is a non-negative integer.
+ * undefined is valid (backward compat: old state.json files won't have this field).
+ */
+export function validateMaxRetries(value: unknown): ValidationResult {
+  if (value === undefined) return ok(); // backward compat
+  if (value === null) return fail(["maxRetries must not be null"]);
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+    return fail(["maxRetries must be a non-negative integer"]);
+  }
+  return ok();
+}
+
+// ─── SelfDriven Validator ──────────────────────────────────────────────
+
+/**
+ * Validates selfDriven is a boolean.
+ * undefined is valid (backward compat: old state.json files won't have this field).
+ */
+export function validateSelfDriven(value: unknown): ValidationResult {
+  if (value === undefined) return ok(); // backward compat
+  if (value === null) return fail(["selfDriven must not be null"]);
+  if (typeof value !== "boolean") {
+    return fail(["selfDriven must be a boolean"]);
+  }
+  return ok();
 }

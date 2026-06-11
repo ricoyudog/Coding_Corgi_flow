@@ -241,6 +241,20 @@ export function evaluateLoopState(
 
   // ── 9. Verdict gate ─────────────────────────────────────────────────
   if (verifyArtifact.verdict === "FAIL") {
+    // Retry before terminal on self-driven platforms
+    if (state.selfDriven && state.retryCount < state.maxRetries) {
+      const clone = deepCloneState(state);
+      clone.retryCount = state.retryCount + 1;
+      clone.phase = "fixing";
+      clone.updatedAt = now();
+      return {
+        decision: "proceed",
+        phase: "fixing",
+        terminal: false,
+        reason: `verify FAIL — retry attempt ${clone.retryCount}/${state.maxRetries}`,
+        state: clone,
+      };
+    }
     return buildTerminal("verify_failed", state, "verification verdict: FAIL");
   }
 
@@ -303,6 +317,20 @@ export function evaluateLoopState(
   const { critical, important } = countBlockingFindings(reviewArtifact.finding_details);
 
   if (critical > 0) {
+    // Retry before terminal on self-driven platforms
+    if (state.selfDriven && state.retryCount < state.maxRetries) {
+      const clone = deepCloneState(state);
+      clone.retryCount = state.retryCount + 1;
+      clone.phase = "fixing";
+      clone.updatedAt = now();
+      return {
+        decision: "proceed",
+        phase: "fixing",
+        terminal: false,
+        reason: `${critical} critical finding(s) — retry attempt ${clone.retryCount}/${state.maxRetries}`,
+        state: clone,
+      };
+    }
     return buildTerminal(
       "stopped_review_findings",
       state,
@@ -311,6 +339,20 @@ export function evaluateLoopState(
   }
 
   if (important > 0) {
+    // Retry before terminal on self-driven platforms
+    if (state.selfDriven && state.retryCount < state.maxRetries) {
+      const clone = deepCloneState(state);
+      clone.retryCount = state.retryCount + 1;
+      clone.phase = "fixing";
+      clone.updatedAt = now();
+      return {
+        decision: "proceed",
+        phase: "fixing",
+        terminal: false,
+        reason: `${important} important finding(s) — retry attempt ${clone.retryCount}/${state.maxRetries}`,
+        state: clone,
+      };
+    }
     return buildTerminal(
       "stopped_review_findings",
       state,
@@ -333,6 +375,7 @@ export function evaluateLoopState(
     clone.blockCount++;
     clone.updatedAt = now();
     clone.phase = "awaiting_finalize";
+    clone.retryCount = 0;
 
     return {
       decision: "block",
@@ -351,6 +394,7 @@ export function evaluateLoopState(
     [String(state.currentGroup)]: "complete",
   };
   clone.currentGroup = state.currentGroup + 1;
+  clone.retryCount = 0;
   clone.blockCount++;
   clone.updatedAt = now();
   clone.phase = "awaiting_group_result";

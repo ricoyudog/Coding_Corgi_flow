@@ -1,19 +1,19 @@
 ---
 name: corgispec-loop
-description: Corgi Loop executor — runs one full Task Group bundle (apply → verify → review-evidence) per invocation, writes structured artifacts, and delegates lifecycle decisions to the stop hook.
+description: Corgi Loop executor — runs one full Task Group bundle (apply → verify → review-evidence) per invocation, writes structured artifacts, and delegates lifecycle decisions to the stop hook. In OpenCode self-driving mode, evaluates loop-check hook and implements fixes directly.
 license: MIT
 compatibility: Requires corgispec CLI. Requires corgispec-apply-change, corgispec-verify, and corgispec-review-loop skills.
 metadata:
   author: corgispec
-  version: "1.0.0"
+  version: "1.1.0"
   generatedBy: "1.3.0"
 ---
 
-Execute **one full Task Group bundle** for a Corgi Loop: apply the current group, run verify checks, collect review evidence, and write machine-readable artifacts. Stop after each bundle — the stop hook owns all lifecycle decisions.
+Execute **one full Task Group bundle** for a Corgi Loop: apply the current group, run verify checks, collect review evidence, and write machine-readable artifacts. In self-driving mode (OpenCode), evaluate the loop-check hook and implement fixes directly. In Claude Code, stop after each bundle — the stop hook owns all lifecycle decisions.
 
 This skill operates under the **Hard Logic Orchestrates, LLM Executes** principle:
 - **Hook (hard logic)**: state-machine decisions, JSON validation, severity derivation, stop/continue/advance, circuit breakers, stale-artifact protection
-- **LLM (this skill)**: apply the group, run verify, gather review evidence, write artifacts, commit/push only when instructed
+- **LLM (this skill)**: apply the group, run verify, gather review evidence, write artifacts, implement fixes (self-driving), commit/push only when instructed
 
 ## Architecture
 
@@ -30,6 +30,7 @@ This skill operates under the **Hard Logic Orchestrates, LLM Executes** principl
          +-- Executes one full group bundle when instructed:
          |     apply -> verify -> review-evidence
          +-- Writes machine-readable artifacts
+         +-- (Self-driving) Evaluates loop-check, fixes findings, re-verifies
          +-- Stops after the bundle; hook decides next action
          |
          v
@@ -58,11 +59,15 @@ Stop hook evaluates artifacts and either stops or injects next group bundle
 - NEVER continue to the next group unless the hook explicitly instructs you to do so
 - NEVER run multiple groups in one invocation
 - NEVER skip verify or review-evidence phases
-- NEVER mutate `state.json` fields that the hook owns (`active`, `terminal`, `blockCount`, `phase` lifecycle transitions)
+- NEVER mutate `state.json` fields that the hook owns (`active`, `terminal`, `blockCount`, `phase`, `currentGroup`, `retryCount`, `groupStatuses`, `completedGroups`, `pushStatus` lifecycle transitions)
 - NEVER fabricate file lists, test results, or evidence
-- NEVER post to issue trackers during loop execution (the hook handles issue sync)
+- NEVER modify tasks.md during fix passes (no appending, no unchecking)
+- NEVER delegate fix passes to corgispec-apply-change (fixes are implemented directly)
+- NEVER implement changes beyond the scope of the reported findings
+- Issue sync is performed by the apply delegate during closeout (Step 5). The loop skill itself does not post to issue trackers directly — it delegates the full closeout to the apply skill.
 
 ---
+
 ## Steps
 
 ### 1. Context Gate (Pre-Execution Validation)
@@ -109,7 +114,7 @@ sessionId = "session-" + ISO-8601 timestamp (e.g., "session-2026-06-10T10:00:00Z
 
 #### 2.4 Create state.json
 
-Write `<PLATFORM_DIR>/state.json` with the following structure (see exact schema in Section **Artifact Schemas** below):
+Write `<PLATFORM_DIR>/state.json` with the following structure (see exact schema in Section **Artifact Schemas** below). This is the ONLY time the skill writes lifecycle fields to state.json:
 
 ```json
 {
@@ -122,6 +127,9 @@ Write `<PLATFORM_DIR>/state.json` with the following structure (see exact schema
   "phase": "awaiting_group_result",
   "worktreePath": "<path-or-null>",
   "platform": "<github-tracked|gitlab-tracked>",
+  "selfDriven": false,
+  "maxRetries": 3,
+  "retryCount": 0,
   "autoApprovalPolicy": {
     "allowCommitPush": true,
     "allowPassWithWarnings": false
@@ -137,6 +145,15 @@ Write `<PLATFORM_DIR>/state.json` with the following structure (see exact schema
 }
 ```
 
+#### 2.5 Self-Driving Mode Detection
+
+Determine platform from invocation context:
+- If invoked via `.opencode/commands/corgi-loop.md` → OpenCode → `selfDriven: true`
+- If invoked via `.claude/commands/corgi/loop.md` → Claude Code → `selfDriven: false`
+- Default if uncertain: `selfDriven: false` (safe default)
+
+When `selfDriven: true`, include `selfDriven: true`, `maxRetries: 3`, `retryCount: 0` in the initial state.json (Section 2.4). These are set ONCE at initialization — the hook owns them thereafter.
+
 **After initialization, STOP.** The hook will pick up the newly created state and direct the next invocation.
 
 ### 3. Group Bundle Execution
@@ -149,7 +166,7 @@ Read `<PLATFORM_DIR>/state.json`. Confirm:
 - `active` is `true`
 - `currentGroup` points to a valid group (1 ≤ currentGroup ≤ totalGroups)
 
-Update `groupStatuses` to mark the current group as `"in_progress"` and write state.json.
+Record current group as in-progress in session context. The hook writes state.json after evaluation.
 
 #### 3.2 Apply Phase — Delegate to corgispec-apply-change
 
@@ -163,13 +180,20 @@ Delegate the apply work for the current group by loading and executing the `corg
 
 The delegate handles: task execution, marking checkboxes in `tasks.md`, closeout summary, issue sync (if tracked), memory writes.
 
-**On apply failure**: If the delegate reports a blocker or error, do NOT proceed to verify. Update state: `groupStatuses["<N>"] = "failed"`, write state.json, STOP.
+**Platform routing**: 
+- If `state.platform` is `"github-tracked"`: delegate to `corgispec-gh-apply` (GitHub issue sync)
+- If `state.platform` is `"gitlab-tracked"`: delegate to `corgispec-apply-change` (GitLab issue sync)
+- The apply delegate MUST execute its full closeout including issue sync (Step 5). 
+- Do NOT suppress issue sync when running inside the loop.
+- The closeout reads the tracking file (.github.yaml or .gitlab.yaml) and posts updates via gh/glab.
+
+**On apply failure**: If the delegate reports a blocker or error, do NOT proceed to verify. Record the failure in session context and STOP. The hook will detect the missing artifacts and determine the outcome.
 
 #### 3.3 Verify Phase — Delegate to corgispec-verify
 
 After apply succeeds, delegate verification by loading and executing the `corgispec-verify` skill.
 
-**Important**: The verify delegate's normal behavior includes posting reports to issue trackers and printing user guidance. When invoked from the loop, instruct it to **only produce evidence** — no issue posting, no user guidance printing. The loop writes structured artifacts instead.
+**Important**: The verify delegate's normal behavior includes posting reports to issue trackers and printing user guidance. When invoked from the loop, instruct it to **only produce evidence** — no SEPARATE issue posting — issue sync is handled by the apply delegate's closeout, not by verify. Only produce evidence. The loop writes structured artifacts instead.
 
 **Input to delegate**:
 - Change name from state
@@ -211,22 +235,75 @@ Collect findings from the review-loop delegate's output. The delegate produces `
 
 **Important**: The nonce in both artifacts MUST match. Generate one nonce before writing and use it in both files.
 
+#### 3.6b Self-Driving Evaluation Loop (OpenCode only)
+
+When `selfDriven: false` in state.json: Skip this section — proceed directly to Section 3.6 (Update State and STOP).
+
+When `selfDriven: true` in state.json: After writing artifacts (Section 3.5), instead of stopping, evaluate the loop state via the CLI hook:
+
+1. **Call the CLI hook**:
+   ```
+   echo '{"hook_event_name":"Stop","stop_hook_active":false}' | npx corgispec hook loop-check --path <project-root>
+   ```
+2. **Parse JSON output**: The hook returns `{ decision, phase, terminal, reason }` on stdout. The hook has already evaluated the artifacts, computed severity counts, and made the decision.
+3. **Act on the decision**:
+
+   **Phase: `"fixing"` (non-terminal)**:
+   a. Read the hook's `reason` field — it describes what needs to be fixed. The hook already evaluated severity and decided fixes are needed.
+   b. Also read `review.json` for detailed finding context (file paths, check axes, descriptions).
+   c. Implement fixes directly (Section 3.6c)
+   d. Re-run verify (Section 3.3 pattern) → review (Section 3.4 pattern) → write artifacts (Section 3.5)
+   e. Go back to step 1 (call loop-check again)
+
+   **Phase: `"awaiting_group_result"` with `decision: "proceed"` (clean advance)**:
+   a. The hook already updated state.json with `currentGroup` and `retryCount`
+   b. If more groups remain (`currentGroup ≤ totalGroups`): execute next group bundle (Sections 3.1–3.5)
+   c. If all groups done: STOP with success summary
+
+   **`terminal: true`**:
+   a. STOP with message, reason, and remaining findings summary
+   b. The hook's `reason` field explains why: which group failed, what findings remain, circuit breaker details
+
+**Circuit breakers**: The CLI hook enforces `maxBlocks`, `maxGroups`, and `maxRetries` limits. If the hook returns `terminal: true` due to a circuit breaker, honor it — do NOT attempt to bypass.
+
+#### 3.6c Direct Fix Implementation
+
+When the hook returns `phase: "fixing"`:
+
+**DO NOT delegate to corgispec-apply-change.** Fixes are implemented directly by the LLM.
+
+**Step 1 — Read findings**: Read the hook output's `reason` field for a description of what to fix. Also read `<PLATFORM_DIR>/groups/<N>/review.json` for detailed finding context (file paths, check axes, descriptions of each issue).
+
+**Step 2 — Implement fixes**: For each finding described by the hook:
+- **`file` field present**: `Read(file)` to get current content, then apply the fix from `description` using `Edit`. Match surrounding context precisely for a clean replacement.
+- **`file` field absent**: Use the `check` axis (e.g., "Spec Coverage", "Code Quality") and `description` to identify the affected file. Search for the relevant code, then apply the fix.
+- **Scope discipline**: Fix ONLY what the finding describes. No new features, no refactoring, no unrelated improvements. Each edit must correspond directly to a reported finding.
+
+**Step 3 — Re-run verify**: Delegate to corgispec-verify using the same pattern as Section 3.3. This produces a fresh verify verdict.
+
+**Step 4 — Re-run review**: Delegate to corgispec-review-loop using the same pattern as Section 3.4. This produces fresh findings.
+
+**Step 5 — Write new artifacts**: Overwrite `<PLATFORM_DIR>/groups/<N>/verify.json` and `<PLATFORM_DIR>/groups/<N>/review.json` with the fresh results. Use a new nonce.
+
+**Step 6 — Call loop-check**: Return to Section 3.6b step 1. The hook evaluates the new artifacts and returns either `phase: "fixing"` (retry needed) or clean advance. If the hook returns `terminal: true` (circuit breaker, max retries exceeded), STOP and report.
+
+**tasks.md is NOT touched during fix passes.** No checkboxes are modified, no content is appended.
+
 #### 3.6 Update State and STOP
 
-After writing both artifacts:
+After writing both artifacts (and after the self-driving loop completes, if applicable):
 
 1. **DO NOT** make any lifecycle decision. Do not decide whether the group passed or failed.
-2. Update state.json:
+2. Update state.json with ONLY these non-lifecycle fields:
    - Set `nonce` to the artifact nonce
    - Set `updatedAt` to current ISO-8601 timestamp
-   - Keep `phase` as is (the hook owns phase transitions)
-   - Keep `active` as `true`
+   (Do NOT write `phase`, `active`, `currentGroup`, `blockCount`, `retryCount`, `groupStatuses`, `completedGroups`, `pushStatus` — the hook owns those)
 3. **STOP.** The stop hook will evaluate the artifacts, recompute severity counts, and decide:
-   - **Block + advance**: "advance to group N+1" → the next invocation will execute the next group
+   - **Block + advance**: the hook advances `currentGroup` and instructs the next invocation to execute the next group
    - **Block + auto-approve**: the hook authorizes commit/push + advance
-   - **Terminal**: verification failed, review found critical/important issues, or circuit breaker tripped
+   - **Terminal**: the hook returns `terminal: true` with a reason for the stop
 
-**Do NOT** auto-continue. Do NOT decide the outcome. Write artifacts, update state, stop.
+**Do NOT** auto-continue. Do NOT decide the outcome. Write artifacts, update nonce/updatedAt in state.json, stop.
 
 ### 4. Compaction Recovery
 
@@ -260,6 +337,9 @@ Context compaction may erase the in-memory state during a loop session. When re-
   "phase": "awaiting_group_result",
   "worktreePath": ".worktrees/feat/add-user-auth",
   "platform": "github-tracked",
+  "selfDriven": true,
+  "maxRetries": 3,
+  "retryCount": 1,
   "autoApprovalPolicy": {
     "allowCommitPush": true,
     "allowPassWithWarnings": false
@@ -281,11 +361,11 @@ Context compaction may erase the in-memory state during a loop session. When re-
 }
 ```
 
-**Fields you own** (LLM may write): `changeName`, `sessionId`, `nonce`, `currentGroup`, `totalGroups`, `worktreePath`, `platform`, `autoApprovalPolicy`, `startedAt`, `updatedAt`, `completedGroups`, `groupStatuses`, `pushStatus`, `maxBlocks`, `maxGroups`
+**Fields the skill writes at initialization ONLY**: All fields in the template above (Section 2.4). After initialization, the skill writes only `nonce` and `updatedAt` to state.json.
 
-**Fields the hook owns** (do NOT mutate without explicit instruction): `active` (set to `false` only by hook), `terminal` (set by hook), `blockCount` (hook increments on block), `phase` lifecycle transitions
+**Fields the hook owns after initialization** (skill MUST NOT write): `active`, `terminal`, `blockCount`, `phase`, `currentGroup`, `retryCount`, `groupStatuses`, `completedGroups`, `pushStatus`, `selfDriven` (after initialization)
 
-**You MAY write**: `updatedAt` (always on any mutation), `nonce` (after writing artifacts), `groupStatuses` (mark in_progress/completed/failed), `completedGroups` (append after hook instructs), `pushStatus` (after hook instructs commit/push), `currentGroup` (increment ONLY when hook explicitly instructs to advance)
+**Skill writes after initialization**: `nonce` (after writing artifacts), `updatedAt` (on any artifact write). The skill also writes artifact files (verify.json, review.json).
 
 #### 5.2 verify.json
 
@@ -397,8 +477,8 @@ The `autoApprovalPolicy` in state.json controls what the hook may do without hum
 - **`allowPassWithWarnings`** (`false`): When `false`, a `PASS_WITH_WARNINGS` verify verdict causes the hook to stop (terminal `verify_failed`). When `true`, the hook treats `PASS_WITH_WARNINGS` as acceptable and may auto-advance.
 
 **What auto-approval enables**:
-- A clean group (`PASS` verdict, no critical/important review findings) → hook may mark group as completed, instruct advance to next group, instruct commit/push (if `allowCommitPush` is true)
-- If any guard trips (FAIL verdict, critical/important findings, circuit breaker, corruption) → hook stops with terminal phase regardless of policy
+- A clean group (hook returns `phase: "awaiting_group_result"` with clean advance) → hook may mark group as completed, instruct advance to next group, instruct commit/push (if `allowCommitPush` is true)
+- If the hook returns `terminal: true` → hook stops with terminal phase regardless of policy
 
 **This skill does NOT implement the policy** — it writes the policy into state.json at initialization. The hook reads and enforces it.
 
@@ -430,6 +510,7 @@ The `autoApprovalPolicy` in state.json controls what the hook may do without hum
 - When re-invoked: check for existing artifacts before executing (compaction recovery)
 - `cli-emitted` evidence MUST have `exitCode` — the hook validates it against `status`
 - Severity values MUST be from the exact enum — the hook fails closed on invalid values
-- If apply fails (blocker): update `groupStatuses`, write state, STOP — do not proceed to verify
+- If apply fails (blocker): record failure in context, STOP — do not proceed to verify. The hook detects missing artifacts.
 - If verify is `FAIL`: write it honestly — the hook handles the terminal decision
 - Never trust session memory over `state.json` — the file on disk is the single source of truth
+- In self-driving mode: never edit `tasks.md` during fix passes, never delegate fixes to apply-change, never exceed finding scope

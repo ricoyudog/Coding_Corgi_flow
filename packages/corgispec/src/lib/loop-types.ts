@@ -2,15 +2,31 @@
 
 /**
  * All possible phases of the Corgi Loop state machine.
- * Non-terminal phases: init, awaiting_group_result, awaiting_finalize.
+ * Non-terminal phases: init, awaiting_group_result, fixing, awaiting_finalize.
  * Terminal phases: done, verify_failed, stopped_review_findings,
  * error_validation, session_conflict, circuit_breaker, error_corruption,
  * worktree_missing.
+ *
+ * Phase descriptions:
+ * - **init**: Loop is initializing, loading state and change config.
+ * - **awaiting_group_result**: Loop is waiting for the current group to be applied and verified.
+ * - **fixing**: Auto-fixing phase — triggered when blocking findings exist. The loop
+ *   implements fixes directly and re-evaluates.
+ * - **awaiting_finalize**: All groups processed, awaiting finalization or human review.
+ * - **done**: Loop completed successfully.
+ * - **verify_failed**: Verification failed; loop stopped.
+ * - **stopped_review_findings**: Review found blocking issues; loop stopped.
+ * - **error_validation**: State validation error; loop stopped.
+ * - **session_conflict**: Session ID mismatch; loop stopped.
+ * - **circuit_breaker**: Too many blocks; circuit breaker triggered.
+ * - **error_corruption**: State file corrupted; loop stopped.
+ * - **worktree_missing**: Git worktree not found; loop stopped.
  */
 export type LoopPhase =
   | "init"
   | "awaiting_group_result"
   | "awaiting_finalize"
+  | "fixing"
   | "done"
   | "verify_failed"
   | "stopped_review_findings"
@@ -83,6 +99,12 @@ export interface LoopState {
   maxBlocks: number;
   /** Maximum number of groups that can be processed in this loop. */
   maxGroups: number;
+  /** Number of retry attempts for the current group. Reset on group advance. */
+  retryCount: number;
+  /** Maximum retry attempts per group before terminal stop. */
+  maxRetries: number;
+  /** Whether the loop is self-driven (OpenCode) or hook-driven (Claude Code). */
+  selfDriven: boolean;
 }
 
 // ─── Verify Artifact ───────────────────────────────────────────────────

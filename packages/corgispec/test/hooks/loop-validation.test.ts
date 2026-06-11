@@ -9,6 +9,9 @@ import {
   validateFindingDetailsType,
   validateEvidenceProvenance,
   validateExitCodeConsistency,
+  validateRetryCount,
+  validateMaxRetries,
+  validateSelfDriven,
 } from "../../src/lib/loop-validation.js";
 import type {
   LoopState,
@@ -1066,5 +1069,155 @@ describe("validateExitCodeConsistency", () => {
     ];
     const result = validateExitCodeConsistency(evidence);
     expect(result.valid).toBe(true);
+  });
+});
+
+// ─── validateRetryCount ─────────────────────────────────────────────────
+
+describe("validateRetryCount", () => {
+  it("passes with valid non-negative integer", () => {
+    const result = validateRetryCount(0);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it("passes with positive integer", () => {
+    const result = validateRetryCount(3);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it("passes with undefined (backward compat)", () => {
+    const result = validateRetryCount(undefined);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it("fails with null", () => {
+    const result = validateRetryCount(null);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.includes("must not be null"))).toBe(true);
+  });
+
+  it("fails with string", () => {
+    const result = validateRetryCount("3");
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.includes("non-negative integer"))).toBe(true);
+  });
+
+  it("fails with negative number", () => {
+    const result = validateRetryCount(-1);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.includes("non-negative integer"))).toBe(true);
+  });
+
+  it("fails with float", () => {
+    const result = validateRetryCount(1.5);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.includes("non-negative integer"))).toBe(true);
+  });
+
+  it("fails with boolean", () => {
+    const result = validateRetryCount(true);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.includes("non-negative integer"))).toBe(true);
+  });
+});
+
+// ─── validateMaxRetries ─────────────────────────────────────────────────
+
+describe("validateMaxRetries", () => {
+  it("passes with valid non-negative integer", () => {
+    const result = validateMaxRetries(0);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it("passes with positive integer", () => {
+    const result = validateMaxRetries(5);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it("passes with undefined (backward compat)", () => {
+    const result = validateMaxRetries(undefined);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it("fails with null", () => {
+    const result = validateMaxRetries(null);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.includes("must not be null"))).toBe(true);
+  });
+
+  it("fails with string", () => {
+    const result = validateMaxRetries("5");
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.includes("non-negative integer"))).toBe(true);
+  });
+
+  it("fails with negative number", () => {
+    const result = validateMaxRetries(-1);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.includes("non-negative integer"))).toBe(true);
+  });
+
+  it("fails with float", () => {
+    const result = validateMaxRetries(2.5);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.includes("non-negative integer"))).toBe(true);
+  });
+
+  it("fails with boolean", () => {
+    const result = validateMaxRetries(false);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.includes("non-negative integer"))).toBe(true);
+  });
+});
+
+// ─── validateSelfDriven ─────────────────────────────────────────────────
+
+describe("validateSelfDriven", () => {
+  it("passes with true", () => {
+    const result = validateSelfDriven(true);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it("passes with false", () => {
+    const result = validateSelfDriven(false);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it("passes with undefined (backward compat)", () => {
+    const result = validateSelfDriven(undefined);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it("fails with null", () => {
+    const result = validateSelfDriven(null);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.includes("must not be null"))).toBe(true);
+  });
+
+  it("fails with string", () => {
+    const result = validateSelfDriven("true");
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.includes("must be a boolean"))).toBe(true);
+  });
+
+  it("fails with number", () => {
+    const result = validateSelfDriven(1);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.includes("must be a boolean"))).toBe(true);
+  });
+
+  it("fails with object", () => {
+    const result = validateSelfDriven({});
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.includes("must be a boolean"))).toBe(true);
   });
 });
