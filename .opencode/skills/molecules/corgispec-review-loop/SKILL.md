@@ -33,7 +33,7 @@ Run automated quality checks for a completed Task Group and write a machine-read
 
 ### 1. Discover: resolve change, group, and platform
 
-**Context Gate**: If session context already contains ALL of: change name, group number, platform, worktree path (if isolation.mode is worktree), and the loop state directory path
+**Context Gate**: If session context already contains ALL of: change name, group number, platform, worktree path (if applicable), and the loop state directory path
 → Gate passed — SKIP discovery below and proceed to Step 2.
 
 **Worktree Path Resolution**: If a worktreePath parameter is provided (from corgispec-loop caller), resolve all file paths (tasks.md, spec files, implementation files) relative to worktreePath instead of the current working directory. If no worktreePath is provided, use the current working directory as normal.

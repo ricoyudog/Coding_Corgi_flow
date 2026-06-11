@@ -246,13 +246,13 @@ The review-loop delegate runs the same 5-axis quality checks (Code Quality, Spec
 Read `review.json` `finding_details[]` and count severities:
 
 **Auto-Approve** (zero critical AND zero important findings):
-1. Commit all changes: `git add -A && git commit -m "feat(<change-name>): complete Group N - auto-approved"`
-2. Push: `git push`
-3. Change child issue label to `done`:
+1. Post a note to child issue: "✅ Auto-approved. No critical or important findings."
+2. Commit all changes: `git add -A && git commit -m "feat(<change-name>): complete Group N - auto-approved"`
+3. Push: `git push`
+4. Change child issue label to `done`:
    - GitHub: `gh issue edit <child_number> --remove-label "review" --add-label "done"`  
    - GitLab: `glab issue update <child_iid> --unlabel "workflow::review" --label "workflow::done"`
-4. Update parent issue progress
-5. Post a note to child issue: "✅ Auto-approved. No critical or important findings."
+5. Update parent issue progress
 
 **Auto-Fix Loop** (any critical or important findings):
 1. Post a note to child issue: "🔄 Auto-fix triggered. Found N critical/important findings. Entering fix loop..."
