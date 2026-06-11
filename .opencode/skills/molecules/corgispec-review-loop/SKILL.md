@@ -20,9 +20,9 @@ Run automated quality checks for a completed Task Group and write a machine-read
 
 ## Forbidden Actions
 
-- NEVER ask the user for approval, rejection, or discussion
-- NEVER mutate issue labels or post to issue trackers
-- NEVER commit or push changes
+- NEVER ask for human approval — approval is automatic based on finding severity
+- NEVER skip posting the review report to the child issue (if tracked)
+- NEVER commit or push changes — commit/push is the loop skill's responsibility, not review-loop's
 - NEVER implement fixes during review
 - NEVER present results to the user or wait for input
 - NEVER present human-gate decision options to the user
@@ -33,8 +33,10 @@ Run automated quality checks for a completed Task Group and write a machine-read
 
 ### 1. Discover: resolve change, group, and platform
 
-**Context Gate**: If session context already contains ALL of: change name, group number, platform, and the loop state directory path
+**Context Gate**: If session context already contains ALL of: change name, group number, platform, worktree path (if isolation.mode is worktree), and the loop state directory path
 → Gate passed — SKIP discovery below and proceed to Step 2.
+
+**Worktree Path Resolution**: If a worktreePath parameter is provided (from corgispec-loop caller), resolve all file paths (tasks.md, spec files, implementation files) relative to worktreePath instead of the current working directory. If no worktreePath is provided, use the current working directory as normal.
 
 Otherwise, resolve:
 
@@ -131,16 +133,44 @@ Use the exact schema below. `finding_details[]` MUST be a JSON array. Every find
 
 Top-level count fields (`critical`, `important`) are optional. If present they are redundant summaries — the hook recomputes counts from `finding_details[]` directly.
 
+### 3b. Post review report to child issue (if tracked)
+
+After writing review.json, post the review report to the tracked child issue:
+
+1. **Assemble review report** from finding_details in the format:
+   - Severity summary line with counts per level
+   - Code Quality table (file, finding, severity, comment)
+   - Architecture check summary
+   - Performance/Security check summary
+   - Spec coverage summary
+   - Decision recommendation (approve or fix)
+
+2. **Find child issue number**: Read the tracking file at openspec/changes/<change>/<change>/.github.yaml (GitHub) or .gitlab.yaml (GitLab). Extract the child issue number for the current group.
+
+3. **Post to child issue**:
+   - GitHub: gh issue comment <child_number> --body "REVIEW_REPORT"
+   - GitLab: glab issue note <child_iid> --message "REVIEW_REPORT"
+
+4. If no tracking file exists, skip issue posting silently.
+
+### 3c. Severity-based decision output
+
+After posting (or skipping), output a decision recommendation based on severity counts from finding_details:
+
+- If zero critical AND zero important findings → output { "decision": "approve" }
+- If any critical or important findings exist → output { "decision": "fix" }
+
+This is a recommendation only — the loop skill reads review.json directly and makes the final decision.
+
 ### 4. Exit
 
-After writing `review.json`, the skill terminates. Do NOT:
+After posting the review report (if tracked) and outputting the decision recommendation, the skill terminates. Do NOT:
 - Ask for user feedback
 - Present a summary to the user
-- Post to issue trackers
-- Change labels
-- Commit or push
+- Commit or push changes
+- Close issues
 
-The loop hook reads `review.json`, validates it, and decides whether to advance, block, or terminate.
+The loop skill reads review.json, the posted review report, and the decision recommendation to auto-approve or enter a fix loop.
 
 ---
 
@@ -150,6 +180,7 @@ The loop hook reads `review.json`, validates it, and decides whether to advance,
 - [ ] `review.json` is valid JSON with correct schema
 - [ ] All findings have valid severity values from the allowed enum
 - [ ] `finding_details` is a non-null array
+- [ ] Review report was posted to child issue (if tracked)
+- [ ] Decision recommendation was output
 - [ ] No human interaction was performed
-- [ ] No issue labels were changed
 - [ ] No commits or pushes were made
