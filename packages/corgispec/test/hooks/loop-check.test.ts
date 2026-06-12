@@ -248,8 +248,8 @@ describe("processLoopState", () => {
 
   describe("artifact type validation", () => {
     it("10. malformed state (missing required field) → state.phase='error_validation'", () => {
-      // Pass undefined as state (null/undefined should be caught)
-      const state = null as unknown as LoopState;
+      // Pass empty object as state — validateLoopState will catch missing fields
+      const state = {} as unknown as LoopState;
       const verify = makeVerify();
       const review = makeReview();
 
