@@ -39,20 +39,31 @@
 
 ```mermaid
 flowchart LR
-    A["/corgi-propose"] --> B["proposal.md\nspecs/\ndesign.md\ntasks.md"]
+    A["/corgi:propose"] --> B["proposal.md\nspecs/\ndesign.md\ntasks.md"]
     B --> C["Issues\n(parent + children)"]
-    C --> D["/corgi-apply"]
-    D --> E{"Group done?"}
-    E -->|Yes| F["/corgi-verify"]
-    F --> G{"Pass?"}
-    G -->|No| D
-    G -->|Yes| H["/corgi-review"]
-    H --> I{"Approved?"}
-    I -->|Yes, more groups| D
-    I -->|Rejected| J["Fix tasks added"]
-    J --> D
-    I -->|All done| K["/corgi-human-qa"]
-    K -->|Pass| L["/corgi-archive"]
+    C --> D{"Path?"}
+    D -->|"Manual"| E["/corgi:apply"]
+    E --> F{"Group done?"}
+    F -->|Yes| G["/corgi:verify"]
+    G --> H{"Pass?"}
+    H -->|No| E
+    H -->|Yes| I["/corgi:review"]
+    I --> J{"Approved?"}
+    J -->|"Yes, more groups"| E
+    J -->|Rejected| K["Fix tasks added"]
+    K --> E
+    J -->|"All done"| L["/corgi:human-qa"]
+    L -->|Pass| M["/corgi:archive"]
+    
+    D -->|"🔄 Automated"| N["/corgi:loop"]
+    N --> O["apply → verify → review\nper group"]
+    O --> P{"Severity?"}
+    P -->|"0 critical+important"| Q["Auto-approve\nCommit + push"]
+    Q --> R{"More groups?"}
+    R -->|Yes| O
+    R -->|No| M
+    P -->|"critical/important found"| S["Auto-fix\n(retry ≤ 3x)"]
+    S --> O
 ```
 
 </details>
@@ -73,6 +84,7 @@ Coding Corgi Flow is the **community extension** of [OpenSpec](https://github.co
 | 🌿 **Worktree Isolation** | Parallel changes, each in its own git worktree (opt-in) |
 | 🧩 **Composable Skills** | Atoms → Molecules → Compounds with validated metadata |
 | 🪝 **Session Hooks** | Lifecycle hooks (pre-write, pre-bash, session-start…) with context gates |
+| 🔄 **Automated Pipeline (Loop)** | One-command apply-verify-review per group with auto-approve/fix, zero human gates |
 | 📦 **One-command Install** | `npm i -g corgispec` → `corgispec bootstrap` → done |
 
 It ships as an npm CLI (`corgispec`), a Claude Code / Codex plugin, and a set of slash commands for OpenCode, Claude Code, and Codex.
@@ -164,6 +176,7 @@ Then: `apply` → `verify` → `review` → `human-qa` → `archive`. One Task G
 | `/corgi-apply` | Execute one Task Group, sync closeout, pause for review |
 | `/corgi-verify` | Automated quality gate — lint, build, tests, spec coverage |
 | `/corgi-review` | 5-axis review with evidence gathering, approve/reject/discuss |
+| `/corgi:loop` | Automated pipeline — runs apply, verify, and review per Task Group with severity-based auto-approval and fix loops |
 | `/corgi-human-qa` | Human QA gate — route to specialized QA atoms (smoke, UI, API, CLI, backend, exploratory) |
 | `/corgi-archive` | Close issues, sync delta specs, extract knowledge, cleanup |
 | `/corgi-explore` | Thinking partner — explore ideas, clarify requirements |
@@ -294,6 +307,37 @@ Hooks are **opt-in** — existing projects work without them. Run `corgispec hoo
 
 ---
 
+## 🔄 Automated Pipeline (Loop)
+
+Manually running `/corgi:apply` → `/corgi:verify` → `/corgi:review` for every Task Group works — but it means 3+ command invocations per group. The **Corgi Loop** automates this.
+
+```text
+# One command to rule them all:
+/corgi:loop <change-name>
+```
+
+**What it does:** Executes one full **Task Group bundle** (apply → verify → review-evidence) per invocation, writes machine-readable artifacts (`verify.json`, `review.json`), and delegates lifecycle decisions to a deterministic **stop hook** — a 14-gate TypeScript state machine.
+
+| Mode | Behavior |
+|---|---|
+| **Auto-approve** | Zero critical AND zero important findings → group approved, committed, pushed, advances to next group |
+| **Auto-fix loop** | Any critical/important findings → implements fixes, re-verifies, re-reviews (up to 3 retries) |
+| **Circuit breaker** | `blockCount` exceeds `maxBlocks` (7) → stops to prevent infinite loops |
+
+**Platform differences:**
+
+| | Claude Code | OpenCode |
+|---|---|---|
+| Driving mode | Hook-driven (stop-based) | Self-driven (`selfDriven: true`) |
+| On failure | Stops immediately | Auto-retry up to 3 times |
+| Command | `/corgi:loop <name>` | `/corgi-loop <name>` |
+
+**Design principle:** *Hard Logic Orchestrates, LLM Executes.* The hook (TypeScript) owns all lifecycle decisions — state-machine transitions, JSON schema validation, severity derivation, circuit breakers. The LLM skill only executes bounded work and writes structured artifacts.
+
+→ **[Full Loop Guide](wiki/guides/loop-guide.md)**
+
+---
+
 ## 🧩 Skill Architecture
 
 Skills are organized in a **composable 3-tier hierarchy**:
@@ -410,6 +454,7 @@ Set `schema: my-schema` in `config.yaml`.
 | Memory health | None | 14-check lint (freshness, caps, links, extraction) |
 | Skill architecture | Flat files | Atoms → Molecules → Compounds with schema validation |
 | Session hooks | None | Lifecycle hooks (pre-write, pre-bash, session-start…) + context gates |
+| Automated pipeline | None | One-command loop: apply, verify, review per group with auto-approve/fix |
 | Plugin marketplace | None | Claude Code `/plugin install` + Codex marketplace |
 
 ---
