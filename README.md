@@ -57,13 +57,14 @@ flowchart LR
     
     D -->|"🔄 Automated"| N["/corgi:loop"]
     N --> O["apply → verify → review\nper group"]
-    O --> P{"Severity?"}
-    P -->|"0 critical+important"| Q["Auto-approve\nCommit + push"]
+    O --> P{"Hook verdict\n(13-gate SM)"}
+    P -->|"clean"| Q["Auto-approve\nCommit + push"]
     Q --> R{"More groups?"}
     R -->|Yes| O
     R -->|No| M
-    P -->|"critical/important found"| S["Auto-fix\n(retry ≤ 3x)"]
-    S --> O
+    P -->|"findings"| S["fix → verify → review\n(retry ≤ 3x)"]
+    S -.->|"retry"| P
+    P -->|"breaker ≥ 7 blocks"| T["⛔ stopped"]
 ```
 
 </details>
@@ -316,7 +317,7 @@ Manually running `/corgi:apply` → `/corgi:verify` → `/corgi:review` for ever
 /corgi:loop <change-name>
 ```
 
-**What it does:** Executes one full **Task Group bundle** (apply → verify → review-evidence) per invocation, writes machine-readable artifacts (`verify.json`, `review.json`), and delegates lifecycle decisions to a deterministic **stop hook** — a 14-gate TypeScript state machine.
+**What it does:** Executes one full **Task Group bundle** (apply → verify → review-evidence) per invocation, writes machine-readable artifacts (`verify.json`, `review.json`), and delegates lifecycle decisions to a deterministic **stop hook** — a 13-gate TypeScript state machine.
 
 | Mode | Behavior |
 |---|---|
