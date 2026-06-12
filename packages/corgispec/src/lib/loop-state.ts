@@ -61,18 +61,18 @@ function block(
  *
  * State machine flow (ordered):
  *   0. Null/undefined guard
- *   1. Inert guard            — active !== true → proceed (graceful inactive)
- *   2. Stop-hook-active guard — prevents re-entry when hook already active
- *   3. Circuit breaker        — blockCount >= maxBlocks → circuit_breaker
- *   4. Corruption guards      — currentGroup out of range → error_corruption
+ *   1. Inert guard              — active === false → proceed (graceful inactive)
+ *   2. Stop-hook-active guard   — prevents re-entry when hook already active
+ *   3. Circuit breaker          — blockCount >= maxBlocks → circuit_breaker
+ *   4. Corruption guards        — currentGroup out of range → error_corruption
  *   5. State structural validation — catch-all for malformed state objects
- *   6. Session guard          — session ID mismatch → session_conflict
- *   7. Finalize → Done        — awaiting_finalize → done
- *   8. First-run detection    — missing verify/review → block
- *   9. Identity validation    — structural + cross-reference checks
- *  10. Verdict gate           — FAIL / PASS_WITH_WARNINGS+deny → verify_failed
- *  11. Severity derivation    — evidence checks, critical/important → stopped_review_findings
- *  12. Advance or Finalize    — mark complete, move to next group or finalize
+ *   6. Session guard            — session ID mismatch → session_conflict
+ *   7. Finalize → Done          — awaiting_finalize → done
+ *   8. First-run detection      — missing verify/review → block
+ *   9. Identity validation      — structural + cross-reference checks
+ *  10. Verdict gate             — FAIL / PASS_WITH_WARNINGS+deny → verify_failed
+ *  11. Severity derivation      — evidence, critical/important → stopped_review_findings
+ *  12. Advance or Finalize      — mark complete, move to next group or finalize
  *
  * @param state  - Current loop state (mutated in place)
  * @param verify - Verification artifact for the current group
@@ -93,7 +93,7 @@ export function processLoopState(
   }
 
   // ── 1. Inert guard ──────────────────────────────────────────────────
-  if (state.active !== true) {
+  if (state.active === false) {
     return { decision: "proceed" };
   }
 
