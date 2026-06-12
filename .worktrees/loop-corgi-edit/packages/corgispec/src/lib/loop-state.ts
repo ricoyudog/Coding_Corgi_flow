@@ -370,7 +370,7 @@ export function evaluateLoopState(
     clone.completedGroups = [...clone.completedGroups, state.currentGroup];
     clone.groupStatuses = {
       ...clone.groupStatuses,
-      [String(state.currentGroup)]: "complete",
+      [String(state.currentGroup)]: "completed",
     };
     clone.blockCount++;
     clone.updatedAt = now();
@@ -391,7 +391,7 @@ export function evaluateLoopState(
   clone.completedGroups = [...clone.completedGroups, state.currentGroup];
   clone.groupStatuses = {
     ...clone.groupStatuses,
-    [String(state.currentGroup)]: "complete",
+    [String(state.currentGroup)]: "completed",
   };
   clone.currentGroup = state.currentGroup + 1;
   clone.retryCount = 0;
