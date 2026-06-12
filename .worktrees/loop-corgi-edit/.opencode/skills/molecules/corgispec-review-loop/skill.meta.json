@@ -1,9 +1,8 @@
 {
-  "name": "corgispec-review-loop",
   "slug": "corgispec-review-loop",
   "tier": "molecule",
   "version": "1.0.0",
-  "description": "Automated loop review — runs quality checks and writes review.json without human gate. Used by the corgi-loop executor.",
+  "description": "Evidence-only review for loop mode — 5-axis quality checks, writes review.json, no human gate, no issue posting",
   "depends_on": [],
   "platform": "universal",
   "tags": [

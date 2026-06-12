@@ -9,186 +9,198 @@ metadata:
   generatedBy: "1.3.0"
 ---
 
-Run automated quality checks for a completed Task Group and write a machine-readable `review.json` artifact. This skill is designed for the **corgi-loop** automation pipeline — it produces structured evidence consumed by the loop hook without any human interaction.
+# corgispec-review-loop
 
-## Preconditions
+Loop-only review. Runs the SAME 5-axis quality checks as normal review but produces a machine-readable `review.json` artifact for the loop hook to evaluate. NO human gate. NO issue posting. NO commit/push.
 
-- [ ] Change exists in `openspec/changes/<name>/`
-- [ ] Group `N` has completed apply and verify phases
-- [ ] `tasks.md` has all tasks for group `N` marked `[x]`
-- [ ] Loop state directory exists: `<platform>-corgi-loop/<change>/groups/<N>/`
+## When to Use
+
+Invoked by the corgispec-loop skill during loop execution. NOT invoked directly by users.
+
+---
 
 ## Forbidden Actions
 
-- NEVER ask for human approval — approval is automatic based on finding severity
-- NEVER skip posting the review report to the child issue (if tracked)
-- NEVER commit or push changes — commit/push is the loop skill's responsibility, not review-loop's
+- NEVER ask for Approve/Reject/Discuss — fully automated
+- NEVER post the review report to any issue tracker (GitLab/GitHub)
+- NEVER mutate issue labels
+- NEVER commit or push changes
+- NEVER close issues or update parent progress
 - NEVER implement fixes during review
 - NEVER present results to the user or wait for input
-- NEVER present human-gate decision options to the user
 
 ---
 
 ## Steps
 
-### 1. Discover: resolve change, group, and platform
+### 1. Gather Context
 
-**Context Gate**: If session context already contains ALL of: change name, group number, platform, worktree path (if isolation.mode is worktree), and the loop state directory path
-→ Gate passed — SKIP discovery below and proceed to Step 2.
+Read these files from the loop state directory:
 
-**Worktree Path Resolution**: If a `worktreePath` parameter is provided (from corgispec-loop caller), resolve all file paths (`tasks.md`, spec files, implementation files) relative to `worktreePath` instead of the current working directory. If no `worktreePath` is provided, use the current working directory as normal.
+- **tasks.md**: `openspec/changes/<change>/tasks.md` — identify the current group's task list
+- **verify.json**: `.claude/corgi-loop/<change>/groups/<N>/verify.json` — review the verify results
+- **state.json**: `.claude/corgi-loop/<change>/state.json` — extract the `nonce` field (CRITICAL: copy verbatim)
 
-Otherwise, resolve:
+If `isolation.mode` is `worktree`, resolve all paths relative to the worktree root.
 
-1. **Change name**: Read from loop state or from `openspec/changes/`. If the loop executor passed `--change <name>`, use that.
-2. **Group number**: Read from loop state (`state.json` `currentGroup` field) or from `--group <N>`.
-3. **Platform root**: Determine platform-specific path:
-   - Claude Code / `.claude`: output to `.claude/corgi-loop/<change>/groups/<N>/review.json`
-   - OpenCode / `.opencode`: output to `.opencode/corgi-loop/<change>/groups/<N>/review.json`
-   - If uncertain, default to `.claude/corgi-loop/<change>/groups/<N>/review.json`
+Confirm all tasks for group N are marked `[x]` before proceeding. If not all complete, abort with an error message.
 
-4. **Worktree path** (only if `isolation.mode` is `worktree` in `openspec/config.yaml`):
-   - Run `git worktree list` to find the current worktree
-   - Set `worktreePath` to the absolute path of the current worktree (e.g., `/path/to/.worktrees/loop-corgi-edit/`)
-   - **When `worktreePath` is set, resolve all relative paths in subsequent steps against `worktreePath`**:
-     - `review.json` output path → `<worktreePath>/<platform>/corgi-loop/<change>/groups/<N>/review.json`
-     - `tasks.md` path → `<worktreePath>/openspec/changes/<change>/tasks.md`
-     - All `specs/` and change directory paths → prefix with `<worktreePath>/`
+### 2. Run 5-Axis Quality Checks
 
-Read `<worktreePath>/openspec/changes/<change>/tasks.md` to identify the group's task list. Confirm all tasks for group N are marked `[x]` before proceeding.
-
-### 2. Run quality checks (same 5-axis as corgispec-review)
-
-Run the same quality checks as documented in `references/quality-checks.md` (from `corgispec-review`). These checks gather evidence — they do NOT decide an outcome.
-
-Read `references/quality-checks.md` for the full procedure. Summary of axes:
+These are the SAME checks used by `corgispec-review` (see `references/quality-checks.md` for the full procedure). Summarized here for self-contained execution:
 
 #### 2.1 Anti-Rationalization Guard
-Confirm none of the standard rationalizations are skewing judgment.
+
+Before executing any checks, confirm none of the standard rationalizations are skewing judgment:
+
+| Rationalization | Counter |
+|---|---|
+| "It runs, that's enough" | Running but unreadable/insecure/wrong-architecture code compounds debt |
+| "Just a small change" | 60% of major incidents trace to unreviewed "small changes" |
+| "I wrote it, I know it's right" | Authors have blind spots — every piece of code needs a second look |
+| "AI-generated should be fine" | AI code needs MORE review, not less — confident but possibly wrong |
+| "Tests pass, it's fine" | Tests are necessary but insufficient — they don't catch architecture, security, readability |
+| "Fix it later" | "Later" never comes — review is the quality gate, demand cleanup now |
+| "Review takes too long" | Unreviewed bugs cost 10x more to fix than bugs caught in review |
 
 #### 2.2 Code Quality
-- Read all files produced by this group
-- Check: structure, bugs, anti-patterns, naming, style consistency
-- Produce: findings per file with severity tags
+
+- Read all files produced by this group (from the verify artifact or group task list)
+- Check for:
+  - **Anti-patterns**: God functions, deep nesting (>3 levels), duplicate code blocks
+  - **Naming conventions**: Consistent casing, descriptive names, no single-letter vars outside loops
+  - **Error handling**: Try-catch coverage, meaningful error messages, no swallowing
+  - **Unused/dead code**: Unused imports, dead branches, commented-out code blocks
+- Produce: at least one finding per file reviewed (Clean = fyi with positive comment)
 
 #### 2.3 Spec Verification
-- Read `specs/<capability>/spec.md` from the change directory
-- If no specs exist: note "No spec found for this group"
-- Check each Requirement against actual implementation
-- Produce: coverage status per requirement with severity for gaps
+
+- Read `openspec/changes/<change>/specs/<capability>/spec.md` for each capability in scope
+- If no specs exist for the group: produce a single finding — `severity: "fyi"`, `check: "Spec Coverage"`, `description: "No spec found for this group"`
+- For each requirement in the spec:
+  - Map to implementation evidence (file, function, or test)
+  - Mark coverage: covered, partially covered, or missing
+  - For partially covered or missing: produce a finding with appropriate severity
 
 #### 2.4 Functional Verification
-Detect project type and gather evidence:
-- **Tests**: Run `python -m pytest` (or equivalent) if test infrastructure exists
-- **UI**: Screenshot if `.html`, `.tsx`, `.vue`, `.jsx` files exist
-- **CLI**: Run basic commands if CLI entry points exist
-- **Fallback**: Try importing or executing the core function
+
+Detect project type and gather evidence. All detection is best-effort; skip gracefully.
+
+| Signal | Action |
+|---|---|
+| `tests/` + `pytest.ini` / `pyproject.toml[.pytest]` | Run `python -m pytest`, capture output |
+| `.html`, `.tsx`, `.vue`, `.jsx` files | Attempt screenshot via Playwright if available |
+| CLI entry points in `pyproject.toml[project.scripts]` | Run basic commands, capture output |
+| None of the above | Skip and note "No functional verification infrastructure detected" |
 
 #### 2.5 Architecture
-Check: design patterns, module boundaries, circular dependencies, abstraction level, new dependencies.
 
-#### 2.6 Performance & Security
-Check: N+1 queries, missing pagination, blocking sync ops, unnecessary re-renders, memory leaks. Optionally consult `references/security-checklist.md` and `references/performance-checklist.md`.
+- **Design patterns**: Does the change follow existing patterns? If a new pattern is introduced, is it intentional?
+- **Module boundaries**: Clean separation? No circular dependencies?
+- **Abstraction level**: Appropriate — not too high, not too low, testable and composable
+- **Dependencies**: Are new dependencies necessary and justified?
+- Produce: one finding per check item where issues are found
 
-### 3. Write review.json
+#### 2.6 Performance + Security
 
-Write a file at the output path: `<platform>/corgi-loop/<change>/groups/<N>/review.json`
+**Performance**:
+- N+1 queries (queries inside loops)
+- Missing pagination on list endpoints
+- Blocking synchronous operations where async would be appropriate
+- Unnecessary re-renders (React: missing useMemo/useCallback)
+- Memory leaks (missing cleanup in useEffect, unclosed streams)
 
-Use the exact schema below. `finding_details[]` MUST be a JSON array. Every finding MUST have a `severity` from the Severity enum.
+**Security**:
+- Secrets in code (API keys, tokens, passwords)
+- Missing or weak input validation
+- SQL injection / shell injection vectors
+- Missing authentication or authorization checks
+- Unsafe deserialization
 
-**Severity enum** (case-sensitive): `critical`, `important`, `suggestion`, `nit`, `fyi`
+Produce: one finding per issue found, tagged with the appropriate check name ("Performance" or "Security").
+
+### 3. Classify Each Finding
+
+Every finding MUST have:
+
+| Field | Required | Description |
+|---|---|---|
+| `severity` | ✅ Yes | One of: `"critical"`, `"important"`, `"suggestion"`, `"nit"`, `"fyi"` |
+| `check` | ✅ Yes | Review axis: `"Code Quality"`, `"Spec Coverage"`, `"Functional Verification"`, `"Architecture"`, `"Performance"`, `"Security"` |
+| `description` | ✅ Yes | Human-readable explanation of the finding |
+| `file` | Optional | File path related to the finding |
+| `requirement` | Optional | Specific requirement ID (e.g., "REQ-3: Error handling") |
+
+**Severity assignment rules**:
+- When in doubt between two levels, choose the HIGHER severity
+- Only use values from the allowed enum: `critical`, `important`, `suggestion`, `nit`, `fyi`
+- Never use `null` for severity
+
+| Level | When to Use |
+|---|---|
+| `critical` | Must fix — security vulnerability, data loss risk, core functionality broken |
+| `important` | Should fix — missing tests, poor error handling, spec non-compliance |
+| `suggestion` | Nice to have — naming improvements, optional refactors, better abstractions |
+| `nit` | Format/style preference — whitespace, line breaks, personal taste |
+| `fyi` | Informational — future considerations, background context, clean file confirmation |
+
+### 4. Write review.json
+
+Write to `.claude/corgi-loop/<change>/groups/<N>/review.json`:
 
 ```json
 {
   "schemaVersion": 1,
   "changeName": "<change-name>",
   "group": <N>,
-  "nonce": "<ISO-8601-timestamp>-group-<N>",
+  "nonce": "<nonce-from-state.json>",
   "finding_details": [
-    {
-      "severity": "important",
-      "check": "Spec Coverage",
-      "requirement": "REQ-3: Error handling",
-      "description": "No null input error path in cli.py"
-    },
     {
       "severity": "suggestion",
       "check": "Code Quality",
-      "file": "src/utils.py",
-      "description": "Consider extracting repeated validation logic"
+      "description": "Consider extracting repeated validation logic into a helper function",
+      "file": "src/utils.ts"
+    },
+    {
+      "severity": "fyi",
+      "check": "Spec Coverage",
+      "description": "No spec found for this group — implementation reviewed against task list instead"
     }
   ]
 }
 ```
 
-**Field rules**:
-- `schemaVersion`: Always `1` (integer)
-- `changeName`: The change directory name (string)
-- `group`: The group number (integer, not string)
-- `nonce`: ISO-8601 timestamp with group suffix, e.g. `"2026-06-10T10:00:00Z-group-2"` (string)
-- `finding_details`: Array of finding objects. MUST be a JSON array — never null, never a string
-- Each finding:
-  - `severity` (required, string): One of `critical`, `important`, `suggestion`, `nit`, `fyi`
-  - `check` (required, string): Which check axis produced this finding (e.g., "Code Quality", "Spec Coverage", "Architecture", "Performance", "Security")
-  - `requirement` (optional, string): The spec requirement ID for spec findings
-  - `file` (optional, string): The file path for code-level findings
-  - `description` (required, string): Human-readable description of the finding
+**CRITICAL rules**:
+- `nonce` MUST match exactly what's in `state.json` — copy it verbatim, do NOT generate a new one
+- `group` MUST be an integer, not a string
+- `finding_details` MUST be a JSON array — never null, never a string
+- Every finding MUST include `severity`, `check`, and `description`
+- Optional fields (`file`, `requirement`) are null-safe — omit when not applicable
 
-**Severity assignment rules**:
-- When in doubt between two levels, choose the HIGHER severity
-- Never use severity values outside the allowed enum — the hook will reject the artifact
-- Never use `null` for severity
+### 5. STOP — Do Not Continue
 
-Top-level count fields (`critical`, `important`) are optional. If present they are redundant summaries — the hook recomputes counts from `finding_details[]` directly.
+After writing `review.json`:
+- DO NOT ask Approve/Reject/Discuss
+- DO NOT commit or push
+- DO NOT mutate issue labels
+- DO NOT post to any issue tracker
+- DO NOT close issues or update parent progress
+- DO NOT output a decision recommendation
+- Simply write `review.json` and terminate
 
-### 3b. Post review report to child issue (if tracked)
-
-After writing review.json, post the review report to the tracked child issue:
-
-1. **Assemble review report** from `finding_details[]` in the format:
-   - Severity summary line: 🔴 N Critical | 🟡 N Important | 🔵 N Suggestions | ⚪ N Nits | ℹ️ N FYI
-   - Code Quality table (file, finding, severity, comment) — one line per finding
-   - Architecture check summary
-   - Performance/Security check summary
-   - Spec coverage summary
-   - Decision recommendation (approve or fix)
-
-2. **Find child issue number**: Read the tracking file at `openspec/changes/<change>/<change>/.github.yaml` (GitHub) or `.gitlab.yaml` (GitLab). Extract the child issue number for the current group.
-
-3. **Post to child issue**:
-   - GitHub: `gh issue comment <child_number> --body "$REVIEW_REPORT"`
-   - GitLab: `glab issue note <child_iid> --message "$REVIEW_REPORT"`
-
-4. If no tracking file exists, skip issue posting silently.
-
-### 3c. Severity-based decision output
-
-After posting (or skipping), output a decision recommendation based on severity counts from `finding_details[]`:
-
-- If `finding_details` has zero `critical` AND zero `important` findings → output `{ "decision": "approve" }` (the loop skill will then commit + push + label `done`)
-- If any `critical` or `important` findings exist → output `{ "decision": "fix" }` (the loop skill will enter the fixing phase)
-
-This is a recommendation only — the loop skill reads review.json directly and makes the final decision.
-
-### 4. Exit
-
-After posting the review report (if tracked) and outputting the decision recommendation, the skill terminates. Do NOT:
-- Ask for user feedback
-- Present a summary to the user
-- Commit or push changes
-- Close issues — only output the decision recommendation
-
-The loop skill reads `review.json`, the posted review report, and the decision recommendation to auto-approve or enter a fix loop.
+The loop skill reads `review.json` and makes the lifecycle decision through the loop-check hook.
 
 ---
 
 ## Postconditions
 
-- [ ] `review.json` exists at `<platform>/corgi-loop/<change>/groups/<N>/review.json`
-- [ ] `review.json` is valid JSON with correct schema
-- [ ] All findings have valid severity values from the allowed enum
+- [ ] `review.json` exists at `.claude/corgi-loop/<change>/groups/<N>/review.json`
+- [ ] `review.json` is valid JSON matching the `ReviewArtifact` schema
+- [ ] `nonce` field matches `state.json` nonce exactly (copy-paste, not regenerated)
 - [ ] `finding_details` is a non-null array
-- [ ] Review report was posted to child issue (if tracked)
-- [ ] Decision recommendation was output ({ "decision": "approve" } or { "decision": "fix" })
+- [ ] All findings have valid severity values from the allowed enum
+- [ ] All required fields (`severity`, `check`, `description`) are present on every finding
 - [ ] No human interaction was performed
-- [ ] No commits or pushes were made
+- [ ] No commits, pushes, or issue tracker mutations were made
+
+**If you reached postconditions but posted to an issue or asked the user for approval, you violated the contract. Stop and re-do.**
