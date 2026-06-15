@@ -13,7 +13,7 @@
 >
 > **Estimated Effort**: Medium
 > **Parallel Execution**: YES — 4 waves
-> **Critical Path**: Task 1 → Task 5 → Task 8 → Task 11 → F1-F4
+> **Critical Path**: Task 1 → Task 5 → Task 8 → Task 17 → F1-F4
 
 ---
 
@@ -130,12 +130,12 @@ Wave 2 (After Wave 1 - core implementation, MAX PARALLEL):
 └── Task 12: Expand plugin - stop-check + loop-check [deep]
 
 Wave 3 (After Wave 2 - doc/help updates, MAX PARALLEL):
-├── Task 13: Update CLI help text [quick]
-├── Task 14: Update install.ts tip [quick]
-└── Task 15: Update corgispec-install skill [writing]
+├── Task 14: Update CLI help text [quick]
+├── Task 15: Update install.ts tip [quick]
+└── Task 16: Update corgispec-install skill [writing]
 
 Wave 4 (After Wave 3 - integration):
-├── Task 16: Full integration QA - all hooks [unspecified-high]
+├── Task 17: Full integration QA - all hooks [unspecified-high]
 
 Wave FINAL (After ALL tasks — 4 parallel reviews, then user okay):
 ├── Task F1: Plan compliance audit (oracle)
@@ -144,31 +144,32 @@ Wave FINAL (After ALL tasks — 4 parallel reviews, then user okay):
 └── Task F4: Scope fidelity check (deep)
 -> Present results -> Get explicit user okay
 
-Critical Path: Task 4 → Task 5 → Task 8 → Task 11 → Task 12 → Task 16 → F1-F4
-Parallel Speedup: ~65% faster than sequential
+Critical Path: Task 4 → Task 5 → Task 8 → Task 11 → Task 12 → Task 17 → F1-F4
+Parallel Speedup: ~60% faster than sequential
 Max Concurrent: 8 (Waves 2)
 ```
 
 ### Dependency Matrix
 
 - **1-4**: - - 5-12, 1
-- **5**: 1 - 8-9, 13-16, 2
+- **5**: 1 - 8-13, 14-17, 2
 - **6**: 2 - 8-9, 12, 2 (can parallel with 5)
 - **7**: 4 - 8, 9, 2 (can parallel with 5, 6)
-- **8**: 5, 6, 7 - 16, 2
-- **9**: 5, 6, 7 - 16, 2 (can parallel with 8)
-- **10**: 5 - 13-14, 2 (can parallel with 8, 9)
+- **8**: 5, 6, 7 - 17, 2
+- **9**: 5, 6, 7 - 17, 2 (can parallel with 8)
+- **10**: 5 - 14-15, 2 (can parallel with 8, 9)
 - **11**: 5 - 12, 2 (can parallel with 8, 9, 10)
-- **12**: 11 - 16, 2
-- **13-15**: 10 - -, 3 (all parallel)
-- **16**: 8, 9, 12 - F1-F4, 4
+- **12**: 11 - 17, 2
+- **13**: 5, 6, 12 - 17, 2
+- **14-16**: 10 - -, 3 (all parallel)
+- **17**: 8, 9, 12, 13 - F1-F4, 4
 
 ### Agent Dispatch Summary
 
 - **Wave 1**: **4** — T1-T3 → `quick`, T4 → `quick`
-- **Wave 2**: **8** — T5 → `deep`, T6-T7 → `quick`, T8-T9 → `deep`, T10 → `quick`, T11 → `quick`, T12 → `deep`
-- **Wave 3**: **3** — T13-T14 → `quick`, T15 → `writing`
-- **Wave 4**: **1** — T16 → `unspecified-high`
+- **Wave 2**: **9** — T5 → `deep`, T6-T7 → `quick`, T8-T9 → `deep`, T10 → `quick`, T11 → `quick`, T12 → `deep`, T13 → `quick`
+- **Wave 3**: **3** — T14-T15 → `quick`, T16 → `writing`
+- **Wave 4**: **1** — T17 → `unspecified-high`
 - **FINAL**: **4** — F1 → `oracle`, F2 → `unspecified-high`, F3 → `unspecified-high`, F4 → `deep`
 
 ---
@@ -987,9 +988,9 @@ Max Concurrent: 8 (Waves 2)
   ```
 
   **Evidence to Capture**:
-  - [ ] task-13-help-text.txt
+  - [ ] task-14-help-text.txt
 
-  **Commit**: YES (groups with Tasks 13-15)
+  **Commit**: YES (groups with Tasks 14-16)
   - Message: `docs(hooks): update CLI help for plugin-as-default`
   - Files: `packages/corgispec/src/commands/hooks/generate.ts`
 
@@ -1034,9 +1035,9 @@ Max Concurrent: 8 (Waves 2)
   ```
 
   **Evidence to Capture**:
-  - [ ] task-14-install-tip.txt
+  - [ ] task-15-install-tip.txt
 
-  **Commit**: YES (groups with Tasks 13-15)
+  **Commit**: YES (groups with Tasks 14-16)
   - Message: `docs(install): update hook generation tip for plugin output`
   - Files: `packages/corgispec/src/commands/install.ts`
 
@@ -1084,9 +1085,9 @@ Max Concurrent: 8 (Waves 2)
   ```
 
   **Evidence to Capture**:
-  - [ ] task-15-skill-update.txt
+  - [ ] task-16-skill-update.txt
 
-  **Commit**: YES (groups with Tasks 13-15)
+  **Commit**: YES (groups with Tasks 14-16)
   - Message: `docs(skills): update install skill for plugin-based hooks`
   - Files: `.opencode/skills/molecules/corgispec-install/SKILL.md`, `.claude/skills/molecules/corgispec-install/SKILL.md`
 
@@ -1117,7 +1118,7 @@ Max Concurrent: 8 (Waves 2)
   - **Can Run In Parallel**: NO
   - **Parallel Group**: Wave 4 (sequential — after all Wave 2-3 tasks)
   - **Blocks**: F1-F4 (final verification)
-  - **Blocked By**: Tasks 8, 9, 12 (all hook handlers), 13-15 (docs)
+  - **Blocked By**: Tasks 8, 9, 12, 13 (all hook handlers), 14-16 (docs)
 
   **References**:
   - All generate.ts and hooks.ts references from previous tasks
