@@ -1,0 +1,7 @@
+npm view corgispec@2.4.2 version
+2.4.2
+
+npm view corgispec@2.4.2 bin
+{ corgispec: 'dist/corgispec.js' }
+
+Published successfully with tag latest.

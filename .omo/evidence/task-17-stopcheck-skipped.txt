@@ -1,0 +1,40 @@
+=== TEST 2: stop-check skipped during active loop ===
+TMPDIR=/tmp/tmp.WnNOrbMqhT
+
+=== Active loop state exists ===
+{
+    "active": true,
+    "changeName": "smoke-test",
+    "sessionId": "session-test-456",
+    "nonce": "2026-06-10T00:00:00Z",
+    "currentGroup": 1,
+    "totalGroups": 2,
+    "phase": "awaiting_group_result",
+    "worktreePath": "/tmp/test",
+    "platform": "github-tracked",
+    "autoApprovalPolicy": {
+        "allowCommitPush": true,
+        "allowPassWithWarnings": false
+    },
+    "startedAt": "2026-06-10T00:00:00Z",
+    "updatedAt": "2026-06-10T00:00:00Z",
+    "completedGroups": [],
+    "groupStatuses": {},
+    "pushStatus": {},
+    "blockCount": 0,
+    "maxBlocks": 6,
+    "maxGroups": 10
+}
+
+=== Invocation: stop-check with active loop ===
+
+EXIT CODE: 0
+
+=== ASSERTION ===
+PASS: stop-check exited 0 (deferred to loop-check)
+
+=== Invocation: stop-check WITHOUT active loop ===
+
+EXIT CODE: 0 (no active loop, no changes → 0)
+
+=== TMPDIR cleaned up ===
