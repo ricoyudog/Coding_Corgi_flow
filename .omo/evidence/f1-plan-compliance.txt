@@ -1,0 +1,37 @@
+F1 Plan Compliance Audit
+Plan: .sisyphus/plans/loop-fix-retry.md
+
+Must Have
+1. PASS — Issue sync text present in .opencode/skills/compounds/corgispec-loop/SKILL.md lines 186-191 with Platform routing, corgispec-gh-apply, and Do NOT suppress issue sync.
+2. PASS — Fix-retry loop instructions present in SKILL.md lines 241-295 with phase "fixing", selfDriven gate, and hook loop-check call.
+3. PASS — Verify FAIL retry exists in packages/corgispec/src/lib/loop-state.ts lines 243-257 before terminal verify_failed.
+4. PASS — Max retries set to 3 in SKILL.md lines 157 and 349.
+5. PASS — Self-driving skill loop present in SKILL.md lines 241-245 with section title "3.6b Self-Driving Evaluation Loop".
+6. PASS — Claude path unchanged verified by bun test packages/corgispec/test/hooks/loop-check.test.ts => 36 pass / 0 fail, including T-retry-4 and T-retry-8.
+7. PASS — Retry returns in loop-state.ts lines 250-256 and 326-354 are inline and do not call buildBlock().
+8. PASS — retryCount reset in loop-state.ts lines 378 and 397.
+
+Must NOT Have
+1. PASS — No issue sync logic found in packages/corgispec/src/commands/hooks/loop-check.ts for patterns gh issue|glab issue|issue.*comment.
+2. PASS — No diff for .opencode/skills/molecules/corgispec-apply-change/SKILL.md versus HEAD.
+3. PASS — No schema drift detected in packages/corgispec/src/lib/loop-types.ts; evidence and finding_details fields remain present without finding_details/evidence schema rewrite.
+4. PASS — No tasks.md mutation instructions like uncheck/append.*tasks found in fix section; only explicit prohibition at SKILL.md line 297.
+5. PASS — No fix delegation to apply-change in fix section; SKILL.md lines 279 and 297 direct direct fixes only.
+6. PASS — selfDriven=false behavior preserved; bun test packages/corgispec/test/hooks/loop-check.test.ts passed, covering T-retry-4 and T-retry-8.
+7. FAIL — Skill still contains severity logic/details in .opencode/skills/compounds/corgispec-loop/SKILL.md lines 256, 281, 461, 471, 488-489. Plan guardrail says MUST NOT implement severity-checking logic in SKILL.md.
+8. PASS — No new files detected under .opencode/skills/, and commands listing shows no new CLI subcommand beyond existing hook loop-check.
+9. PASS — Grep for buildBlock shows only helper definition in loop-state.ts line 75; retry paths do not use it.
+10. FAIL — Skill instructs direct state.json writes/updates in .opencode/skills/compounds/corgispec-loop/SKILL.md lines 155-158, 172, 193, 273, 304-308, 376. Plan guardrail says skill must not edit state.json directly and CLI owns retryCount/currentGroup/phase/active/blockCount.
+
+Test Evidence
+- bun test packages/corgispec/test/hooks/loop-check.test.ts
+  Result: 36 pass, 0 fail.
+
+Verdict Summary
+- Must Have: 8/8
+- Must NOT Have: 8/10
+- Overall: REJECT
+
+Reject Reasons
+1. SKILL.md still embeds severity-selection/checking instructions instead of leaving that decision entirely to the CLI.
+2. SKILL.md still tells the skill to mutate state.json directly, including retryCount-related updates, which violates the state-ownership rules in the plan.

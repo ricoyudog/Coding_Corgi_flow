@@ -1,0 +1,108 @@
+================================================================================
+F4 — SCOPE FIDELITY CHECK
+================================================================================
+Date: 2026-06-11
+Branch: HEAD (commit 399299a: "feat(loop): self-driving fix-retry cycle on OpenCode + issue sync")
+
+================================================================================
+TASK 1 — TYPES (loop-types.ts)
+================================================================================
+[PASS] LoopPhase has "fixing"                 — line 29: `| "fixing"`
+[PASS] LoopState has retryCount                — line 103: `retryCount: number`
+[PASS] LoopState has maxRetries                — line 105: `maxRetries: number`
+[PASS] LoopState has selfDriven                — line 107: `selfDriven: boolean`
+[PASS] VALID_PHASES includes "fixing"          — loop-validation.ts line 40: `"fixing"`
+
+================================================================================
+TASK 2 — VALIDATORS (loop-validation.ts)
+================================================================================
+[PASS] validateRetryCount exported             — line 493: `export function validateRetryCount`
+[PASS] validateMaxRetries exported             — line 508: `export function validateMaxRetries`
+[PASS] validateSelfDriven exported             — line 523: `export function validateSelfDriven`
+[PASS] Tests exist                             — loop-validation.test.ts lines 1077-1223
+                                                   (validateRetryCount: 8 cases)
+                                                   (validateMaxRetries: 8 cases)
+                                                   (validateSelfDriven: 7 cases)
+
+================================================================================
+TASK 3 — TDD TESTS (loop-check.test.ts)
+================================================================================
+[PASS] 11 retry tests                          — T-retry-1 through T-retry-11 (lines 534-761)
+                                                   4x verify FAIL retry scenarios
+                                                   5x review critical retry scenarios
+                                                   1x non-blocking findings (suggestion)
+                                                   1x clean advance reset
+[PASS] makeState() updated                     — defaultState() at line 42 includes:
+                                                   retryCount: 0, maxRetries: 3, selfDriven: true
+
+================================================================================
+TASK 4 — STATE MACHINE (loop-state.ts)
+================================================================================
+[PASS] Gate 9 (verify FAIL -> retry)            — line 243-258: checks selfDriven && retryCount < maxRetries
+                                                   before terminal verify_failed
+[PASS] Gate 13 critical -> retry                — line 319-338: critical > 0 retry logic
+[PASS] Gate 13 important -> retry               — line 341-360: important > 0 retry logic
+[PASS] Gate 14 resets retryCount               — line 378 (final group): `clone.retryCount = 0`
+                                                   line 397 (non-final): `clone.retryCount = 0`
+
+================================================================================
+TASK 5 — HOOK (loop-check.ts)
+================================================================================
+[PASS] Handles fixing phase                    — line 177-179: diagnostic stderr output
+                                                   "Fix mode: retry ${result.state.retryCount}/${result.state.maxRetries}"
+
+================================================================================
+TASK 6 — SKILL (.opencode/skills/compounds/corgispec-loop/SKILL.md)
+================================================================================
+[PASS] Self-driving sections exist             — Section 3.6b (line 241-273):
+                                                   "Self-Driving Evaluation Loop (OpenCode only)"
+[PASS] Fix implementation section              — Section 3.6c (line 275-297):
+                                                   "Direct Fix Implementation"
+                                                   Steps: Read->Implement->Re-verify->Re-review->Write->Check
+
+================================================================================
+TASK 7 — COMMANDS
+================================================================================
+[PASS] OpenCode dispatcher mentions retry      — .opencode/commands/corgi-loop.md line 59
+[PASS] Claude mirror synced                    — .claude/commands/corgi/loop.md exists (67 lines),
+                                                   references corgispec-loop skill, platform-aware
+
+================================================================================
+TASK 8 — ISSUE SYNC
+================================================================================
+[PASS] No "NEVER post to issue trackers" ban   — SKILL.md line 67: delegates issue sync to apply delegate
+[PASS] Platform routing exists                 — SKILL.md lines 187-188: gh-apply/gitlab routing
+[PASS] Apply closeout instruction              — SKILL.md line 189: MUST execute full closeout + issue sync
+
+================================================================================
+SCOPE VIOLATION CHECKS
+================================================================================
+[PASS] corgispec-apply-change SKILL.md NOT modified
+[PASS] verify.json schema NOT changed          — VerifyArtifact unchanged
+[PASS] review.json schema NOT changed          — ReviewArtifact unchanged
+[PASS] No tasks.md mutation instructions       — SKILL.md explicitly forbids: "NEVER modify tasks.md"
+[WARN] Unaccounted file                        — packages/corgispec/test/hooks/loop-check.test.ts.bak
+
+================================================================================
+CHANGED FILES (HEAD~5..HEAD)
+================================================================================
+1. .opencode/commands/corgi-loop.md                        (Task 7)
+2. .opencode/skills/compounds/corgispec-loop/SKILL.md      (Task 6, Task 8)
+3. packages/corgispec/src/commands/hooks/loop-check.ts     (Task 5)
+4. packages/corgispec/src/lib/loop-state.ts                (Task 4)
+5. packages/corgispec/src/lib/loop-types.ts                (Task 1)
+6. packages/corgispec/src/lib/loop-validation.ts           (Task 2)
+7. packages/corgispec/test/hooks/loop-check.test.ts        (Task 3)
+8. packages/corgispec/test/hooks/loop-check.test.ts.bak    (STRAY: not in any task)
+9. packages/corgispec/test/hooks/loop-validation.test.ts   (Task 2)
+
+Pre-existing: .claude/commands/corgi/loop.md (mirror synced, not in this diff)
+
+================================================================================
+VERDICT
+================================================================================
+
+Tasks [8/8 compliant] | Contamination [CLEAN] | Unaccounted [1 file: loop-check.test.ts.bak] | VERDICT: APPROVE
+
+NOTE: 1 stray backup file (.bak) in test directory. Recommend removal.
+All 8 task deliverables verified. No schema contamination. No prohibited mutations.
