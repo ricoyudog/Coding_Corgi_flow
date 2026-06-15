@@ -37,9 +37,9 @@
 <details>
 <summary>Precise diagram</summary>
 
-![[wiki/corgi-loop-pipeline-flow.png]]
-
-*Figure: Complete Corgi Loop pipeline — from /corgi:propose through Manual vs Automated paths, converging to /corgi:archive.*
+<p align="center">
+  <img src="docs/assets/corgi-loop-pipeline-flow.png" alt="Complete Corgi Loop pipeline — from /corgi:propose through Manual vs Automated paths, converging to /corgi:archive" width="100%"/>
+</p>
 
 </details>
 
