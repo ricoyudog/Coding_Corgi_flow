@@ -34,14 +34,9 @@
   <img src="docs/assets/corgi_journey_illustration.png" alt="Corgi journey: Propose → Apply → Verify → Review → Archive" width="100%"/>
 </p>
 
-<details>
-<summary>Precise diagram</summary>
-
 <p align="center">
   <img src="docs/assets/corgi-loop-pipeline-flow.png" alt="Complete Corgi Loop pipeline — from /corgi:propose through Manual vs Automated paths, converging to /corgi:archive" width="100%"/>
 </p>
-
-</details>
 
 ---
 
