@@ -102,7 +102,7 @@ Replace `generateOpenCodeOutput()`'s Claude Code bridge JSON output with an expa
 Every task MUST include agent-executed QA scenarios.
 Evidence saved to `.omo/evidence/task-{N}-{scenario-slug}.{ext}`.
 
-- **CLI**: Use Bash — Run `node packages/corgispec/dist/bin/corgispec.js hooks generate` and validate output
+- **CLI**: Use Bash — Run `node packages/corgispec/dist/corgispec.js hooks generate` and validate output
 - **TypeScript compile**: Use Bash — Run `bun build` on generated plugin to catch TS errors
 - **Detection regression**: Use Bash — Run `corgispec doctor` to verify detection still works
 
@@ -438,7 +438,7 @@ Max Concurrent: 8 (Waves 2)
     Preconditions: packages/corgispec/dist exists (built)
     Steps:
       1. cd packages/corgispec
-      2. DEFAULT=$(node dist/bin/corgispec.js hooks generate --platform opencode 2>/dev/null)
+      2. DEFAULT=$(node dist/corgispec.js hooks generate --platform opencode 2>/dev/null)
       3. echo "$DEFAULT" | head -1
     Expected Result: First line is "import type { Plugin } from "@opencode-ai/plugin";"
     Failure Indicators: Output starts with "{" or is empty
@@ -500,9 +500,9 @@ Max Concurrent: 8 (Waves 2)
     Preconditions: packages/corgispec/ built
     Steps:
       1. cd packages/corgispec
-      2. node dist/bin/corgispec.js hooks generate --platform opencode > /tmp/plugin-before.ts 2>/dev/null
+      2. node dist/corgispec.js hooks generate --platform opencode > /tmp/plugin-before.ts 2>/dev/null
       3. [make refactoring changes]
-      4. node dist/bin/corgispec.js hooks generate --platform opencode > /tmp/plugin-after.ts 2>/dev/null
+      4. node dist/corgispec.js hooks generate --platform opencode > /tmp/plugin-after.ts 2>/dev/null
       5. diff /tmp/plugin-before.ts /tmp/plugin-after.ts
     Expected Result: Output identical before and after refactoring
     Evidence: .omo/evidence/task-6-refactor-identical.txt
@@ -520,10 +520,9 @@ Max Concurrent: 8 (Waves 2)
   **What to do**:
   - Using research findings from Task 4, add a translation helper to the plugin template in `buildOpenCodeDeepPlugin()`
   - Helper function: `buildStdinPayload(tool: string, args: Record<string, unknown>): string`
-    - For `tool === "write"` or `tool === "edit"`: returns `JSON.stringify({ file_path: args.filePath })`
-    - For `tool === "bash"`: returns `JSON.stringify({ command: args.command })`
-    - Default: returns `JSON.stringify({})`
-    - Field names confirmed from Task 4 research — only use the documented fields, no speculative aliases
+    - Returns `JSON.stringify({ tool_name: tool, tool_input: { file_path: args.filePath, command: args.command } })`
+    - The `tool_input` wrapper is required — `pre-write.ts:48` reads `input.tool_input?.file_path`, `pre-bash.ts:31` reads `input.tool_input?.command`
+    - HookInput interface at `packages/corgispec/src/lib/hooks.ts:23-31` defines the shape: `{ tool_name, tool_input: { file_path?, command? } }`
   - Insert this helper before the hook registration in the template
   - Run: `npx vitest run` — existing tests still pass
 
@@ -558,7 +557,7 @@ Max Concurrent: 8 (Waves 2)
     Preconditions: packages/corgispec/ built
     Steps:
       1. cd packages/corgispec
-      2. node dist/bin/corgispec.js hooks generate --platform opencode --output /tmp/corgispec-deep.ts
+      2. node dist/corgispec.js hooks generate --platform opencode --output /tmp/corgispec-deep.ts
       3. bun build /tmp/corgispec-deep.ts --no-bundle
     Expected Result: Exit code 0, no TypeScript errors
     Evidence: .omo/evidence/task-7-compiles.txt
@@ -599,9 +598,10 @@ Max Concurrent: 8 (Waves 2)
 
   **References**:
   - `packages/corgispec/src/commands/hooks/generate.ts:240-265` — Plugin template where `tool.execute.before` handler will be added to the return object
+  - `packages/corgispec/src/commands/hooks/pre-write.ts:47-49` — Runtime hook reads `input.tool_input.file_path` from stdin — plugin must construct this exact shape
+  - `packages/corgispec/src/commands/hooks/pre-bash.ts:30-32` — Runtime hook reads `input.tool_input.command` from stdin
+  - `packages/corgispec/src/lib/hooks.ts:23-31` — HookInput interface defining the stdin payload shape: `{ tool_name, tool_input: { file_path?, command? } }`
   - `packages/corgispec/src/commands/hooks/generate.ts:278-290` — HOOK_EVENTS: pre-write matcher `^(Edit|Write|apply_patch)$`, pre-bash matcher `^Bash$` — use these to determine tool ID equivalents
-  - `packages/corgispec/src/commands/hooks/pre-write.ts` — Runtime hook that reads `file_path` from stdin and validates — the plugin must construct this stdin payload
-  - `packages/corgispec/src/commands/hooks/pre-bash.ts` — Runtime hook that reads `command` from stdin and checks dangerous commands
 
   **Acceptance Criteria**:
 
@@ -621,7 +621,7 @@ Max Concurrent: 8 (Waves 2)
     Tool: Bash
     Preconditions: packages/corgispec/ built
     Steps:
-      1. node dist/bin/corgispec.js hooks generate --platform opencode --output /tmp/corgispec-deep.ts
+      1. node dist/corgispec.js hooks generate --platform opencode --output /tmp/corgispec-deep.ts
       2. bun build /tmp/corgispec-deep.ts --no-bundle
     Expected Result: Exit code 0
     Evidence: .omo/evidence/task-8-plugin-compiles.txt
@@ -630,7 +630,7 @@ Max Concurrent: 8 (Waves 2)
     Tool: Bash
     Preconditions: packages/corgispec/ built
     Steps:
-      1. node dist/bin/corgispec.js hooks generate --platform opencode --output /tmp/corgispec-deep.ts
+      1. node dist/corgispec.js hooks generate --platform opencode --output /tmp/corgispec-deep.ts
       2. grep -A5 "tool.execute.before" /tmp/corgispec-deep.ts | grep -c "return"
     Expected Result: Early return exists for non-matching tools (grep finds at least 1 "return" in the handler)
     Failure Indicators: No early return — plugin would execute hooks for ALL tools
@@ -683,7 +683,7 @@ Max Concurrent: 8 (Waves 2)
     Preconditions: packages/corgispec/ built
     Steps:
       1. cd packages/corgispec
-      2. node dist/bin/corgispec.js hooks generate --platform opencode 2>/dev/null
+      2. node dist/corgispec.js hooks generate --platform opencode 2>/dev/null
       3. grep "tool.execute.after" /dev/stdin && grep "hook post-write" /dev/stdin
     Expected Result: Both "tool.execute.after" and "hook post-write" found in output
     Evidence: .omo/evidence/task-9-postwrite.txt
@@ -692,7 +692,7 @@ Max Concurrent: 8 (Waves 2)
     Tool: Bash
     Preconditions: packages/corgispec/ built
     Steps:
-      1. node dist/bin/corgispec.js hooks generate --platform opencode --output /tmp/corgispec-deep.ts
+      1. node dist/corgispec.js hooks generate --platform opencode --output /tmp/corgispec-deep.ts
       2. grep -A10 "hook post-write" /tmp/corgispec-deep.ts | grep "catch"
     Expected Result: try/catch pattern found around post-write execSync (non-blocking)
     Evidence: .omo/evidence/task-9-nonblocking.txt
@@ -743,8 +743,8 @@ Max Concurrent: 8 (Waves 2)
     Preconditions: packages/corgispec/ built
     Steps:
       1. cd packages/corgispec
-      2. DEFAULT=$(node dist/bin/corgispec.js hooks generate --platform opencode 2>/dev/null)
-      3. DEEP=$(node dist/bin/corgispec.js hooks generate --platform opencode --deep 2>/dev/null)
+      2. DEFAULT=$(node dist/corgispec.js hooks generate --platform opencode 2>/dev/null)
+      3. DEEP=$(node dist/corgispec.js hooks generate --platform opencode --deep 2>/dev/null)
       4. [ "$DEFAULT" = "$DEEP" ] && echo "IDENTICAL" || echo "DIFFER"
     Expected Result: IDENTICAL — both produce same TypeScript plugin
     Evidence: .omo/evidence/task-10-deep-noop.txt
@@ -865,8 +865,9 @@ Max Concurrent: 8 (Waves 2)
     Preconditions: packages/corgispec/ built
     Steps:
       1. cd packages/corgispec
-      2. node dist/bin/corgispec.js hooks generate --platform opencode 2>/dev/null
-      3. grep "hook stop-check" /dev/stdin && grep "hook loop-check" /dev/stdin
+      2. node dist/corgispec.js hooks generate --platform opencode > /tmp/plugin-out.ts 2>/dev/null
+      3. grep "hook stop-check" /tmp/plugin-out.ts && grep "hook loop-check" /tmp/plugin-out.ts
+      4. rm /tmp/plugin-out.ts
     Expected Result: Both stop-check and loop-check found in plugin output
     Evidence: .omo/evidence/task-12-stop-hooks.txt
 
@@ -874,7 +875,7 @@ Max Concurrent: 8 (Waves 2)
     Tool: Bash
     Preconditions: packages/corgispec/ built
     Steps:
-      1. node dist/bin/corgispec.js hooks generate --platform opencode --output /tmp/corgispec-deep.ts
+      1. node dist/corgispec.js hooks generate --platform opencode --output /tmp/corgispec-deep.ts
       2. bun build /tmp/corgispec-deep.ts --no-bundle
     Expected Result: Exit code 0
     Evidence: .omo/evidence/task-12-compiles.txt
@@ -929,8 +930,9 @@ Max Concurrent: 8 (Waves 2)
     Preconditions: packages/corgispec/ built
     Steps:
       1. cd packages/corgispec
-      2. node dist/bin/corgispec.js hooks generate --platform opencode 2>/dev/null
-      3. grep "hook post-compact" /dev/stdin && grep "session.compacted" /dev/stdin
+      2. node dist/corgispec.js hooks generate --platform opencode > /tmp/plugin-out.ts 2>/dev/null
+      3. grep "hook post-compact" /tmp/plugin-out.ts && grep "session.compacted" /tmp/plugin-out.ts
+      4. rm /tmp/plugin-out.ts
     Expected Result: Both found in plugin output
     Evidence: .omo/evidence/task-13-postcompact.txt
   ```
@@ -980,7 +982,7 @@ Max Concurrent: 8 (Waves 2)
     Preconditions: packages/corgispec/ built
     Steps:
       1. cd packages/corgispec
-      2. node dist/bin/corgispec.js hooks generate --help 2>&1 | grep -i opencode
+      2. node dist/corgispec.js hooks generate --help 2>&1 | grep -i opencode
     Expected Result: Output mentions "TypeScript plugin" as default format, NOT "Claude Code bridge"
     Evidence: .omo/evidence/task-13-help-text.txt
   ```
@@ -1132,10 +1134,10 @@ Max Concurrent: 8 (Waves 2)
     Preconditions: All Wave 2-3 tasks complete, packages/corgispec/ built
     Steps:
       1. cd packages/corgispec
-      2. node dist/bin/corgispec.js hooks generate --platform opencode --output /tmp/corgispec-deep-final.ts
+      2. node dist/corgispec.js hooks generate --platform opencode --output /tmp/corgispec-deep-final.ts
       3. bun build /tmp/corgispec-deep-final.ts --no-bundle && echo "BUILD OK" || echo "BUILD FAIL"
-      4. node dist/bin/corgispec.js hooks generate --platform opencode 2>/dev/null | head -1 | grep "import type" && echo "FORMAT OK" || echo "FORMAT FAIL"
-      5. node dist/bin/corgispec.js hooks generate --platform claude 2>/dev/null | head -1 | grep "{" && echo "CLAUDE OK" || echo "CLAUDE FAIL"
+      4. node dist/corgispec.js hooks generate --platform opencode 2>/dev/null | head -1 | grep "import type" && echo "FORMAT OK" || echo "FORMAT FAIL"
+      5. node dist/corgispec.js hooks generate --platform claude 2>/dev/null | head -1 | grep "{" && echo "CLAUDE OK" || echo "CLAUDE FAIL"
       6. npx vitest run test/hooks/generate.test.ts 2>&1 | tail -3
     Expected Result: All checks pass — BUILD OK, FORMAT OK, CLAUDE OK, all tests pass
     Evidence: .omo/evidence/task-16-full-qa.txt
@@ -1185,22 +1187,22 @@ Max Concurrent: 8 (Waves 2)
 ```bash
 # Default output is TypeScript (not JSON)
 cd packages/corgispec
-DEFAULT=$(node dist/bin/corgispec.js hooks generate --platform opencode 2>/dev/null)
+DEFAULT=$(node dist/corgispec.js hooks generate --platform opencode 2>/dev/null)
 [[ "$DEFAULT" == *"import type { Plugin }"* ]] && echo "PASS: Default is TypeScript" || echo "FAIL: Default is not TypeScript"
 
 # --deep produces same output (deprecated no-op)
-DEEP=$(node dist/bin/corgispec.js hooks generate --platform opencode --deep 2>/dev/null)
+DEEP=$(node dist/corgispec.js hooks generate --platform opencode --deep 2>/dev/null)
 [[ "$DEEP" == "$DEFAULT" ]] && echo "PASS: --deep is no-op" || echo "FAIL: --deep differs"
 
 # Claude output unchanged
-CLAUDE=$(node dist/bin/corgispec.js hooks generate --platform claude 2>/dev/null)
+CLAUDE=$(node dist/corgispec.js hooks generate --platform claude 2>/dev/null)
 [[ "$CLAUDE" == *"\"hooks\""* ]] && echo "PASS: Claude output unchanged" || echo "FAIL: Claude output changed"
 
 # All tests pass
 npx vitest run test/hooks/generate.test.ts
 
 # Generated plugin compiles
-node dist/bin/corgispec.js hooks generate --platform opencode --output /tmp/corgispec-deep.ts
+node dist/corgispec.js hooks generate --platform opencode --output /tmp/corgispec-deep.ts
 bun build /tmp/corgispec-deep.ts --no-bundle
 ```
 
