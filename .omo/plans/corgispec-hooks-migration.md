@@ -683,9 +683,10 @@ Max Concurrent: 8 (Waves 2)
     Preconditions: packages/corgispec/ built
     Steps:
       1. cd packages/corgispec
-      2. node dist/corgispec.js hooks generate --platform opencode 2>/dev/null
-      3. grep "tool.execute.after" /dev/stdin && grep "hook post-write" /dev/stdin
-    Expected Result: Both "tool.execute.after" and "hook post-write" found in output
+      2. node dist/corgispec.js hooks generate --platform opencode > /tmp/plugin-out-9.ts 2>/dev/null
+      3. grep "tool.execute.after" /tmp/plugin-out-9.ts && grep "hook post-write" /tmp/plugin-out-9.ts && echo "PASS" || echo "FAIL"
+      4. rm /tmp/plugin-out-9.ts
+    Expected Result: PASS — both "tool.execute.after" and "hook post-write" found
     Evidence: .omo/evidence/task-9-postwrite.txt
 
   Scenario: post-write catches errors (does not throw)
@@ -769,18 +770,16 @@ Max Concurrent: 8 (Waves 2)
 - [ ] 11. Investigate and validate session.idle semantics for stop/loop hooks
 
   **What to do**:
-  - Create a minimal test plugin that subscribes to ALL session events via the `event` hook:
-    ```typescript
-    event: async ({ event }) => {
-      if (event.type?.startsWith("session.")) {
-        console.log(JSON.stringify({ type: event.type, timestamp: Date.now() }));
-      }
-    }
-    ```
-  - Document: Does `session.idle` fire? When? How often? Does `session.deleted` fire? What's the sequence?
-  - Test empirically: generate the test plugin, load in OpenCode, interact, observe event log
-  - Also search OpenCode source/docs for `session.idle` semantics
-  - Document findings and decide: is `session.idle` suitable for stop-check/loop-check? If not, what's the alternative?
+  - Research OpenCode's session event system to determine which event to use for stop/loop hooks:
+  - Search the OpenCode source (sst/opencode on GitHub) for `session.idle` and `session.deleted` event emission
+  - Check the official OpenCode plugin docs for session event definitions and semantics
+  - Document findings: Does `session.idle` fire after every agent response? Does `session.deleted` fire reliably at session end? What's the event payload?
+  - Recommendation: if `session.deleted` fires at session end, it's the better fit for stop hooks. If neither is reliable, document the limitation.
+  - Document findings in a comment block added to generate.ts for reference
+
+  **Must NOT do**:
+  - Do NOT implement stop/loop hooks yet — investigation only
+  - Do NOT modify production code beyond the research comment
 
   **Must NOT do**:
   - Do NOT implement stop/loop hooks yet — investigation only
@@ -807,16 +806,16 @@ Max Concurrent: 8 (Waves 2)
   **QA Scenarios (MANDATORY)**:
 
   ```
-  Scenario: Empirical session event log captured
+  Scenario: Session event system research completed
     Tool: Bash
-    Preconditions: Test plugin generated and loaded in OpenCode
+    Preconditions: None (read-only task)
     Steps:
-      1. Generate test plugin: write minimal event-subscribing plugin to .opencode/plugins/session-test.ts
-      2. Start OpenCode session, perform one tool call, end session
-      3. cat /tmp/opencode-session-events.log
-    Expected Result: Log file exists with session event entries
-    Failure Indicators: No log file — plugin didn't load or events didn't fire
-    Evidence: .omo/evidence/task-11-session-events.log
+      1. cd /tmp && git clone --depth 1 https://github.com/sst/opencode.git opencode-session-check 2>/dev/null || echo "Repo already cloned or unavailable"
+      2. grep -rn "session\.idle\|session\.deleted" /tmp/opencode-session-check/packages/opencode/src/ 2>/dev/null | head -20 || echo "Source not available, using web search"
+      3. Search the OpenCode plugin docs (https://opencode.ai/docs/plugins) for session event reference
+      4. Document findings in packages/corgispec/src/commands/hooks/generate.ts as a comment
+    Expected Result: Comment block in generate.ts documents which session event (idle or deleted) is most appropriate for stop hooks, with evidence citations
+    Evidence: .omo/evidence/task-11-session-research.txt
   ```
 
   **Evidence to Capture**:
@@ -944,7 +943,7 @@ Max Concurrent: 8 (Waves 2)
   - Message: `feat(hooks): add post-compact handler to OpenCode plugin`
   - Files: `packages/corgispec/src/commands/hooks/generate.ts`
 
-- [ ] 13. Update CLI help text to reflect plugin-as-default
+- [ ] 14. Update CLI help text to reflect plugin-as-default
 
   **What to do**:
   - In `packages/corgispec/src/commands/hooks/generate.ts`, update the help text (around lines 85-98):
@@ -994,7 +993,7 @@ Max Concurrent: 8 (Waves 2)
   - Message: `docs(hooks): update CLI help for plugin-as-default`
   - Files: `packages/corgispec/src/commands/hooks/generate.ts`
 
-- [ ] 14. Update install.ts tip to reflect plugin output
+- [ ] 15. Update install.ts tip to reflect plugin output
 
   **What to do**:
   - In `packages/corgispec/src/commands/install.ts`, update the installation tip (line 144 area):
@@ -1041,7 +1040,7 @@ Max Concurrent: 8 (Waves 2)
   - Message: `docs(install): update hook generation tip for plugin output`
   - Files: `packages/corgispec/src/commands/install.ts`
 
-- [ ] 15. Update corgispec-install skill to reflect plugin approach
+- [ ] 16. Update corgispec-install skill to reflect plugin approach
 
   **What to do**:
   - Read the `corgispec-install` skill file to find any references to:
@@ -1091,7 +1090,7 @@ Max Concurrent: 8 (Waves 2)
   - Message: `docs(skills): update install skill for plugin-based hooks`
   - Files: `.opencode/skills/molecules/corgispec-install/SKILL.md`, `.claude/skills/molecules/corgispec-install/SKILL.md`
 
-- [ ] 16. Full integration QA — verify generated plugin works end-to-end
+- [ ] 17. Full integration QA — verify generated plugin works end-to-end
 
   **What to do**:
   - Generate the final plugin: `corgispec hooks generate --platform opencode --output .opencode/plugins/corgispec-deep.ts`
@@ -1158,17 +1157,77 @@ Max Concurrent: 8 (Waves 2)
   Read the plan end-to-end. For each "Must Have": verify implementation exists. For each "Must NOT Have": search codebase for forbidden patterns — reject with file:line if found. Check evidence files exist in .omo/evidence/. Compare deliverables against plan.
   Output: `Must Have [N/N] | Must NOT Have [N/N] | Tasks [N/N] | VERDICT: APPROVE/REJECT`
 
+  **QA Scenario**:
+  ```
+  Scenario: All Must Have items verified against implementation
+    Tool: Bash
+    Preconditions: All Waves 1-4 tasks complete
+    Steps:
+      1. grep -c "import type { Plugin }" .opencode/plugins/corgispec-deep.ts → expect >= 1 (plugin output)
+      2. grep -c "corgispec hook session-start" .opencode/plugins/corgispec-deep.ts → expect >= 1
+      3. grep -c "tool.execute.before" .opencode/plugins/corgispec-deep.ts → expect >= 1
+      4. grep -c "tool.execute.after" .opencode/plugins/corgispec-deep.ts → expect >= 1
+      5. grep -c "session.compacted" .opencode/plugins/corgispec-deep.ts → expect >= 1
+      6. git diff packages/corgispec/src/commands/hooks/generate.ts | grep "buildClaudeConfig" → expect empty (unchanged)
+      7. git diff packages/corgispec/src/commands/hooks/ | grep -v "generate.ts" | wc -l → expect 0 (only generate.ts changed)
+      8. cat packages/corgispec/package.json | grep "@opencode-ai/plugin" → expect empty (not added as dep)
+    Expected Result: All 8 checks pass
+    Evidence: .omo/evidence/final-F1-audit.txt
+  ```
+
 - [ ] F2. Code Quality Review
   Run `npx vitest run` in packages/corgispec/. Review all changed files for: type suppression, empty catches, debug logging in prod, commented-out code, unused imports. Check generated plugin string template for TypeScript validity via `bun build`.
   Output: `Build [PASS/FAIL] | Tests [N pass/N fail] | Files [N clean/N issues] | VERDICT`
+
+  **QA Scenario**:
+  ```
+  Scenario: Build and tests pass, code quality checks clean
+    Tool: Bash
+    Preconditions: All Waves 1-4 tasks complete
+    Steps:
+      1. cd packages/corgispec && npx vitest run test/hooks/generate.test.ts → expect all pass
+      2. bun build /tmp/corgispec-deep-final.ts --no-bundle → expect exit 0
+      3. git diff --stat → expect only planned files changed
+    Expected Result: Tests pass, build succeeds, diff is minimal
+    Evidence: .omo/evidence/final-F2-quality.txt
+  ```
 
 - [ ] F3. Real Manual QA
   Execute EVERY QA scenario from EVERY task. Test: `corgispec hooks generate --platform opencode` → verify TypeScript output. Test: `corgispec hooks generate --platform opencode --deep` → verify same output. Test: `corgispec hooks generate --platform claude` → verify unchanged JSON. Test: `detectHookConfig()` returns opencode platform. Save evidence to `.omo/evidence/final-qa/`.
   Output: `Scenarios [N/N pass] | Integration [N/N] | Edge Cases [N tested] | VERDICT`
 
+  **QA Scenario**:
+  ```
+  Scenario: All verification commands from Success Criteria pass
+    Tool: Bash
+    Preconditions: All Waves 1-4 tasks complete
+    Steps:
+      1. cd packages/corgispec
+      2. DEFAULT=$(node dist/corgispec.js hooks generate --platform opencode 2>/dev/null) && echo "$DEFAULT" | head -1 | grep "import type" && echo "PASS:DEFAULT" || echo "FAIL:DEFAULT" | tee /tmp/final-qa-results.txt
+      3. DEEP=$(node dist/corgispec.js hooks generate --platform opencode --deep 2>/dev/null) && [ "$DEEP" = "$DEFAULT" ] && echo "PASS:DEEP" || echo "FAIL:DEEP" | tee -a /tmp/final-qa-results.txt
+      4. CLAUDE=$(node dist/corgispec.js hooks generate --platform claude 2>/dev/null) && echo "$CLAUDE" | head -1 | grep "{" && echo "PASS:CLAUDE" || echo "FAIL:CLAUDE" | tee -a /tmp/final-qa-results.txt
+      5. grep -c "FAIL" /tmp/final-qa-results.txt
+    Expected Result: grep returns 0 — no FAIL lines in results file
+    Evidence: .omo/evidence/final-F3-qa.txt
+  ```
+
 - [ ] F4. Scope Fidelity Check
   For each task: read "What to do", read actual diff (git log/diff). Verify 1:1 — everything in spec was built, nothing beyond spec was built. Check "Must NOT do" compliance — especially `buildClaudeConfig()` untouched, runtime CLI hooks untouched, no new dependencies.
   Output: `Tasks [N/N compliant] | Contamination [CLEAN/N issues] | Unaccounted [CLEAN/N files] | VERDICT`
+
+  **QA Scenario**:
+  ```
+  Scenario: git diff shows only planned changes
+    Tool: Bash
+    Preconditions: All Waves 1-4 tasks complete
+    Steps:
+      1. git diff --name-only HEAD → capture file list
+      2. Verify only expected files: packages/corgispec/src/commands/hooks/generate.ts, packages/corgispec/test/hooks/generate.test.ts, packages/corgispec/src/commands/install.ts, .opencode/skills/molecules/corgispec-install/SKILL.md, .claude/skills/molecules/corgispec-install/SKILL.md
+      3. git diff packages/corgispec/src/commands/hooks/ | grep "session-start.ts\|pre-write.ts\|pre-bash.ts\|post-write.ts\|post-compact.ts\|stop-check.ts\|loop-check.ts" → expect empty
+      4. git diff packages/corgispec/src/commands/hooks/generate.ts | grep "buildClaudeConfig" → expect empty
+    Expected Result: Only expected files changed, runtime hooks and buildClaudeConfig untouched
+    Evidence: .omo/evidence/final-F4-scope.txt
+  ```
 
 ---
 
