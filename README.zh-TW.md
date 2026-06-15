@@ -34,27 +34,9 @@
   <img src="docs/assets/corgi_journey_illustration.png" alt="Corgi journey: Propose → Apply → Verify → Review → Archive" width="100%"/>
 </p>
 
-<details>
-<summary>精確流程圖（Mermaid）</summary>
-
-```mermaid
-flowchart LR
-    A["/corgi-propose"] --> B["proposal.md\nspecs/\ndesign.md\ntasks.md"]
-    B --> C["Issues\n(parent + children)"]
-    C --> D["/corgi-apply"]
-    D --> E{"Group done?"}
-    E -->|Yes| F["/corgi-verify"]
-    F --> G{"Pass?"}
-    G -->|No| D
-    G -->|Yes| H["/corgi-review"]
-    H --> I{"Approved?"}
-    I -->|Yes, more groups| D
-    I -->|Rejected| J["Fix tasks added"]
-    J --> D
-    I -->|All done| K["/corgi-archive"]
-```
-
-</details>
+<p align="center">
+  <img src="docs/assets/corgi-loop-pipeline-flow.png" alt="完整的 Corgi Loop 管線 — 從 /corgi:propose 到 Manual 與 Automated 路徑，匯流至 /corgi:archive" width="100%"/>
+</p>
 
 ---
 
@@ -72,6 +54,7 @@ Coding Corgi Flow 是 [OpenSpec](https://github.com/Fission-AI/OpenSpec)（由 [
 | 🌿 **Worktree 隔離** | 平行處理多個 change，各自在獨立 git worktree（opt-in） |
 | 🧩 **可組合 Skill** | Atoms → Molecules → Compounds，附帶驗證過的 metadata |
 | 🪝 **Session Hooks** | 生命週期 hooks（pre-write、pre-bash、session-start…）搭配 context gates |
+| 🔄 **自動化管線（Loop）** | 一條指令 apply-verify-review 每個 group，自動批准/修復，零人工關卡 |
 | 📦 **一行指令安裝** | `npm i -g corgispec` → `corgispec bootstrap` → 完成 |
 
 以 npm CLI（`corgispec`）、Claude Code / Codex plugin，以及 OpenCode、Claude Code、Codex 的 slash command 形式發佈。
@@ -136,7 +119,7 @@ Fetch and follow instructions from https://raw.githubusercontent.com/ricoyudog/C
 /corgi:propose Add user authentication with JWT and refresh tokens
 ```
 
-然後：`apply` → `verify` → `review` → `archive`。一次一個 Task Group。
+然後：`apply` → `verify` → `review` → `human-qa` → `archive`。一次一個 Task Group。
 
 ---
 
@@ -148,6 +131,8 @@ Fetch and follow instructions from https://raw.githubusercontent.com/ricoyudog/C
 | `/corgi-apply` | 執行一個 Task Group，同步 closeout，暫停等 review |
 | `/corgi-verify` | 自動化品質關卡 — lint、build、tests、spec coverage |
 | `/corgi-review` | 五軸審查，蒐集證據，approve/reject/discuss |
+| `/corgi-loop` | 自動化管線 — 對每個 Task Group 執行 apply、verify、review，severity-based 自動批准與修復迴圈 |
+| `/corgi-human-qa` | 人工 QA 關卡 — 路由至專業 QA atom（smoke、UI、API、CLI、backend、exploratory） |
 | `/corgi-archive` | 關閉 issue、同步 delta spec、萃取知識、清理 |
 | `/corgi-explore` | 思考夥伴 — 探索想法、釐清需求 |
 | `/corgi-install` | 安裝、更新或驗證 project-local 資產 |
@@ -279,6 +264,37 @@ Hooks 是 **opt-in** — 現有專案不需要 hooks 也能正常運作。執行
 
 ---
 
+## 🔄 自動化管線（Loop）
+
+手動執行 `/corgi:apply` → `/corgi:verify` → `/corgi:review` 對每個 Task Group 可行 — 但每個 Group 需要 3+ 次指令呼叫。**Corgi Loop** 將此自動化。
+
+```text
+# 一條指令搞定一切：
+/corgi:loop <change-name>
+```
+
+**功能說明：** 每次呼叫執行一個完整的 **Task Group 組合**（apply → verify → review-evidence），寫出機器可讀的 artifact（`verify.json`、`review.json`），並將生命週期決策委派給一個確定性的 **stop hook** — 一個 13-gate TypeScript 狀態機。
+
+| 模式 | 行為 |
+|---|---|
+| **自動批准** | 零 critical 且零 important 發現 → group 批准、commit、push、推進下一 group |
+| **自動修復迴圈** | 任何 critical/important 發現 → 實作修復、重新驗證、重新審查（最多 3 次重試） |
+| **熔斷器** | `blockCount` 超過 `maxBlocks`（7）→ 停止，防止無限迴圈 |
+
+**平台差異：**
+
+| | Claude Code | OpenCode |
+|---|---|---|
+| 驅動模式 | Hook 驅動（stop-based） | 自驅動（`selfDriven: true`） |
+| 失敗處理 | 立即停止 | 自動重試最多 3 次 |
+| 指令 | `/corgi:loop <name>` | `/corgi-loop <name>` |
+
+**設計原則：** *Hard Logic Orchestrates, LLM Executes.* Hook（TypeScript）擁有所有生命週期決策 — 狀態機轉換、JSON schema 驗證、severity 推導、熔斷器。LLM skill 只執行有限的工作並寫出結構化 artifact。
+
+→ **[完整 Loop 指南](wiki/guides/loop-guide.md)**
+
+---
+
 ## 🧩 Skill 架構
 
 Skills 採用 **可組合的三層階層**：
@@ -387,6 +403,7 @@ apply:
 | 進度同步 | 僅本地 checkbox | 豐富摘要發佈到 issue |
 | 工作流標籤 | 無 | `backlog → todo → in-progress → review → done` |
 | 審查 | 無 | 五軸自動檢查 + verify gate + 決策循環 |
+| 人工 QA | 無 | 結構化 QA，含 6 個專業 atom（smoke、UI、API、CLI、backend、exploratory） |
 | Spec 格式 | 通用 | Delta 操作（ADDED/MODIFIED/REMOVED/RENAMED） |
 | Worktree 隔離 | 無 | 可選平行開發（git worktree） |
 | 跨 session 記憶 | 無 | 三層系統，自動壓縮 |
@@ -394,6 +411,7 @@ apply:
 | 記憶健康 | 無 | 14 項 lint（新鮮度、上限、連結、萃取） |
 | Skill 架構 | 扁平檔案 | Atoms → Molecules → Compounds + schema 驗證 |
 | Session hooks | 無 | 生命週期 hooks（pre-write、pre-bash、session-start…）+ context gates |
+| 自動化管線 | 無 | 一條指令 loop：每個 group 自動 apply、verify、review，含 auto-approve/fix |
 | Plugin 市集 | 無 | Claude Code `/plugin install` + Codex marketplace |
 
 ---
