@@ -35,37 +35,11 @@
 </p>
 
 <details>
-<summary>Precise diagram (Mermaid)</summary>
+<summary>Precise diagram</summary>
 
-```mermaid
-flowchart LR
-    A["/corgi:propose"] --> B["proposal.md\nspecs/\ndesign.md\ntasks.md"]
-    B --> C["Issues\n(parent + children)"]
-    C --> D{"Path?"}
-    D -->|"Manual"| E["/corgi:apply"]
-    E --> F{"Group done?"}
-    F -->|Yes| G["/corgi:verify"]
-    G --> H{"Pass?"}
-    H -->|No| E
-    H -->|Yes| I["/corgi:review"]
-    I --> J{"Approved?"}
-    J -->|"Yes, more groups"| E
-    J -->|Rejected| K["Fix tasks added"]
-    K --> E
-    J -->|"All done"| L["/corgi:human-qa"]
-    L -->|Pass| M["/corgi:archive"]
-    
-    D -->|"🔄 Automated"| N["/corgi:loop"]
-    N --> O["apply → verify → review\nper group"]
-    O --> P{"Hook verdict\n(13-gate SM)"}
-    P -->|"clean"| Q["Auto-approve\nCommit + push"]
-    Q --> R{"More groups?"}
-    R -->|Yes| O
-    R -->|No| M
-    P -->|"findings"| S["fix → verify → review\n(retry ≤ 3x)"]
-    S -.->|"retry"| P
-    P -->|"breaker ≥ 7 blocks"| T["⛔ stopped"]
-```
+![[wiki/corgi-loop-pipeline-flow.png]]
+
+*Figure: Complete Corgi Loop pipeline — from /corgi:propose through Manual vs Automated paths, converging to /corgi:archive.*
 
 </details>
 
@@ -171,21 +145,21 @@ Then: `apply` → `verify` → `review` → `human-qa` → `archive`. One Task G
 
 ## 🎮 Commands
 
-| Command | What it does |
-|---|---|
-| `/corgi-propose` | Generate planning artifacts (proposal, specs, design, tasks) + create issues |
-| `/corgi-apply` | Execute one Task Group, sync closeout, pause for review |
-| `/corgi-verify` | Automated quality gate — lint, build, tests, spec coverage |
-| `/corgi-review` | 5-axis review with evidence gathering, approve/reject/discuss |
-| `/corgi:loop` | Automated pipeline — runs apply, verify, and review per Task Group with severity-based auto-approval and fix loops |
-| `/corgi-human-qa` | Human QA gate — route to specialized QA atoms (smoke, UI, API, CLI, backend, exploratory) |
-| `/corgi-archive` | Close issues, sync delta specs, extract knowledge, cleanup |
-| `/corgi-explore` | Thinking partner — explore ideas, clarify requirements |
-| `/corgi-install` | Project-local asset install, update, or verify |
-| `/corgi-memory-init` | Initialize 3-layer memory (`memory/` + `wiki/`) |
-| `/corgi-migrate` | Import existing knowledge into memory/wiki |
-| `/corgi-lint` | 14-check memory health validation |
-| `/corgi-ask` | Answer questions from the vault with budget-aware retrieval |
+| Command              | What it does                                                                                                       |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `/corgi-propose`     | Generate planning artifacts (proposal, specs, design, tasks) + create issues                                       |
+| `/corgi-apply`       | Execute one Task Group, sync closeout, pause for review                                                            |
+| `/corgi-verify`      | Automated quality gate — lint, build, tests, spec coverage                                                         |
+| `/corgi-review`      | 5-axis review with evidence gathering, approve/reject/discuss                                                      |
+| `/corgi-loop`        | Automated pipeline — runs apply, verify, and review per Task Group with severity-based auto-approval and fix loops |
+| `/corgi-human-qa`    | Human QA gate — route to specialized QA atoms (smoke, UI, API, CLI, backend, exploratory)                          |
+| `/corgi-archive`     | Close issues, sync delta specs, extract knowledge, cleanup                                                         |
+| `/corgi-explore`     | Thinking partner — explore ideas, clarify requirements                                                             |
+| `/corgi-install`     | Project-local asset install, update, or verify                                                                     |
+| `/corgi-memory-init` | Initialize 3-layer memory (`memory/` + `wiki/`)                                                                    |
+| `/corgi-migrate`     | Import existing knowledge into memory/wiki                                                                         |
+| `/corgi-lint`        | 14-check memory health validation                                                                                  |
+| `/corgi-ask`         | Answer questions from the vault with budget-aware retrieval                                                        |
 
 > Claude Code uses `/corgi:<command>` syntax (e.g., `/corgi:propose`). Platform auto-detected from `config.yaml`.
 
