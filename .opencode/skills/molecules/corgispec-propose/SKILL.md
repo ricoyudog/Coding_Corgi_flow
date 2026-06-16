@@ -54,16 +54,16 @@ git worktree add <isolation.root>/<name> -b <isolation.branch_prefix><name>
 ### 3. Develop: Create change directory and build artifacts in dependency order
 
 ```bash
-openspec new change "<name>"
+corgispec propose <name>
 ```
 If `openspec/changes/<name>/` already exists, reuse it.
 
 ```bash
-openspec status --change "<name>" --json
+corgispec status "<name>" --json
 ```
 Loop through artifacts until all `applyRequires` are `done`. For each `ready` artifact:
 ```bash
-openspec instructions <artifact-id> --change "<name>" --json
+corgispec instructions <artifact-id> --change <name> --json
 ```
 Use the `template` as structure, `instruction` as guidance. `context` and `rules` are constraints for YOU — never include them in output files.
 
@@ -74,7 +74,7 @@ The primary output of propose is the completed planning artifact package: `propo
 ### 4. Closeout: Show final status and prepare handoff state
 
 ```bash
-openspec status --change "<name>"
+corgispec status "<name>"
 ```
 
 After the artifacts are complete, prepare the local handoff state that later phases consume. The planning artifact package remains the primary output; tracker setup and worktree metadata are closeout work layered on top of it.
@@ -113,7 +113,7 @@ Summarize:
 ## Postconditions (VERIFY BEFORE REPORTING DONE)
 
 - [ ] All `applyRequires` artifacts exist and have content
-- [ ] `openspec status --change "<name>" --json` shows all required artifacts as `done`
+- [ ] `corgispec status "<name>" --json` shows all required artifacts as `done`
 - [ ] If `isolation.mode` is `worktree`: run `git worktree list` — the change worktree MUST appear
 - [ ] If `isolation.mode` is `worktree`: `openspec/changes/<name>/.worktree.yaml` exists
 - [ ] If glab available: `openspec/changes/<name>/.gitlab.yaml` exists

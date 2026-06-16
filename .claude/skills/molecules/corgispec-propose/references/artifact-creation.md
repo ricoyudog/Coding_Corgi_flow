@@ -4,7 +4,7 @@
 
 Get the artifact pipeline status:
 ```bash
-openspec status --change "<name>" --json
+corgispec status "<name>" --json
 ```
 
 Parse the JSON:
@@ -17,7 +17,7 @@ For each artifact in dependency order (no pending dependencies first):
 
 1. Get instructions:
    ```bash
-   openspec instructions <artifact-id> --change "<name>" --json
+   corgispec instructions <artifact-id> --change <name> --json
    ```
 
 2. The JSON includes:
@@ -34,14 +34,14 @@ For each artifact in dependency order (no pending dependencies first):
 
 5. After writing, re-check status:
    ```bash
-   openspec status --change "<name>" --json
+   corgispec status "<name>" --json
    ```
 
 6. Continue until all `applyRequires` artifacts have `status: "done"`.
 
 ## Guidelines
 
-- Follow the `instruction` field from `openspec instructions` for each artifact type
+- Follow the `instruction` field from `corgispec instructions` for each artifact type
 - Use `template` as the structure — fill in its sections
 - `context` and `rules` guide what you write but NEVER appear in the output
 - If context is unclear, ask the user — but prefer reasonable decisions to keep momentum

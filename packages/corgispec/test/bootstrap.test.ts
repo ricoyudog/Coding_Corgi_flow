@@ -439,4 +439,193 @@ describe("bootstrap library", () => {
     expect(existsSync(resolve(missingTarget, "openspec"))).toBe(false);
     expect(existsSync(resolve(missingTarget))).toBe(false);
   });
+
+  it("rejects an invalid platform before running bootstrap", () => {
+    try {
+      execSync(
+        `node ${CLI} bootstrap --target ${JSON.stringify(targetDir)} --platform invalid-platform`,
+        {
+          encoding: "utf-8",
+          env: bootstrapEnv(process.env["PATH"]),
+        }
+      );
+      expect.fail("Should have thrown");
+    } catch (err: any) {
+      expect(err.status).toBe(1);
+      expect(err.stdout).toContain("Invalid platform");
+    }
+  });
+
+  it("shows --platform option in bootstrap help output", () => {
+    const output = execSync(`node ${CLI} bootstrap --help`, { encoding: "utf-8" });
+
+    expect(output).toContain("--platform");
+  });
+
+  it("passes platforms option through to runBootstrap", async () => {
+    writeFileSync(resolve(targetDir, "README.md"), "# Platform Project\n\nBootstrap target.\n");
+
+    const result = await runBootstrap({
+      target: targetDir,
+      schema: "github-tracked",
+      mode: "auto",
+      yes: true,
+      noMemory: true,
+      json: false,
+      assetsRoot: ASSETS_ROOT,
+      userSkillDirs: userSkillDirs(userSkillRoot),
+      platforms: ["claude", "opencode"],
+    });
+
+    expect(result.status).toBe("success");
+  });
+
+  it("defaults to all platforms when not specified", async () => {
+    writeFileSync(resolve(targetDir, "README.md"), "# Default Platform Project\n\nBootstrap target.\n");
+
+    const result = await runBootstrap({
+      target: targetDir,
+      schema: "github-tracked",
+      mode: "auto",
+      yes: true,
+      noMemory: true,
+      json: false,
+      assetsRoot: ASSETS_ROOT,
+      userSkillDirs: userSkillDirs(userSkillRoot),
+    });
+
+    expect(result.status).toBe("success");
+  });
+
+  it("rejects an invalid scope before running bootstrap", () => {
+    try {
+      execSync(
+        `node ${CLI} bootstrap --target ${JSON.stringify(targetDir)} --scope invalid-scope`,
+        {
+          encoding: "utf-8",
+          env: bootstrapEnv(process.env["PATH"]),
+        }
+      );
+      expect.fail("Should have thrown");
+    } catch (err: any) {
+      expect(err.status).toBe(1);
+      expect(err.stdout).toContain("Invalid scope");
+    }
+  });
+
+  it("shows --scope option in bootstrap help output", () => {
+    const output = execSync(`node ${CLI} bootstrap --help`, { encoding: "utf-8" });
+
+    expect(output).toContain("--scope");
+  });
+
+  it("passes scope option through to runBootstrap", async () => {
+    writeFileSync(resolve(targetDir, "README.md"), "# Scope Project\n\nBootstrap target.\n");
+
+    const result = await runBootstrap({
+      target: targetDir,
+      schema: "github-tracked",
+      mode: "auto",
+      yes: true,
+      noMemory: true,
+      json: false,
+      assetsRoot: ASSETS_ROOT,
+      userSkillDirs: userSkillDirs(userSkillRoot),
+      scope: "local",
+    });
+
+    expect(result.status).toBe("success");
+  });
+
+  it("defaults to global scope when not specified", async () => {
+    writeFileSync(resolve(targetDir, "README.md"), "# Default Scope Project\n\nBootstrap target.\n");
+
+    const result = await runBootstrap({
+      target: targetDir,
+      schema: "github-tracked",
+      mode: "auto",
+      yes: true,
+      noMemory: true,
+      json: false,
+      assetsRoot: ASSETS_ROOT,
+      userSkillDirs: userSkillDirs(userSkillRoot),
+    });
+
+    expect(result.status).toBe("success");
+
+  });
+  it("installs to specific platform with local scope", async () => {
+    writeFileSync(resolve(targetDir, "README.md"), "# Platform+Scope\n\nTest.\n");
+
+    const result = await runBootstrap({
+      target: targetDir,
+      schema: "github-tracked",
+      mode: "auto",
+      yes: true,
+      noMemory: true,
+      json: false,
+      assetsRoot: ASSETS_ROOT,
+      userSkillDirs: userSkillDirs(userSkillRoot),
+      platforms: ["opencode"],
+      scope: "local",
+    });
+
+    expect(result.status).toBe("success");
+    expect(existsSync(resolve(targetDir, ".opencode/commands/corgi-propose.md"))).toBe(true);
+  });
+
+  it("global scope does not sync project-local files", async () => {
+    writeFileSync(resolve(targetDir, "README.md"), "# Global\n\nTest.\n");
+
+    const result = await runBootstrap({
+      target: targetDir,
+      schema: "github-tracked",
+      mode: "auto",
+      yes: true,
+      noMemory: true,
+      json: false,
+      assetsRoot: ASSETS_ROOT,
+      userSkillDirs: userSkillDirs(userSkillRoot),
+      platforms: ["claude"],
+      scope: "global",
+    });
+
+    expect(result.status).toBe("success");
+    expect(existsSync(resolve(targetDir, ".opencode/commands/corgi-propose.md"))).toBe(false);
+  });
+
+  it("runs bootstrap CLI with platform and scope flags", () => {
+    writeFileSync(resolve(targetDir, "README.md"), "# CLI Platform+Scope\n\nTest.\n");
+    const fakeBin = createFakeGhBin(targetDir);
+
+    const output = execSync(
+      `node ${CLI} bootstrap --target ${JSON.stringify(targetDir)} --platform claude,opencode --scope local --mode verify --json`,
+      {
+        encoding: "utf-8",
+        env: bootstrapEnv(`${fakeBin}:${process.env["PATH"] ?? ""}`),
+      }
+    );
+
+    const parsed = JSON.parse(output) as Record<string, unknown>;
+    expect(parsed.status).toBe("success");
+  });
+
+  it("both scope installs to user and project", async () => {
+    writeFileSync(resolve(targetDir, "README.md"), "# Both\n\nTest.\n");
+
+    const result = await runBootstrap({
+      target: targetDir,
+      schema: "github-tracked",
+      mode: "auto",
+      yes: true,
+      noMemory: true,
+      json: false,
+      assetsRoot: ASSETS_ROOT,
+      userSkillDirs: userSkillDirs(userSkillRoot),
+      platforms: ["claude"],
+      scope: "both",
+    });
+
+    expect(result.status).toBe("success");
+  });
 });

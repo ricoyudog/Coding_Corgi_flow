@@ -95,7 +95,22 @@ Choose your path:
 
 ```bash
 npm install -g corgispec
-corgispec bootstrap --path /path/to/your-project --schema github-tracked
+```
+
+Options: `--platform <platforms>` (claude, opencode, codex; default: all), `--scope <scope>` (global, local, both; default: global). When TTY is detected and flags are not provided, interactive prompts ask for platform and scope.
+
+```bash
+# Basic (all platforms, global scope)
+corgispec bootstrap --target /path/to/your-project --schema github-tracked
+
+# Specific platforms
+corgispec bootstrap --target /path/to/your-project --platform opencode --schema github-tracked
+
+# Local scope only
+corgispec bootstrap --target /path/to/your-project --scope local --schema github-tracked
+
+# Interactive mode
+corgispec bootstrap --target /path/to/your-project
 ```
 
 **B. Claude Code / Codex Plugin**

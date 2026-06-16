@@ -17,7 +17,7 @@ Enter explore mode. Think deeply. Visualize freely. Follow the conversation wher
 
 At the start, check active changes with:
 ```bash
-openspec list --json
+corgispec list --json
 ```
 
 ### Worktree Awareness
@@ -27,7 +27,7 @@ openspec list --json
 Otherwise: read `openspec/config.yaml` and proceed with discovery.
 
 **If `isolation.mode: worktree`**: Changes live inside worktrees, not the main checkout. Read `references/worktree-discovery.md` for the full discovery procedure. Quick summary:
-1. `openspec list --json` — if it returns changes, use them
+1. `corgispec list --json` — if it returns changes, use them
 2. If empty (new session from main checkout): scan `<isolation.root>/` directories, verify each with `git worktree list`
 3. Enter the relevant worktree for context: use workdir parameter for commands
 

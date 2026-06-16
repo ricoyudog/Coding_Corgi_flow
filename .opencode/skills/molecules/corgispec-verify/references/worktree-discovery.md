@@ -1,6 +1,6 @@
 # Worktree Discovery
 
-When `isolation.mode` is `worktree`, changes live inside worktrees — NOT in the main checkout. A new session starting from the main checkout cannot see them via `openspec list`.
+When `isolation.mode` is `worktree`, changes live inside worktrees — NOT in the main checkout. A new session starting from the main checkout cannot see them via `corgispec list`.
 
 ## Discovery Procedure
 
@@ -9,7 +9,7 @@ When resolving a change with worktree isolation:
 ### 1. Try normal resolution first
 
 ```bash
-openspec list --json
+corgispec list --json
 ```
 
 If this returns changes, use them directly. (This works when already inside a worktree.)
@@ -78,5 +78,6 @@ This discovery is needed by:
 - **review** — to find which change to review
 - **archive** — to find which change to archive
 - **explore** — to investigate a change's context
+- **loop** — to find which change to loop over
 
 Always use this procedure when `isolation.mode: worktree` and starting from the main checkout.

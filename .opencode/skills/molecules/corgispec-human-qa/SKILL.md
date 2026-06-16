@@ -39,12 +39,12 @@ Human QA orchestrator. Classifies the change type, routes to appropriate QA atom
 Otherwise: read `openspec/config.yaml` and proceed with discovery.
 
 **If `isolation.mode: worktree`**: Changes live inside worktrees. Read `references/worktree-discovery.md` for the full discovery procedure. Quick summary:
-1. `openspec list --json`, if it returns changes, use them
+1. `corgispec list --json`, if it returns changes, use them
 2. If empty: scan `<isolation.root>/` directories, verify each with `git worktree list` and check `openspec/changes/<name>/` exists inside
 3. Auto-select if one found, prompt if multiple
 4. ALL subsequent work uses the worktree as workdir
 
-**If no isolation**: `openspec list --json` directly. Auto-select if one, prompt if multiple.
+**If no isolation**: `corgispec list --json` directly. Auto-select if one, prompt if multiple.
 
 If name provided by user, use it directly.
 

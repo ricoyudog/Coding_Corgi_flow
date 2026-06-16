@@ -5,7 +5,8 @@ import {
   statSync,
 } from "node:fs";
 import { resolve } from "node:path";
-import { loadConfigFromDir } from "./config.js";
+import { spawnSync } from "node:child_process";
+import { loadConfigFromDir, type OpenSpecConfig } from "./config.js";
 import yaml from "js-yaml";
 
 // ─── Types ──────────────────────────────────────────────────────────────
@@ -152,7 +153,7 @@ export function loadTemplate(cwd: string, schemaName: string, templateFile: stri
 // ─── Change Discovery ───────────────────────────────────────────────────
 
 /**
- * Discover all active changes in openspec/changes/.
+ * Discover all active changes in openspec/changes/ at a given directory.
  */
 export function discoverChanges(cwd: string): string[] {
   const changesDir = resolve(cwd, "openspec/changes");
@@ -163,6 +164,91 @@ export function discoverChanges(cwd: string): string[] {
   return readdirSync(changesDir, { withFileTypes: true })
     .filter((e) => e.isDirectory())
     .map((e) => e.name);
+}
+
+// ─── Worktree Discovery ──────────────────────────────────────────────────
+
+/**
+ * A change discovered in a specific worktree (or main repo).
+ */
+export interface DiscoveredChange {
+  /** Change directory name */
+  name: string;
+  /** Absolute path to the worktree (or main repo) containing this change */
+  path: string;
+}
+
+/**
+ * Run `git worktree list --porcelain` from cwd and return all worktree paths.
+ * Returns empty array if git is unavailable or the command fails.
+ */
+function getGitWorktreePaths(cwd: string): string[] {
+  try {
+    const result = spawnSync("git", ["worktree", "list", "--porcelain"], {
+      cwd,
+      encoding: "utf-8",
+      timeout: 5000,
+    });
+    if (result.error || result.status !== 0) {
+      return [];
+    }
+    const paths: string[] = [];
+    for (const line of result.stdout.split("\n")) {
+      if (line.startsWith("worktree ")) {
+        paths.push(line.slice("worktree ".length));
+      }
+    }
+    return paths;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Discover all active changes across all worktrees (when isolation mode is "worktree")
+ * or only from the current working directory (when isolation mode is "none" or not configured).
+ *
+ * Uses `git worktree list --porcelain` to find all worktree directories,
+ * then scans each for `openspec/changes/` subdirectories.
+ */
+export function discoverAllChanges(cwd: string): DiscoveredChange[] {
+  // Check if worktree isolation is configured
+  let config: OpenSpecConfig | null = null;
+  try {
+    config = loadConfigFromDir(cwd);
+  } catch {
+    // No config — fall through to cwd-only scan
+  }
+
+  if (config?.isolation?.mode === "worktree") {
+    const worktreePaths = getGitWorktreePaths(cwd);
+    const seen = new Set<string>();
+    const allChanges: DiscoveredChange[] = [];
+
+    for (const wtPath of worktreePaths) {
+      const changesDir = resolve(wtPath, "openspec/changes");
+      if (!existsSync(changesDir)) continue;
+
+      const entries = readdirSync(changesDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        // Deduplicate by change name (prefer first occurrence)
+        if (seen.has(entry.name)) continue;
+        seen.add(entry.name);
+        allChanges.push({ name: entry.name, path: wtPath });
+      }
+    }
+
+    return allChanges;
+  }
+
+  // Non-worktree mode: scan only the current working directory
+  const changesDir = resolve(cwd, "openspec/changes");
+  if (!existsSync(changesDir)) return [];
+
+  return readdirSync(changesDir, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => ({ name: e.name, path: cwd }));
 }
 
 /**

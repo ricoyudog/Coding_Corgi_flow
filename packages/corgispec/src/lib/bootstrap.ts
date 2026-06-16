@@ -39,6 +39,8 @@ export interface BootstrapOptions {
   json: boolean;
   assetsRoot?: string;
   userSkillDirs?: Record<Platform, string>;
+  platforms?: string[];
+  scope?: string;
 }
 
 export interface BootstrapResult {
@@ -69,6 +71,7 @@ const REQUIRED_PROJECT_ASSET_DIRS = ["commands", "schemas", "skills", "memory-in
 
 export async function runBootstrap(opts: BootstrapOptions): Promise<BootstrapResult> {
   const target = resolve(opts.target);
+  const { platforms, scope } = opts;
   const state = classifyTargetState(target);
   const mode = resolveBootstrapMode(opts.mode, state.kind);
   const assetsRoot = resolveAssetsRoot(opts.assetsRoot);
@@ -162,9 +165,13 @@ export async function runBootstrap(opts: BootstrapOptions): Promise<BootstrapRes
       }
     }
 
-    installUserSkills(context, assetsRoot, opts.userSkillDirs);
+    if (scope !== "local") {
+      installUserSkills(context, assetsRoot, opts.userSkillDirs, platforms);
+    }
 
-    context.managedFiles = syncManagedProjectFiles(target, effectiveSchema, assetsRoot, context);
+    if (scope !== "global") {
+      context.managedFiles = syncManagedProjectFiles(target, effectiveSchema, assetsRoot, context);
+    }
 
     updateConfigSchema(target, effectiveSchema, context.timestamp);
 
@@ -322,13 +329,17 @@ function checkCliAvailability(command: "gh" | "glab"): { ok: boolean; detail: st
 function installUserSkills(
   context: BootstrapContext,
   assetsRoot: string,
-  userSkillDirs?: Record<Platform, string>
+  userSkillDirs?: Record<Platform, string>,
+  platforms?: string[]
 ): void {
   const sourceDir = getBundledSkillsDirFromAssets(assetsRoot);
-  const platforms: Platform[] = ["claude", "opencode", "codex"];
+  const allPlatforms: Platform[] = ["claude", "opencode", "codex"];
+  const targetPlatforms = platforms
+    ? allPlatforms.filter((p) => platforms.includes(p))
+    : allPlatforms;
   let installedCount = 0;
 
-  for (const platform of platforms) {
+  for (const platform of targetPlatforms) {
     const targetDir = userSkillDirs?.[platform] ?? getSkillDir(platform);
     installedCount += installSkillsTo(sourceDir, targetDir, false).length;
   }
@@ -337,7 +348,7 @@ function installUserSkills(
   context.checks.push({
     name: "User-level skills",
     status: "PASS",
-    detail: `Installed bundled skills across ${platforms.length} platform targets.`,
+    detail: `Installed bundled skills across ${targetPlatforms.length} platform targets.`,
   });
 }
 
