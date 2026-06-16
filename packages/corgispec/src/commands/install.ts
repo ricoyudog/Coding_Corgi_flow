@@ -141,7 +141,7 @@ export function createInstallCommand(): Command {
 
       if (!dryRun && totalInstalled > 0) {
         console.log(
-          "\n💡 Tip: Run `corgispec hooks generate` to enable auto context injection & security guards."
+          "\n💡 Tip: Run `corgispec hooks generate --platform opencode` to generate the TypeScript lifecycle-hook plugin."
         );
       }
     });
