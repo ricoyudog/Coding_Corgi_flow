@@ -294,7 +294,7 @@ function buildStdinPayload(tool: string, args: Record<string, unknown>): string 
 
 export const CorgiSpecDeep: Plugin = async () => {
   return {
-    "experimental.chat.system.transform": async ({ output }) => {
+    "experimental.chat.system.transform": async (_input, output) => {
       try {
         const ctx = execSync(BINARY + " hook session-start", {
           encoding: "utf-8",
@@ -317,10 +317,10 @@ export const CorgiSpecDeep: Plugin = async () => {
         execSync(BINARY + " hook pre-bash", { input: payload, encoding: "utf-8", timeout: 5000 });
       }
     },
-    "tool.execute.after": async (input, output) => {
+    "tool.execute.after": async (input, _output) => {
       if (input.tool !== "write" && input.tool !== "edit") return;
       try {
-        const payload = buildStdinPayload(input.tool, output.args);
+        const payload = buildStdinPayload(input.tool, input.args);
         execSync(BINARY + " hook post-write", { input: payload, encoding: "utf-8", timeout: 10000 });
       } catch {
         // Post-write validation is non-blocking

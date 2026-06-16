@@ -84,6 +84,7 @@ export function createHookLoopCheckCommand(): Command {
       }
 
       // 7. Call the state machine
+      const wasActive = state.active;
       const result = processLoopState(state, verify!, review!, input);
 
       // 8. Atomically write state mutations (tmp + rename)
@@ -93,7 +94,18 @@ export function createHookLoopCheckCommand(): Command {
       renameSync(tmpPath, statePath);
 
       // 9. Output decision as JSON
-      console.log(JSON.stringify(result));
+      // Include phase/terminal/reason — consumers (loop orchestration, integration
+      // tests, stop-check composition) depend on these fields to distinguish
+      // terminal stops from non-terminal blocks and to route on phase.
+      const output: Record<string, unknown> = {
+        decision: result.decision,
+        phase: state.phase,
+        terminal: wasActive && !state.active,
+      };
+      if (result.reason) {
+        output.reason = result.reason;
+      }
+      console.log(JSON.stringify(output));
       process.exit(0);
     });
 
