@@ -180,7 +180,7 @@ Max Concurrent: 8 (Waves 2)
 > EVERY task MUST have: Recommended Agent Profile + Parallelization info + QA Scenarios.
 > Task labels use bare numbers: `1.`, `2.`, `3.` — NOT `T1.`, `Task 1.`
 
-- [ ] 1. Write failing TDD test: default output becomes TypeScript plugin
+- [x] 1. Write failing TDD test: default output becomes TypeScript plugin
 
   **What to do**:
   - In `packages/corgispec/test/hooks/generate.test.ts`, add a test that calls `corgispec hooks generate --platform opencode` (without `--deep`) and asserts the output is TypeScript (NOT JSON)
@@ -244,7 +244,7 @@ Max Concurrent: 8 (Waves 2)
   - Files: `packages/corgispec/test/hooks/generate.test.ts`
   - Pre-commit: `npx vitest run test/hooks/generate.test.ts`
 
-- [ ] 2. Write failing TDD test: plugin output includes pre-write and pre-bash hooks
+- [x] 2. Write failing TDD test: plugin output includes pre-write and pre-bash hooks
 
   **What to do**:
   - In `packages/corgispec/test/hooks/generate.test.ts`, add a test that calls `corgispec hooks generate --platform opencode` and verifies:
@@ -294,7 +294,7 @@ Max Concurrent: 8 (Waves 2)
   - Message: `test(hooks): add failing test for PreToolUse hooks in plugin output`
   - Files: `packages/corgispec/test/hooks/generate.test.ts`
 
-- [ ] 3. Write failing TDD test: --deep flag is deprecated (no-op alias)
+- [x] 3. Write failing TDD test: --deep flag is deprecated (no-op alias)
 
   **What to do**:
   - In `packages/corgispec/test/hooks/generate.test.ts`, modify the existing `--deep` test (lines 144-152) to assert that `--deep` flag still works but produces the SAME output as without `--deep` (both are now the plugin)
@@ -341,7 +341,7 @@ Max Concurrent: 8 (Waves 2)
   - Message: `test(hooks): update --deep flag tests for deprecation (no-op alias)`
   - Files: `packages/corgispec/test/hooks/generate.test.ts`
 
-- [ ] 4. Research OpenCode tool.execute field names for translation layer
+- [x] 4. Research OpenCode tool.execute field names for translation layer
 
   **What to do**:
   - Investigate what field names OpenCode's `tool.execute.before` passes in `output.args` for the Write tool and Bash tool

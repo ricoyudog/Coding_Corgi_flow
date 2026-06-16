@@ -222,6 +222,52 @@ function generateClaudeOutput(
 
 // ─── OpenCode Config ─────────────────────────────────────────────────────
 
+/**
+ * OpenCode Plugin API — tool.execute.before argument shapes
+ * =========================================================
+ *
+ * The plugin hook signature (from @opencode-ai/plugin):
+ *   "tool.execute.before"?: (
+ *     input: { tool: string; sessionID: string; callID: string },
+ *     output: { args: any },
+ *   ) => Promise<void>
+ *
+ * `output.args` contains the tool-specific parameters as defined by each
+ * built-in tool's Effect Schema. The field names are:
+ *
+ * **Write tool** (tool === "write"):
+ *   output.args = {
+ *     filePath: string   // absolute path to the file to write
+ *   }
+ *
+ * **Bash/Shell tool** (tool === "bash"):
+ *   output.args = {
+ *     command: string             // the shell command to execute
+ *     timeout?: number            // optional timeout in ms
+ *     workdir?: string            // optional working directory (defaults to cwd)
+ *   }
+ *
+ * **Edit tool** (tool === "edit"):
+ *   output.args = {
+ *     filePath: string   // absolute path to the file to edit
+ *     oldString: string  // text to find
+ *     newString: string  // replacement text
+ *   }
+ *
+ * Mapping to our HookInput (hooks.ts:23-31):
+ *   HookInput.tool_input.file_path  ← output.args.filePath  (write/edit)
+ *   HookInput.tool_input.command    ← output.args.command   (bash)
+ *
+ * NOTE: OpenCode uses camelCase (`filePath`), while Claude Code uses
+ * snake_case (`file_path`). The CLI hooks read the snake_case form from
+ * stdin because Claude Code is the primary bridge-format consumer.
+ * For a deep plugin, access `output.args.filePath` / `output.args.command` directly.
+ *
+ * Sources:
+ *   - https://github.com/anomalyco/opencode/blob/dev/packages/plugin/src/index.ts (L261-266)
+ *   - https://github.com/anomalyco/opencode/blob/dev/packages/opencode/src/tool/write.ts (L22)
+ *   - https://github.com/anomalyco/opencode/blob/dev/packages/opencode/src/tool/shell/prompt.ts (L22-30)
+ */
 function generateOpenCodeOutput(
   binaryPath: string,
   opts: GenerateOptions
