@@ -35,10 +35,12 @@ function timestamp(): string {
 function terminal(
   state: LoopState,
   phase: LoopState["phase"],
+  reason?: string,
 ): LoopHookDecision {
   state.phase = phase;
   state.active = false;
   state.updatedAt = timestamp();
+  if (reason) return { decision: "proceed", reason };
   return { decision: "proceed" };
 }
 
@@ -155,11 +157,11 @@ export function processLoopState(
 
   // ── 10. Verdict gate ────────────────────────────────────────────────
   if (verdict === "FAIL") {
-    return terminal(state, "verify_failed");
+    return terminal(state, "verify_failed", "verification verdict: FAIL");
   }
 
   if (verdict === "PASS_WITH_WARNINGS" && !state.autoApprovalPolicy.allowPassWithWarnings) {
-    return terminal(state, "verify_failed");
+    return terminal(state, "verify_failed", "verification verdict: PASS_WITH_WARNINGS denied by policy");
   }
 
   // ── 11. Severity validation, evidence validation, severity gate ─────
@@ -184,7 +186,10 @@ export function processLoopState(
   const important = review.finding_details.filter(f => f.severity === "important").length;
 
   if (critical > 0 || important > 0) {
-    return terminal(state, "stopped_review_findings");
+    const parts: string[] = [];
+    if (critical > 0) parts.push(`${critical} critical`);
+    if (important > 0) parts.push(`${important} important`);
+    return terminal(state, "stopped_review_findings", `${parts.join(" + ")} finding(s) block advancement`);
   }
 
   // ── 12. Advance or Finalize ─────────────────────────────────────────

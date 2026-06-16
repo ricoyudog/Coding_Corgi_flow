@@ -1,8 +1,0 @@
-# Task 3: Test Results
-
-## npm test
-- Exit code: 0
-- Test Files: 22 passed (22)
-- Tests: 374 passed (374)
-- Duration: 43.66s
-- Status: PASS

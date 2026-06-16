@@ -30,7 +30,7 @@ export function createHooksGenerateCommand(): Command {
     .option("--force", "Overwrite existing hook configuration")
     .option(
       "--deep",
-      "Generate deep TypeScript plugin (OpenCode only, ignored for others)"
+      "Deprecated: TypeScript plugin is now the default for OpenCode (flag is a no-op)"
     )
     .action((opts: GenerateOptions) => {
       if (!opts.platform) {
@@ -87,7 +87,7 @@ function showPlatformListing(): void {
     "  claude    Claude Code (.claude/settings.json → hooks key)"
   );
   console.log(
-    "  opencode  OpenCode (Claude Code bridge format, or --deep for TypeScript plugin)"
+    "  opencode  OpenCode (TypeScript plugin, default)"
   );
   console.log(
     "  codex     Codex (.codex/config.toml + .codex/hooks/*.py wrappers)"
@@ -222,19 +222,58 @@ function generateClaudeOutput(
 
 // ─── OpenCode Config ─────────────────────────────────────────────────────
 
+/**
+ * OpenCode Plugin API — tool.execute.before argument shapes
+ * =========================================================
+ *
+ * The plugin hook signature (from @opencode-ai/plugin):
+ *   "tool.execute.before"?: (
+ *     input: { tool: string; sessionID: string; callID: string },
+ *     output: { args: any },
+ *   ) => Promise<void>
+ *
+ * `output.args` contains the tool-specific parameters as defined by each
+ * built-in tool's Effect Schema. The field names are:
+ *
+ * **Write tool** (tool === "write"):
+ *   output.args = {
+ *     filePath: string   // absolute path to the file to write
+ *   }
+ *
+ * **Bash/Shell tool** (tool === "bash"):
+ *   output.args = {
+ *     command: string             // the shell command to execute
+ *     timeout?: number            // optional timeout in ms
+ *     workdir?: string            // optional working directory (defaults to cwd)
+ *   }
+ *
+ * **Edit tool** (tool === "edit"):
+ *   output.args = {
+ *     filePath: string   // absolute path to the file to edit
+ *     oldString: string  // text to find
+ *     newString: string  // replacement text
+ *   }
+ *
+ * Mapping to our HookInput (hooks.ts:23-31):
+ *   HookInput.tool_input.file_path  ← output.args.filePath  (write/edit)
+ *   HookInput.tool_input.command    ← output.args.command   (bash)
+ *
+ * NOTE: OpenCode uses camelCase (`filePath`), while Claude Code uses
+ * snake_case (`file_path`). The CLI hooks read the snake_case form from
+ * stdin because Claude Code is the primary bridge-format consumer.
+ * For a deep plugin, access `output.args.filePath` / `output.args.command` directly.
+ *
+ * Sources:
+ *   - https://github.com/anomalyco/opencode/blob/dev/packages/plugin/src/index.ts (L261-266)
+ *   - https://github.com/anomalyco/opencode/blob/dev/packages/opencode/src/tool/write.ts (L22)
+ *   - https://github.com/anomalyco/opencode/blob/dev/packages/opencode/src/tool/shell/prompt.ts (L22-30)
+ */
 function generateOpenCodeOutput(
   binaryPath: string,
   opts: GenerateOptions
 ): void {
-  if (opts.deep) {
-    const tsCode = buildOpenCodeDeepPlugin(binaryPath);
-    writeOutput(tsCode, opts.output, opts.force);
-    return;
-  }
-
-  const config = buildClaudeConfig(binaryPath);
-  const json = JSON.stringify(config, null, 2) + "\n";
-  writeOutput(json, opts.output, opts.force);
+  const tsCode = buildOpenCodeDeepPlugin(binaryPath);
+  writeOutput(tsCode, opts.output, opts.force);
 }
 
 function buildOpenCodeDeepPlugin(binaryPath: string): string {
@@ -243,9 +282,19 @@ import { execSync } from "node:child_process";
 
 const BINARY = "${binaryPath}";
 
+function buildStdinPayload(tool: string, args: Record<string, unknown>): string {
+  return JSON.stringify({
+    tool_name: tool,
+    tool_input: {
+      file_path: args.filePath,
+      command: args.command,
+    },
+  });
+}
+
 export const CorgiSpecDeep: Plugin = async () => {
   return {
-    "experimental.chat.system.transform": async ({ output }) => {
+    "experimental.chat.system.transform": async (_input, output) => {
       try {
         const ctx = execSync(BINARY + " hook session-start", {
           encoding: "utf-8",
@@ -259,9 +308,57 @@ export const CorgiSpecDeep: Plugin = async () => {
         // Context injection is optional — skip on failure
       }
     },
+    "tool.execute.before": async (input, output) => {
+      const payload = buildStdinPayload(input.tool, output.args);
+      if (input.tool === "write" || input.tool === "edit") {
+        execSync(BINARY + " hook pre-write", { input: payload, encoding: "utf-8", timeout: 5000 });
+      }
+      if (input.tool === "bash") {
+        execSync(BINARY + " hook pre-bash", { input: payload, encoding: "utf-8", timeout: 5000 });
+      }
+    },
+    "tool.execute.after": async (input, _output) => {
+      if (input.tool !== "write" && input.tool !== "edit") return;
+      try {
+        const payload = buildStdinPayload(input.tool, input.args);
+        execSync(BINARY + " hook post-write", { input: payload, encoding: "utf-8", timeout: 10000 });
+      } catch {
+        // Post-write validation is non-blocking
+      }
+    },
+    // session.idle (agent finished responding) — not session.deleted (explicit teardown, too late for loop-check).
+    event: async ({ event }) => {
+      if (event.type === "session.idle") {
+        try {
+          execSync(BINARY + " hook stop-check", { encoding: "utf-8", timeout: 10000 });
+        } catch {
+          // Stop validation is non-blocking
+        }
+        try {
+          execSync(BINARY + " hook loop-check", { encoding: "utf-8", timeout: 15000 });
+        } catch {
+          // Loop check is non-blocking
+        }
+      }
+      if (event.type === "session.compacted") {
+        try {
+          execSync(BINARY + " hook post-compact", { encoding: "utf-8", timeout: 10000 });
+        } catch {
+          // Post-compact recovery is non-blocking
+        }
+      }
+    },
   };
 };
 `;
+}
+
+function buildExecHookBlock(cmd: string, timeout: number): string {
+  return `      try {
+        execSync("${cmd}", { encoding: "utf-8", timeout: ${timeout}_000 });
+      } catch {
+        // Hook execution is best-effort
+      }`;
 }
 
 // ─── Codex Config ────────────────────────────────────────────────────────
