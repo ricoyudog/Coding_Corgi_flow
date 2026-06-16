@@ -44,7 +44,7 @@ Otherwise, resolve:
 2. **Group number**: Read from loop state (`state.json` `currentGroup` field) or from `--group <N>`.
 3. **Platform root**: Determine platform-specific path:
    - Claude Code / `.claude`: output to `.claude/corgi-loop/<change>/groups/<N>/review.json`
-   - OpenCode / `.opencode`: output to `.opencode/corgi-loop/<change>/groups/<N>/review.json`
+   - OpenCode / `.opencode`: output to `.opencode/corgi-loop/<change>/groups/<N>/review.json` (platform-specific, used when running in OpenCode)
    - If uncertain, default to `.claude/corgi-loop/<change>/groups/<N>/review.json`
 
 Read `openspec/changes/<change>/tasks.md` to identify the group's task list. Confirm all tasks for group N are marked `[x]` before proceeding.

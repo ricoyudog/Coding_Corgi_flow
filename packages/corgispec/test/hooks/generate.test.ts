@@ -131,14 +131,13 @@ describe("hooks generate", () => {
   });
 
   describe("OpenCode format", () => {
-    it("outputs Claude-compatible bridge format by default", () => {
+    it("outputs TypeScript plugin by default", () => {
       const output = execSync(`node ${CLI} hooks generate --platform opencode`, {
         encoding: "utf-8",
       });
 
-      const parsed = JSON.parse(output);
-      expect(parsed).toHaveProperty("hooks");
-      expect(parsed.hooks).toHaveProperty("SessionStart");
+      expect(output).toContain("import type { Plugin }");
+      expect(output).toContain("CorgiSpecDeep");
     });
 
     it("outputs TypeScript plugin with --deep", () => {
@@ -161,6 +160,37 @@ describe("hooks generate", () => {
 
       const content = readFileSync(outputPath, "utf-8");
       expect(content).toContain("CorgiSpecDeep");
+    });
+
+    it("defaults to TypeScript plugin output (no --deep)", () => {
+      const output = execSync(`node ${CLI} hooks generate --platform opencode`, {
+        encoding: "utf-8",
+      });
+
+      expect(output).toContain("import type { Plugin }");
+      expect(output).toContain("CorgiSpecDeep");
+      expect(output.trimStart()).not.toMatch(/^{/);
+    });
+
+    it("plugin output includes PreToolUse handlers", () => {
+      const output = execSync(`node ${CLI} hooks generate --platform opencode`, {
+        encoding: "utf-8",
+      });
+
+      expect(output).toContain("tool.execute.before");
+      expect(output).toContain("hook pre-write");
+      expect(output).toContain("hook pre-bash");
+    });
+
+    it("--deep flag is no-op (produces same output as default)", () => {
+      const defaultOutput = execSync(`node ${CLI} hooks generate --platform opencode`, {
+        encoding: "utf-8",
+      });
+      const deepOutput = execSync(`node ${CLI} hooks generate --platform opencode --deep`, {
+        encoding: "utf-8",
+      });
+
+      expect(deepOutput).toBe(defaultOutput);
     });
   });
 

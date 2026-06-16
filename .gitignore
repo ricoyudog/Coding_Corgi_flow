@@ -28,6 +28,7 @@ Thumbs.db
 .agents/
 .claudian/
 .sisyphus/
+.omo/
 
 # AI platform skill mirrors & plugins (product is shipped via npm/plugin marketplace)
 .claude/
@@ -51,3 +52,5 @@ setup.sh
 
 # Misc artifacts
 未命名*.base
+# Git worktrees
+.worktrees/

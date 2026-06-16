@@ -78,5 +78,6 @@ This discovery is needed by:
 - **review** — to find which change to review
 - **archive** — to find which change to archive
 - **explore** — to investigate a change's context
+- **loop** — to find which change to loop over
 
 Always use this procedure when `isolation.mode: worktree` and starting from the main checkout.

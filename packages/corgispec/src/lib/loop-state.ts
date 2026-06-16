@@ -5,404 +5,221 @@ import type {
   VerifyArtifact,
   ReviewArtifact,
   LoopHookDecision,
-  LoopPhase,
-  FindingDetail,
 } from "./loop-types.js";
 
 import {
+  validateLoopState,
   validateVerifyArtifact,
   validateReviewArtifact,
   validateIdentity,
-  validateVerdictString,
-  validateFindingDetailsType,
   validateSeverityEnum,
   validateEvidenceProvenance,
   validateExitCodeConsistency,
 } from "./loop-validation.js";
 
-// ─── Return Type ─────────────────────────────────────────────────────────
+// ─── LoopHookInput ────────────────────────────────────────────────────────
 
-/**
- * Result of evaluating the loop state machine.
- * Extends LoopHookDecision with phase tracking and terminal flag.
- * Includes the mutated state for the hook to write to disk.
- */
-export interface LoopEvaluationResult extends LoopHookDecision {
-  /** Current phase of the state machine after evaluation. */
-  phase?: LoopPhase;
-  /** Whether the loop has reached a terminal state (no further progress). */
-  terminal?: boolean;
-  /** The mutated state to write to disk. */
-  state: LoopState;
+/** Runtime input passed by the hook when invoking the state machine. */
+interface LoopHookInput {
+  hook_event_name: string;
+  stop_hook_active: boolean;
+  session_id: string;
 }
 
-// ─── Helpers ────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────
 
-/**
- * Heuristic for detecting stale session IDs.
- * Loop-created session IDs always start with "session-".
- * Any sessionId not matching this pattern is likely from an older/foreign process.
- */
-const VALID_SESSION_PATTERN = /^session-/;
-
-function deepCloneState(state: LoopState): LoopState {
-  return JSON.parse(JSON.stringify(state)) as LoopState;
-}
-
-function now(): string {
+function timestamp(): string {
   return new Date().toISOString();
 }
 
-function buildTerminal(
-  phase: LoopPhase,
+function terminal(
   state: LoopState,
+  phase: LoopState["phase"],
   reason?: string,
-): LoopEvaluationResult {
-  return {
-    decision: "proceed",
-    phase,
-    terminal: true,
-    reason,
-    state: {
-      ...state,
-      active: false,
-      phase,
-      updatedAt: now(),
-    },
-  };
+): LoopHookDecision {
+  state.phase = phase;
+  state.active = false;
+  state.updatedAt = timestamp();
+  if (reason) return { decision: "proceed", reason };
+  return { decision: "proceed" };
 }
 
-function buildBlock(
+function block(
   state: LoopState,
   reason: string,
-  phase?: LoopPhase,
-): LoopEvaluationResult {
-  const newBlockCount = state.blockCount + 1;
-  return {
-    decision: "block",
-    phase,
-    terminal: false,
-    reason,
-    state: {
-      ...state,
-      blockCount: newBlockCount,
-      updatedAt: now(),
-    },
-  };
+): LoopHookDecision {
+  state.blockCount++;
+  state.updatedAt = timestamp();
+  return { decision: "block", reason };
 }
 
-/**
- * Count findings with critical or important severity, derived from
- * the finding_details array (not trusted from LLM-written top-level fields).
- */
-function countBlockingFindings(finding_details: FindingDetail[]): {
-  critical: number;
-  important: number;
-} {
-  let critical = 0;
-  let important = 0;
-  for (const f of finding_details) {
-    if (f.severity === "critical") critical++;
-    if (f.severity === "important") important++;
-  }
-  return { critical, important };
-}
+// ─── Core State Machine ──────────────────────────────────────────────────
 
 /**
- * Check whether all groups have been finalized.
- */
-function allGroupsFinalized(state: LoopState): boolean {
-  if (state.phase !== "awaiting_finalize") return false;
-  const completed = new Set(state.completedGroups);
-  for (let g = 1; g <= state.totalGroups; g++) {
-    if (!completed.has(g)) return false;
-  }
-  return true;
-}
-
-// ─── Core State Machine ─────────────────────────────────────────────────
-
-/**
- * Evaluate the current loop state against optional verify and review
- * artifacts from the most recently completed task group.
+ * Process the loop state machine: evaluate the current state, verify artifact,
+ * review artifact, and runtime hook input to produce a decision.
  *
- * This is a pure function — it receives data and returns a decision
- * plus a mutated state. No file I/O, no side effects.
+ * Mutates `state` **in place**. Returns a LoopHookDecision.
  *
- * @param state - Current loop state (from disk)
- * @param verifyArtifact - Optional verification artifact for the current group
- * @param reviewArtifact - Optional review artifact for the current group
- * @returns Decision (proceed/block), optional phase/terminal, and mutated state
+ * State machine flow (ordered):
+ *   0. Null/undefined guard
+ *   1. Inert guard              — active === false → proceed (graceful inactive)
+ *   2. Stop-hook-active guard   — prevents re-entry when hook already active
+ *   3. Circuit breaker          — blockCount >= maxBlocks → circuit_breaker
+ *   4. Corruption guards        — currentGroup out of range → error_corruption
+ *   5. State structural validation — catch-all for malformed state objects
+ *   6. Session guard            — session ID mismatch → session_conflict
+ *   7. Finalize → Done          — awaiting_finalize → done
+ *   8. First-run detection      — missing verify/review → block
+ *   9. Identity validation      — structural + cross-reference checks
+ *  10. Verdict gate             — FAIL / PASS_WITH_WARNINGS+deny → verify_failed
+ *  11. Severity derivation      — evidence, critical/important → stopped_review_findings
+ *  12. Advance or Finalize      — mark complete, move to next group or finalize
+ *
+ * @param state  - Current loop state (mutated in place)
+ * @param verify - Verification artifact for the current group
+ * @param review - Review artifact for the current group
+ * @param input  - Runtime input from the stop hook
+ * @returns Decision (proceed/block) with optional reason
  */
-export function evaluateLoopState(
+export function processLoopState(
   state: LoopState,
-  verifyArtifact?: VerifyArtifact,
-  reviewArtifact?: ReviewArtifact,
-): LoopEvaluationResult {
+  verify: VerifyArtifact,
+  review: ReviewArtifact,
+  input: LoopHookInput,
+): LoopHookDecision {
+  // ── 0. Null/undefined state guard ────────────────────────────────────
+  if (state === null || state === undefined) {
+    // Cannot mutate null/undefined. Caller must validate before invoking.
+    return { decision: "proceed" };
+  }
+
   // ── 1. Inert guard ──────────────────────────────────────────────────
-  if (!state.active) {
-    return {
-      decision: "proceed",
-      state: deepCloneState(state),
-    };
+  if (state.active === false) {
+    return { decision: "proceed" };
   }
 
-  // ── 2. Session conflict ─────────────────────────────────────────────
-  // Detect stale session IDs: if it doesn't start with "session-",
-  // it was likely written by a different/older process.
-  if (!VALID_SESSION_PATTERN.test(state.sessionId)) {
-    return buildTerminal("session_conflict", state, "stale session ID detected");
+  // ── 2. Stop-hook-active guard (prevents re-entry) ────────────────────
+  if (input.stop_hook_active === true) {
+    return { decision: "proceed" };
   }
 
-  // ── 3. Corruption guards ────────────────────────────────────────────
-  if (state.currentGroup < 1) {
-    return buildTerminal(
-      "error_corruption",
-      state,
-      `currentGroup (${state.currentGroup}) is less than 1`,
-    );
-  }
-  if (state.currentGroup > state.totalGroups) {
-    return buildTerminal(
-      "error_corruption",
-      state,
-      `currentGroup (${state.currentGroup}) exceeds totalGroups (${state.totalGroups})`,
-    );
-  }
-
-  // ── 4. Circuit breaker ──────────────────────────────────────────────
+  // ── 3. Circuit breaker ──────────────────────────────────────────────
   if (state.blockCount >= state.maxBlocks) {
-    return buildTerminal(
-      "circuit_breaker",
-      state,
-      `blockCount (${state.blockCount}) >= maxBlocks (${state.maxBlocks})`,
-    );
+    return terminal(state, "circuit_breaker");
   }
 
-  // ── 5. Done state check ─────────────────────────────────────────────
-  if (state.phase === "awaiting_finalize" && allGroupsFinalized(state)) {
-    return buildTerminal("done", state, "all groups finalized");
+  // ── 4. Corruption guards ────────────────────────────────────────────
+  if (state.currentGroup < 1 || state.currentGroup > state.totalGroups) {
+    return terminal(state, "error_corruption");
   }
 
-  // ── 6. First-run detection ──────────────────────────────────────────
-  if (!verifyArtifact || !reviewArtifact) {
-    const clone = deepCloneState(state);
-    clone.blockCount++;
-    clone.updatedAt = now();
-    return {
-      decision: "block",
-      terminal: false,
-      reason: "awaiting apply+verify+review — both artifacts required to evaluate",
-      state: clone,
-    };
+  // ── 5. State structural validation (catch-all for malformed states) ──
+  const stateResult = validateLoopState(state);
+  if (!stateResult.valid) {
+    return terminal(state, "error_validation");
   }
 
-  // ── 7. Artifact validation ──────────────────────────────────────────
+  // ── 6. Session guard ────────────────────────────────────────────────
+  if (input.session_id && input.session_id !== state.sessionId) {
+    return terminal(state, "session_conflict");
+  }
 
-  // Verify artifact structural validation
-  const verifyResult = validateVerifyArtifact(verifyArtifact);
+  // ── 7. Finalize → Done ──────────────────────────────────────────────
+  if (state.phase === "awaiting_finalize") {
+    return terminal(state, "done");
+  }
+
+  // ── 8. First-run detection ──────────────────────────────────────────
+  if (!verify || !review) {
+    return block(state, `Run Group ${state.currentGroup}/${state.totalGroups} bundle`);
+  }
+
+  // ── 9. Identity / artifact validation ───────────────────────────────
+
+  const verifyResult = validateVerifyArtifact(verify);
   if (!verifyResult.valid) {
-    return buildTerminal(
-      "error_validation",
-      state,
-      `verify artifact validation failed: ${verifyResult.errors.join("; ")}`,
-    );
+    return terminal(state, "error_validation");
   }
 
-  // Review artifact structural validation
-  const reviewResult = validateReviewArtifact(reviewArtifact);
+  const reviewResult = validateReviewArtifact(review);
   if (!reviewResult.valid) {
-    return buildTerminal(
-      "error_validation",
-      state,
-      `review artifact validation failed: ${reviewResult.errors.join("; ")}`,
-    );
+    return terminal(state, "error_validation");
   }
 
-  // Identity cross-validation
-  const identityResult = validateIdentity(state, verifyArtifact, reviewArtifact);
+  const identityResult = validateIdentity(state, verify, review);
   if (!identityResult.valid) {
-    return buildTerminal(
-      "error_validation",
-      state,
-      `identity validation failed: ${identityResult.errors.join("; ")}`,
-    );
+    return terminal(state, "error_validation");
   }
 
-  // ── 8. Verdict type check ───────────────────────────────────────────
-  const verdictResult = validateVerdictString(verifyArtifact.verdict);
-  if (!verdictResult.valid) {
-    return buildTerminal(
-      "error_validation",
-      state,
-      `verdict validation failed: ${verdictResult.errors.join("; ")}`,
-    );
+  // verdict is guaranteed to be a valid Verdict string at this point
+  const verdict = verify.verdict;
+
+  // ── 10. Verdict gate ────────────────────────────────────────────────
+  if (verdict === "FAIL") {
+    return terminal(state, "verify_failed", "verification verdict: FAIL");
   }
 
-  // ── 9. Verdict gate ─────────────────────────────────────────────────
-  if (verifyArtifact.verdict === "FAIL") {
-    // Retry before terminal on self-driven platforms
-    if (state.selfDriven && state.retryCount < state.maxRetries) {
-      const clone = deepCloneState(state);
-      clone.retryCount = state.retryCount + 1;
-      clone.phase = "fixing";
-      clone.updatedAt = now();
-      return {
-        decision: "proceed",
-        phase: "fixing",
-        terminal: false,
-        reason: `verify FAIL — retry attempt ${clone.retryCount}/${state.maxRetries}`,
-        state: clone,
-      };
-    }
-    return buildTerminal("verify_failed", state, "verification verdict: FAIL");
+  if (verdict === "PASS_WITH_WARNINGS" && !state.autoApprovalPolicy.allowPassWithWarnings) {
+    return terminal(state, "verify_failed", "verification verdict: PASS_WITH_WARNINGS denied by policy");
   }
 
-  if (verifyArtifact.verdict === "PASS_WITH_WARNINGS") {
-    if (!state.autoApprovalPolicy.allowPassWithWarnings) {
-      return buildTerminal(
-        "verify_failed",
-        state,
-        "verification verdict: PASS_WITH_WARNINGS and policy denies auto-approval",
-      );
-    }
-    // Policy allows — continue to review checks
+  // ── 11. Severity validation, evidence validation, severity gate ─────
+
+  const severityResult = validateSeverityEnum(review.finding_details);
+  if (!severityResult.valid) {
+    return terminal(state, "error_validation");
   }
 
-  // At this point, verdict is PASS or PASS_WITH_WARNINGS (allowed)
-
-  // ── 10. Finding details type check ──────────────────────────────────
-  const findingTypeResult = validateFindingDetailsType(reviewArtifact.finding_details);
-  if (!findingTypeResult.valid) {
-    return buildTerminal(
-      "error_validation",
-      state,
-      `finding_details type check failed: ${findingTypeResult.errors.join("; ")}`,
-    );
-  }
-
-  // ── 11. Severity enum validation ────────────────────────────────────
-  const severityEnumResult = validateSeverityEnum(reviewArtifact.finding_details);
-  if (!severityEnumResult.valid) {
-    return buildTerminal(
-      "error_validation",
-      state,
-      `severity enum validation failed: ${severityEnumResult.errors.join("; ")}`,
-    );
-  }
-
-  // ── 12. Evidence validation ─────────────────────────────────────────
-  const exitCodeResult = validateExitCodeConsistency(verifyArtifact.evidence);
+  const exitCodeResult = validateExitCodeConsistency(verify.evidence);
   if (!exitCodeResult.valid) {
-    return buildTerminal(
-      "error_validation",
-      state,
-      `exit code consistency check failed: ${exitCodeResult.errors.join("; ")}`,
-    );
+    return terminal(state, "error_validation");
   }
 
-  const provenanceResult = validateEvidenceProvenance(
-    verifyArtifact.evidence,
-    verifyArtifact.verdict,
-  );
+  const provenanceResult = validateEvidenceProvenance(verify.evidence, verdict);
   if (!provenanceResult.valid) {
-    return buildTerminal(
-      "error_validation",
+    return terminal(state, "error_validation");
+  }
+
+  // Severity derivation: count blocking findings from finding_details array
+  const critical = review.finding_details.filter(f => f.severity === "critical").length;
+  const important = review.finding_details.filter(f => f.severity === "important").length;
+
+  if (critical > 0 || important > 0) {
+    const parts: string[] = [];
+    if (critical > 0) parts.push(`${critical} critical`);
+    if (important > 0) parts.push(`${important} important`);
+    return terminal(state, "stopped_review_findings", `${parts.join(" + ")} finding(s) block advancement`);
+  }
+
+  // ── 12. Advance or Finalize ─────────────────────────────────────────
+
+  // Re-entry guard: if currentGroup is already completed, just block
+  if (state.completedGroups.includes(state.currentGroup)) {
+    return block(state, `Re-entering Group ${state.currentGroup} — already completed`);
+  }
+
+  // Mark current group as completed
+  state.groupStatuses[String(state.currentGroup)] = "completed";
+  state.completedGroups.push(state.currentGroup);
+  state.retryCount = 0;
+
+  const nextGroup = state.currentGroup + 1;
+
+  if (nextGroup > state.totalGroups) {
+    // All groups complete — advance to finalize
+    state.phase = "awaiting_finalize";
+    return block(
       state,
-      `evidence provenance check failed: ${provenanceResult.errors.join("; ")}`,
+      `All groups complete. Auto-approve Group ${state.currentGroup}/${state.totalGroups}, then finalize`,
     );
   }
 
-  // ── 13. Severity gate ───────────────────────────────────────────────
-  const { critical, important } = countBlockingFindings(reviewArtifact.finding_details);
-
-  if (critical > 0) {
-    // Retry before terminal on self-driven platforms
-    if (state.selfDriven && state.retryCount < state.maxRetries) {
-      const clone = deepCloneState(state);
-      clone.retryCount = state.retryCount + 1;
-      clone.phase = "fixing";
-      clone.updatedAt = now();
-      return {
-        decision: "proceed",
-        phase: "fixing",
-        terminal: false,
-        reason: `${critical} critical finding(s) — retry attempt ${clone.retryCount}/${state.maxRetries}`,
-        state: clone,
-      };
-    }
-    return buildTerminal(
-      "stopped_review_findings",
-      state,
-      `${critical} critical finding(s) block advancement`,
-    );
-  }
-
-  if (important > 0) {
-    // Retry before terminal on self-driven platforms
-    if (state.selfDriven && state.retryCount < state.maxRetries) {
-      const clone = deepCloneState(state);
-      clone.retryCount = state.retryCount + 1;
-      clone.phase = "fixing";
-      clone.updatedAt = now();
-      return {
-        decision: "proceed",
-        phase: "fixing",
-        terminal: false,
-        reason: `${important} important finding(s) — retry attempt ${clone.retryCount}/${state.maxRetries}`,
-        state: clone,
-      };
-    }
-    return buildTerminal(
-      "stopped_review_findings",
-      state,
-      `${important} important finding(s) block advancement`,
-    );
-  }
-
-  // ── 14. Clean advance / finalize ────────────────────────────────────
-
-  const isLastGroup = state.currentGroup === state.totalGroups;
-
-  if (isLastGroup) {
-    // Final group — advance to awaiting_finalize
-    const clone = deepCloneState(state);
-    clone.completedGroups = [...clone.completedGroups, state.currentGroup];
-    clone.groupStatuses = {
-      ...clone.groupStatuses,
-      [String(state.currentGroup)]: "complete",
-    };
-    clone.blockCount++;
-    clone.updatedAt = now();
-    clone.phase = "awaiting_finalize";
-    clone.retryCount = 0;
-
-    return {
-      decision: "block",
-      phase: "awaiting_finalize",
-      terminal: false,
-      reason: `group ${state.currentGroup} complete — finalize to finish the loop`,
-      state: clone,
-    };
-  }
-
-  // Non-final group — advance to next group
-  const clone = deepCloneState(state);
-  clone.completedGroups = [...clone.completedGroups, state.currentGroup];
-  clone.groupStatuses = {
-    ...clone.groupStatuses,
-    [String(state.currentGroup)]: "complete",
-  };
-  clone.currentGroup = state.currentGroup + 1;
-  clone.retryCount = 0;
-  clone.blockCount++;
-  clone.updatedAt = now();
-  clone.phase = "awaiting_group_result";
-
-  return {
-    decision: "block",
-    terminal: false,
-    reason: `group ${state.currentGroup} passed — advance to group ${clone.currentGroup} of ${state.totalGroups}`,
-    state: clone,
-  };
+  // Advance to next group
+  state.currentGroup = nextGroup;
+  state.phase = "awaiting_group_result";
+  return block(
+    state,
+    `Auto-approve Group ${nextGroup - 1}, then run Group ${nextGroup}/${state.totalGroups} bundle`,
+  );
 }

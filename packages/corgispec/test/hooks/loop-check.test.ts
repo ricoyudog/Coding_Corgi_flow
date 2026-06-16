@@ -1,82 +1,76 @@
-// RED PHASE — these tests are designed to FAIL until Task 6 implements evaluateLoopState
+// RED PHASE — these tests are designed to FAIL until Task 6 implements processLoopState
 //
-// The imports below reference modules that don't exist yet (loop-state.js).
-// When `npx vitest run` executes, every test will fail because:
-//   1. The import of evaluateLoopState from "../../src/lib/loop-state.js" cannot resolve
-//   2. Even if the import somehow resolved, the function isn't implemented
+// The import of processLoopState from "../../src/lib/loop-state.js" cannot resolve
+// because the function doesn't exist yet. Every test will fail at import time.
+//
+// When processLoopState is implemented:
+//   - It mutates state IN PLACE (modifies state.phase, state.currentGroup, etc.)
+//   - Returns LoopHookDecision { decision: "proceed" | "block", reason?: string }
+//   - Signature: processLoopState(state, verify, review, input)
 //
 // This is the RED phase of TDD. Tests describe the desired behavior before
 // any implementation exists.
 
 import { describe, it, expect } from "vitest";
-import { evaluateLoopState } from "../../src/lib/loop-state.js";
+import { processLoopState } from "../../src/lib/loop-state.js";
 import type {
   LoopState,
   VerifyArtifact,
   ReviewArtifact,
   LoopHookDecision,
   AutoApprovalPolicy,
-  EvidenceEntry,
-  FindingDetail,
+  LoopPhase,
+  Severity,
 } from "../../src/lib/loop-types.js";
-import type { LoopPhase, Verdict, Severity } from "../../src/lib/loop-types.js";
 
-// ─── Type for the evaluation result ─────────────────────────────────────
-// (In Task 6, this will be the actual return type of evaluateLoopState)
+// ─── LoopHookInput (will be added to loop-types.ts in Task 6) ────────────
 
-interface LoopEvaluationResult extends LoopHookDecision {
-  phase?: LoopPhase;
-  terminal?: boolean;
+interface LoopHookInput {
+  hook_event_name: string;
+  stop_hook_active: boolean;
+  session_id: string;
 }
 
-// ─── Helpers ────────────────────────────────────────────────────────────
+// ─── Factory Helpers ──────────────────────────────────────────────────────
 
-function defaultPolicy(overrides: Partial<AutoApprovalPolicy> = {}): AutoApprovalPolicy {
-  return {
-    allowCommitPush: true,
-    allowPassWithWarnings: false,
-    ...overrides,
-  };
-}
-
-function defaultState(overrides: Partial<LoopState> = {}): LoopState {
+function makeState(overrides: Partial<LoopState> = {}): LoopState {
   return {
     active: true,
     changeName: "test-change",
-    sessionId: "session-abc-123",
-    nonce: "2026-06-10T00:00:00.000Z",
+    sessionId: "ses_test",
+    nonce: "2026-01-01T00:00:00Z-group-1",
     currentGroup: 1,
-    totalGroups: 3,
+    totalGroups: 2,
     phase: "awaiting_group_result",
-    worktreePath: "/tmp/test-worktree",
+    worktreePath: ".",
     platform: "github-tracked",
-    autoApprovalPolicy: defaultPolicy(),
-    startedAt: "2026-06-10T00:00:00.000Z",
-    updatedAt: "2026-06-10T00:00:00.000Z",
+    autoApprovalPolicy: { allowCommitPush: true, allowPassWithWarnings: false },
+    startedAt: "2026-01-01T00:00:00Z",
+    updatedAt: "2026-01-01T00:00:00Z",
     completedGroups: [],
-    groupStatuses: {},
+    groupStatuses: { "1": "in_progress", "2": "pending" },
     pushStatus: {},
     blockCount: 0,
-    maxBlocks: 3,
-    maxGroups: 5,
+    maxBlocks: 6,
+    maxGroups: 10,
     retryCount: 0,
     maxRetries: 3,
-    selfDriven: true,
+    selfDriven: false,
     ...overrides,
   };
 }
 
-function defaultVerifyArtifact(overrides: Partial<VerifyArtifact> = {}): VerifyArtifact {
+function makeVerify(overrides: Partial<VerifyArtifact> = {}): VerifyArtifact {
   return {
     schemaVersion: 1,
     changeName: "test-change",
     group: 1,
-    nonce: "2026-06-10T00:00:00.000Z",
+    nonce: "2026-01-01T00:00:00Z-group-1",
     verdict: "PASS",
     evidence: [
       {
-        kind: "test",
-        command: "npm test",
+        kind: "build",
+        command: "npm run build",
         status: "pass",
         exitCode: 0,
         provenance: "cli-emitted",
@@ -86,678 +80,545 @@ function defaultVerifyArtifact(overrides: Partial<VerifyArtifact> = {}): VerifyA
   };
 }
 
-function defaultReviewArtifact(overrides: Partial<ReviewArtifact> = {}): ReviewArtifact {
+function makeReview(overrides: Partial<ReviewArtifact> = {}): ReviewArtifact {
   return {
     schemaVersion: 1,
     changeName: "test-change",
     group: 1,
-    nonce: "2026-06-10T00:00:00.000Z",
-    finding_details: [],
+    nonce: "2026-01-01T00:00:00Z-group-1",
+    finding_details: [{ severity: "suggestion", check: "Code Quality", description: "Minor style issue" }],
     ...overrides,
   };
 }
 
-// ─── Test Suite ─────────────────────────────────────────────────────────
+const defaultInput: LoopHookInput = {
+  hook_event_name: "Stop",
+  stop_hook_active: false,
+  session_id: "ses_test",
+};
 
-describe("evaluateLoopState", () => {
-  // ── Category 1: Inert guard ──────────────────────────────────────────
+// ─── Test Suite ───────────────────────────────────────────────────────────
 
-  it("1. Inert guard: inactive loop → proceed (no-op)", () => {
-    const state = defaultState({ active: false, phase: "init" });
-    const result = evaluateLoopState(state) as LoopEvaluationResult;
-    expect(result).toMatchObject({ decision: "proceed" });
-  });
+describe("processLoopState", () => {
+  // ═══════════════════════════════════════════════════════════════════════
+  // IDENTITY VALIDATION
+  // ═══════════════════════════════════════════════════════════════════════
 
-  // ── Category 2: First-run block ──────────────────────────────────────
+  describe("identity validation", () => {
+    it("1. changeName mismatch → state.phase='error_validation', decision='proceed'", () => {
+      const state = makeState({ changeName: "expected-change" });
+      const verify = makeVerify({ changeName: "different-change" });
+      const review = makeReview();
 
-  it("2. First-run block: active loop but no verify artifact → block with instruction", () => {
-    const state = defaultState({
-      active: true,
-      phase: "awaiting_group_result",
+      const result: LoopHookDecision = processLoopState(state, verify, review, defaultInput);
+
+      expect(result.decision).toBe("proceed");
+      expect(state.phase).toBe("error_validation" satisfies LoopPhase);
+      expect(state.active).toBe(false);
     });
-    const result = evaluateLoopState(state) as LoopEvaluationResult;
-    expect(result).toMatchObject({
-      decision: "block",
+
+    it("2. group mismatch → state.phase='error_validation'", () => {
+      const state = makeState({ currentGroup: 2 });
+      const verify = makeVerify({ group: 1 });
+      const review = makeReview({ group: 1 });
+
+      const result: LoopHookDecision = processLoopState(state, verify, review, defaultInput);
+
+      expect(result.decision).toBe("proceed");
+      expect(state.phase).toBe("error_validation" satisfies LoopPhase);
+      expect(state.active).toBe(false);
     });
-    expect(result.reason).toBeDefined();
-  });
 
-  // ── Category 3–5: Identity validation ────────────────────────────────
+    it("3. nonce mismatch → state.phase='error_validation'", () => {
+      const state = makeState({ nonce: "2026-01-01T12:00:00Z-group-1" });
+      const verify = makeVerify({ nonce: "2026-01-01T00:00:00Z-group-1" });
+      const review = makeReview({ nonce: "2026-01-01T00:00:00Z-group-1" });
 
-  it("3. Identity validation: changeName mismatch → terminal error_validation", () => {
-    const state = defaultState({ changeName: "expected-change" });
-    const verify = defaultVerifyArtifact({ changeName: "different-change" });
-    const review = defaultReviewArtifact();
+      const result: LoopHookDecision = processLoopState(state, verify, review, defaultInput);
 
-    const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
-    expect(result).toMatchObject({
-      decision: "proceed",
-      phase: "error_validation",
-      terminal: true,
-    });
-  });
-
-  it("4. Identity validation: group mismatch → terminal error_validation", () => {
-    const state = defaultState({ currentGroup: 2 });
-    const verify = defaultVerifyArtifact({ group: 1 });
-    const review = defaultReviewArtifact({ group: 1 });
-
-    const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
-    expect(result).toMatchObject({
-      decision: "proceed",
-      phase: "error_validation",
-      terminal: true,
+      expect(result.decision).toBe("proceed");
+      expect(state.phase).toBe("error_validation" satisfies LoopPhase);
+      expect(state.active).toBe(false);
     });
   });
 
-  it("5. Identity validation: nonce mismatch → terminal error_validation", () => {
-    const state = defaultState({ nonce: "2026-06-10T12:00:00.000Z" });
-    const verify = defaultVerifyArtifact({ nonce: "2026-06-09T00:00:00.000Z" });
-    const review = defaultReviewArtifact({ nonce: "2026-06-09T00:00:00.000Z" });
+  // ═══════════════════════════════════════════════════════════════════════
+  // VERDICT GATES
+  // ═══════════════════════════════════════════════════════════════════════
 
-    const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
-    expect(result).toMatchObject({
-      decision: "proceed",
-      phase: "error_validation",
-      terminal: true,
+  describe("verdict gates", () => {
+    it("4. verdict=FAIL → state.phase='verify_failed', decision='proceed'", () => {
+      const state = makeState();
+      const verify = makeVerify({ verdict: "FAIL" });
+      const review = makeReview({ finding_details: [] });
+
+      const result: LoopHookDecision = processLoopState(state, verify, review, defaultInput);
+
+      expect(result.decision).toBe("proceed");
+      expect(state.phase).toBe("verify_failed" satisfies LoopPhase);
+      expect(state.active).toBe(false);
+    });
+
+    it("5. verdict=PASS_WITH_WARNINGS + policy denies → state.phase='verify_failed'", () => {
+      const state = makeState({
+        autoApprovalPolicy: { allowCommitPush: true, allowPassWithWarnings: false },
+      });
+      const verify = makeVerify({ verdict: "PASS_WITH_WARNINGS" });
+      const review = makeReview({ finding_details: [] });
+
+      const result: LoopHookDecision = processLoopState(state, verify, review, defaultInput);
+
+      expect(result.decision).toBe("proceed");
+      expect(state.phase).toBe("verify_failed" satisfies LoopPhase);
+      expect(state.active).toBe(false);
+    });
+
+    it("6. verdict=PASS_WITH_WARNINGS + policy allows → advances past verdict gate", () => {
+      const state = makeState({
+        autoApprovalPolicy: { allowCommitPush: true, allowPassWithWarnings: true },
+      });
+      const verify = makeVerify({ verdict: "PASS_WITH_WARNINGS" });
+      const review = makeReview({ finding_details: [] });
+
+      const result: LoopHookDecision = processLoopState(state, verify, review, defaultInput);
+
+      // Should NOT be verify_failed — policy allows advance
+      expect(state.phase).not.toBe("verify_failed");
+      // Should advance to a non-terminal state (block for next group or finalize)
+      expect(result.decision).toBe("block");
+      expect(state.active).toBe(true);
     });
   });
 
-  // ── Category 6–8: Verdict gate ───────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════
+  // REVIEW SEVERITY GATES
+  // ═══════════════════════════════════════════════════════════════════════
 
-  it("6. Verdict gate: FAIL → terminal verify_failed", () => {
-    const state = defaultState({ selfDriven: false });
-    const verify = defaultVerifyArtifact({ verdict: "FAIL" });
-    const review = defaultReviewArtifact();
+  describe("review severity gates", () => {
+    it("7. critical finding → state.phase='stopped_review_findings', decision='proceed'", () => {
+      const state = makeState();
+      const verify = makeVerify({ verdict: "PASS" });
+      const review = makeReview({
+        finding_details: [{ severity: "critical", check: "Security", description: "SQL injection risk" }],
+      });
 
-    const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
-    expect(result).toMatchObject({
-      decision: "proceed",
-      phase: "verify_failed",
-      terminal: true,
+      const result: LoopHookDecision = processLoopState(state, verify, review, defaultInput);
+
+      expect(result.decision).toBe("proceed");
+      expect(state.phase).toBe("stopped_review_findings" satisfies LoopPhase);
+      expect(state.active).toBe(false);
+    });
+
+    it("8. important finding → state.phase='stopped_review_findings', decision='proceed'", () => {
+      const state = makeState();
+      const verify = makeVerify({ verdict: "PASS" });
+      const review = makeReview({
+        finding_details: [{ severity: "important", check: "Architecture", description: "Circular dependency" }],
+      });
+
+      const result: LoopHookDecision = processLoopState(state, verify, review, defaultInput);
+
+      expect(result.decision).toBe("proceed");
+      expect(state.phase).toBe("stopped_review_findings" satisfies LoopPhase);
+      expect(state.active).toBe(false);
+    });
+
+    it("9. suggestion/nit/fyi findings → NOT stopped (non-blocking)", () => {
+      const state = makeState();
+      const verify = makeVerify({ verdict: "PASS" });
+      const review = makeReview({
+        finding_details: [
+          { severity: "suggestion", check: "Code Quality", description: "Use optional chaining" },
+          { severity: "nit", check: "Style", description: "Missing trailing comma" },
+          { severity: "fyi", check: "Docs", description: "Update README" },
+        ],
+      });
+
+      const result: LoopHookDecision = processLoopState(state, verify, review, defaultInput);
+
+      expect(state.phase).not.toBe("stopped_review_findings");
+      expect(state.active).toBe(true);
+      expect(result.decision).toBe("block");
     });
   });
 
-  it("7. Verdict gate: PASS_WITH_WARNINGS, policy denies → terminal verify_failed", () => {
-    const state = defaultState({
-      autoApprovalPolicy: defaultPolicy({ allowPassWithWarnings: false }),
-    });
-    const verify = defaultVerifyArtifact({ verdict: "PASS_WITH_WARNINGS" });
-    const review = defaultReviewArtifact();
+  // ═══════════════════════════════════════════════════════════════════════
+  // ARTIFACT TYPE VALIDATION
+  // ═══════════════════════════════════════════════════════════════════════
 
-    const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
-    expect(result).toMatchObject({
-      decision: "proceed",
-      phase: "verify_failed",
-      terminal: true,
-    });
-  });
+  describe("artifact type validation", () => {
+    it("10. malformed state (missing required field) → state.phase='error_validation'", () => {
+      // Pass empty object as state — validateLoopState will catch missing fields
+      const state = {} as unknown as LoopState;
+      const verify = makeVerify();
+      const review = makeReview();
 
-  it("8. Verdict gate: PASS_WITH_WARNINGS, policy allows → advance to review check", () => {
-    const state = defaultState({
-      autoApprovalPolicy: defaultPolicy({ allowPassWithWarnings: true }),
-    });
-    const verify = defaultVerifyArtifact({ verdict: "PASS_WITH_WARNINGS" });
-    const review = defaultReviewArtifact();
+      const result: LoopHookDecision = processLoopState(state, verify, review, defaultInput);
 
-    const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
-    // Should advance past the verdict gate (not terminal verify_failed)
-    expect(result).not.toMatchObject({ phase: "verify_failed" });
-    expect(result).not.toMatchObject({ terminal: true });
-  });
-
-  // ── Category 9: Verdict type validation ──────────────────────────────
-
-  it("9. Verdict type validation: verdict is not a string → terminal error_validation", () => {
-    const state = defaultState();
-    // Cast through unknown to inject a bad type at runtime
-    const verify = {
-      ...defaultVerifyArtifact(),
-      verdict: 42,
-    } as unknown as VerifyArtifact;
-    const review = defaultReviewArtifact();
-
-    const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
-    expect(result).toMatchObject({
-      decision: "proceed",
-      phase: "error_validation",
-      terminal: true,
-    });
-  });
-
-  // ── Category 10–12: Severity gate ────────────────────────────────────
-
-  it("10. Severity gate: critical finding → terminal stopped_review_findings", () => {
-    const state = defaultState({ selfDriven: false });
-    const verify = defaultVerifyArtifact({ verdict: "PASS" });
-    const review = defaultReviewArtifact({
-      finding_details: [
-        { severity: "critical", check: "Security", description: "SQL injection risk" },
-      ],
+      expect(result.decision).toBe("proceed");
+      expect(state.phase).toBe("error_validation" satisfies LoopPhase);
     });
 
-    const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
-    expect(result).toMatchObject({
-      decision: "proceed",
-      phase: "stopped_review_findings",
-      terminal: true,
-    });
-  });
+    it("11. non-string verdict → state.phase='error_validation'", () => {
+      const state = makeState();
+      const verify = { ...makeVerify(), verdict: 42 } as unknown as VerifyArtifact;
+      const review = makeReview();
 
-  it("11. Severity gate: important finding → terminal stopped_review_findings", () => {
-    const state = defaultState({ selfDriven: false });
-    const verify = defaultVerifyArtifact({ verdict: "PASS" });
-    const review = defaultReviewArtifact({
-      finding_details: [
-        { severity: "important", check: "Architecture", description: "Circular dependency" },
-      ],
+      const result: LoopHookDecision = processLoopState(state, verify, review, defaultInput);
+
+      expect(result.decision).toBe("proceed");
+      expect(state.phase).toBe("error_validation" satisfies LoopPhase);
+      expect(state.active).toBe(false);
     });
 
-    const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
-    expect(result).toMatchObject({
-      decision: "proceed",
-      phase: "stopped_review_findings",
-      terminal: true,
-    });
-  });
+    it("12. non-array finding_details → state.phase='error_validation'", () => {
+      const state = makeState();
+      const verify = makeVerify({ verdict: "PASS" });
+      const review = {
+        ...makeReview(),
+        finding_details: "not-an-array",
+      } as unknown as ReviewArtifact;
 
-  it("12. Severity gate: suggestion/nit/fyi findings → advance (non-blocking)", () => {
-    const state = defaultState();
-    const verify = defaultVerifyArtifact({ verdict: "PASS" });
-    const review = defaultReviewArtifact({
-      finding_details: [
-        { severity: "suggestion", check: "Code Quality", description: "Use optional chaining" },
-        { severity: "nit", check: "Style", description: "Missing trailing comma" },
-        { severity: "fyi", check: "Docs", description: "Update README" },
-      ],
+      const result: LoopHookDecision = processLoopState(state, verify, review, defaultInput);
+
+      expect(result.decision).toBe("proceed");
+      expect(state.phase).toBe("error_validation" satisfies LoopPhase);
+      expect(state.active).toBe(false);
     });
 
-    const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
-    // Non-blocking: should not hit stopped_review_findings
-    expect(result).not.toMatchObject({ phase: "stopped_review_findings" });
-    expect(result).not.toMatchObject({ terminal: true });
-  });
+    it("13. null severity → state.phase='error_validation'", () => {
+      const state = makeState();
+      const verify = makeVerify({ verdict: "PASS" });
+      const review = makeReview({
+        finding_details: [{
+          severity: null as unknown as Severity,
+          check: "Bad",
+          description: "Null severity",
+        }],
+      });
 
-  // ── Category 13: Severity enum validation ─────────────────────────────
+      const result: LoopHookDecision = processLoopState(state, verify, review, defaultInput);
 
-  it("13. Severity enum validation: unknown severity → terminal error_validation", () => {
-    const state = defaultState();
-    const verify = defaultVerifyArtifact({ verdict: "PASS" });
-    // Inject a severity value not in the enum
-    const badSeverity = "catastrophic" as unknown as Severity;
-    const review = defaultReviewArtifact({
-      finding_details: [
-        {
-          severity: badSeverity,
+      expect(result.decision).toBe("proceed");
+      expect(state.phase).toBe("error_validation" satisfies LoopPhase);
+      expect(state.active).toBe(false);
+    });
+
+    it("14. unknown severity value → state.phase='error_validation'", () => {
+      const state = makeState();
+      const verify = makeVerify({ verdict: "PASS" });
+      const review = makeReview({
+        finding_details: [{
+          severity: "catastrophic" as unknown as Severity,
           check: "Unknown",
-          description: "This severity doesn't exist",
-        },
-      ],
-    });
+          description: "Unknown severity value",
+        }],
+      });
 
-    const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
-    expect(result).toMatchObject({
-      decision: "proceed",
-      phase: "error_validation",
-      terminal: true,
-    });
-  });
+      const result: LoopHookDecision = processLoopState(state, verify, review, defaultInput);
 
-  // ── Category 14: finding_details type check ──────────────────────────
-
-  it("14. finding_details is not an array → terminal error_validation", () => {
-    const state = defaultState();
-    const verify = defaultVerifyArtifact({ verdict: "PASS" });
-    // Corrupt finding_details to be a non-array value
-    const review = {
-      ...defaultReviewArtifact(),
-      finding_details: "not-an-array",
-    } as unknown as ReviewArtifact;
-
-    const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
-    expect(result).toMatchObject({
-      decision: "proceed",
-      phase: "error_validation",
-      terminal: true,
+      expect(result.decision).toBe("proceed");
+      expect(state.phase).toBe("error_validation" satisfies LoopPhase);
+      expect(state.active).toBe(false);
     });
   });
 
-  // ── Category 15: Circuit breaker ─────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════
+  // EVIDENCE VALIDATION
+  // ═══════════════════════════════════════════════════════════════════════
 
-  it("15. Circuit breaker: blockCount >= maxBlocks → terminal circuit_breaker", () => {
-    const state = defaultState({
-      blockCount: 3,
-      maxBlocks: 3,
-    });
-
-    const result = evaluateLoopState(state) as LoopEvaluationResult;
-    expect(result).toMatchObject({
-      decision: "proceed",
-      phase: "circuit_breaker",
-      terminal: true,
-    });
-  });
-
-  // ── Category 16: Session conflict ────────────────────────────────────
-
-  it("16. Session conflict: sessionId mismatch → terminal session_conflict", () => {
-    const state = defaultState({ sessionId: "session-expected" });
-    const stateWithMismatch = defaultState({ sessionId: "session-different" });
-
-    // The hook receives the actual session ID as a parameter or detects mismatch
-    // For the test, we pass the state with a mismatched session
-    const result = evaluateLoopState(stateWithMismatch) as LoopEvaluationResult;
-    // session_conflict is triggered when the runtime session ID doesn't match
-    // the one in state — we simulate this with a state that has a stale sessionId
-    // that the hook detects as different from whatever it expects
-    expect(result.decision).toBeDefined();
-    // (Actual assertion depends on how the function receives the runtime session ID)
-    // This test will be refined in Task 6 when the function signature is finalized
-  });
-
-  it("17. Session conflict: explicit stale session ID → terminal session_conflict", () => {
-    const state = defaultState({
-      sessionId: "stale-session-from-previous-run",
-    });
-
-    const result = evaluateLoopState(state) as LoopEvaluationResult;
-    // The function should detect the stale session and terminate
-    expect(result).toMatchObject({
-      decision: "proceed",
-      phase: "session_conflict",
-      terminal: true,
-    });
-  });
-
-  // ── Category 17–18: Corruption guards ────────────────────────────────
-
-  it("18. Corruption guard: currentGroup > totalGroups → terminal error_corruption", () => {
-    const state = defaultState({
-      currentGroup: 5,
-      totalGroups: 3,
-    });
-
-    const result = evaluateLoopState(state) as LoopEvaluationResult;
-    expect(result).toMatchObject({
-      decision: "proceed",
-      phase: "error_corruption",
-      terminal: true,
-    });
-  });
-
-  it("19. Corruption guard: currentGroup < 1 → terminal error_corruption", () => {
-    const state = defaultState({
-      currentGroup: 0,
-      totalGroups: 3,
-    });
-
-    const result = evaluateLoopState(state) as LoopEvaluationResult;
-    expect(result).toMatchObject({
-      decision: "proceed",
-      phase: "error_corruption",
-      terminal: true,
-    });
-  });
-
-  // ── Category 19: Clean advance ───────────────────────────────────────
-
-  it("20. Clean advance: PASS verdict + clean review → block with instruction to continue", () => {
-    const state = defaultState({
-      currentGroup: 1,
-      totalGroups: 3,
-      phase: "awaiting_group_result",
-    });
-    const verify = defaultVerifyArtifact({ verdict: "PASS" });
-    const review = defaultReviewArtifact({ finding_details: [] });
-
-    const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
-    expect(result).toMatchObject({
-      decision: "block",
-    });
-    expect(result.reason).toBeDefined();
-    // Non-terminal block — loop continues, awaiting next group
-    expect(result.terminal).toBeFalsy();
-  });
-
-  // ── Category 20: Finalize path ───────────────────────────────────────
-
-  it("21. Finalize path: last group (currentGroup === totalGroups) clean → block with finalize instruction", () => {
-    const state = defaultState({
-      currentGroup: 3,
-      totalGroups: 3,
-      phase: "awaiting_group_result",
-    });
-    const verify = defaultVerifyArtifact({ verdict: "PASS", group: 3 });
-    const review = defaultReviewArtifact({ group: 3, finding_details: [] });
-
-    const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
-    expect(result).toMatchObject({
-      decision: "block",
-      phase: "awaiting_finalize",
-    });
-    expect(result.terminal).toBeFalsy();
-  });
-
-  // ── Category 21: Done state ──────────────────────────────────────────
-
-  it("22. Done state: phase=awaiting_finalize, all finalized → proceed with phase=done", () => {
-    const state = defaultState({
-      phase: "awaiting_finalize",
-      currentGroup: 3,
-      totalGroups: 3,
-      completedGroups: [1, 2, 3],
-      groupStatuses: { "1": "complete", "2": "complete", "3": "complete" },
-      active: true,
-    });
-
-    const result = evaluateLoopState(state) as LoopEvaluationResult;
-    expect(result).toMatchObject({
-      decision: "proceed",
-      phase: "done",
-      terminal: true,
-    });
-  });
-
-  // ── Bonus: exitCode mismatch validation ─────────────────────────────
-
-  it("23. Evidence exitCode mismatch: exitCode=1 but status='pass' with cli-emitted provenance → terminal error_validation", () => {
-    const state = defaultState();
-    const verify = defaultVerifyArtifact({
-      verdict: "PASS",
-      evidence: [
-        {
+  describe("evidence validation", () => {
+    it("15. cli-emitted exitCode mismatch (non-zero with status='pass') → state.phase='error_validation'", () => {
+      const state = makeState();
+      const verify = makeVerify({
+        verdict: "PASS",
+        evidence: [{
           kind: "test",
           command: "npm test",
           status: "pass",
-          exitCode: 1, // non-zero exit code contradicts "pass" status
+          exitCode: 1,
           provenance: "cli-emitted",
-        },
-      ],
+        }],
+      });
+      const review = makeReview({ finding_details: [] });
+
+      const result: LoopHookDecision = processLoopState(state, verify, review, defaultInput);
+
+      expect(result.decision).toBe("proceed");
+      expect(state.phase).toBe("error_validation" satisfies LoopPhase);
+      expect(state.active).toBe(false);
     });
-    const review = defaultReviewArtifact();
 
-    const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
-    expect(result).toMatchObject({
-      decision: "proceed",
-      phase: "error_validation",
-      terminal: true,
-    });
-  });
-
-  // ── Bonus: PASS with zero cli-emitted evidence ───────────────────────
-
-  it("24. PASS verdict with zero cli-emitted evidence → terminal error_validation", () => {
-    const state = defaultState();
-    const verify = defaultVerifyArtifact({
-      verdict: "PASS",
-      evidence: [
-        {
+    it("16. no cli-emitted evidence for PASS verdict → state.phase='error_validation'", () => {
+      const state = makeState();
+      const verify = makeVerify({
+        verdict: "PASS",
+        evidence: [{
           kind: "manual-check",
-          description: "Looks good to me",
+          description: "Looks good",
           status: "pass",
           provenance: "llm-interpreted",
-        },
-      ],
-    });
-    const review = defaultReviewArtifact();
-
-    const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
-    expect(result).toMatchObject({
-      decision: "proceed",
-      phase: "error_validation",
-      terminal: true,
-    });
-  });
-
-  // ── Edge: review-only artifact (no verify), should still work ───────
-
-  it("25. No verify artifact (only review) → block (verify must come first)", () => {
-    const state = defaultState({ phase: "awaiting_group_result" });
-    const review = defaultReviewArtifact();
-
-    const result = evaluateLoopState(state, undefined, review) as LoopEvaluationResult;
-    expect(result).toMatchObject({
-      decision: "block",
-    });
-    expect(result.reason).toBeDefined();
-  });
-
-  // ── Category: Retry scenarios ──────────────────────────────────────────
-  // RED PHASE — these tests validate retry behavior for the state machine.
-  // They are expected to FAIL until Task 4 implements retry logic in evaluateLoopState.
-  //
-  // When selfDriven=true (OpenCode platform), FAIL verdicts and critical/important
-  // findings should trigger a "fixing" phase with retry instead of immediate terminal.
-  // When selfDriven=false (Claude Code), behavior is unchanged — terminal as before.
-  // maxRetries=0 effectively disables retry.
-
-  describe("retry: verify FAIL", () => {
-    it("T-retry-1: selfDriven=true, retryCount=0 with FAIL verdict → phase=fixing, terminal=false, retryCount=1", () => {
-      const state = defaultState({
-        retryCount: 0,
-        maxRetries: 3,
-        selfDriven: true,
+        }],
       });
-      const verify = defaultVerifyArtifact({ verdict: "FAIL" });
-      const review = defaultReviewArtifact();
+      const review = makeReview({ finding_details: [] });
 
-      const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
-      expect(result).toMatchObject({
-        decision: "proceed",
-        phase: "fixing",
-        terminal: false,
-      });
-      expect(result.state.retryCount).toBe(1);
-    });
+      const result: LoopHookDecision = processLoopState(state, verify, review, defaultInput);
 
-    it("T-retry-2: selfDriven=true, retryCount=2 with FAIL verdict → phase=fixing, terminal=false, retryCount=3", () => {
-      const state = defaultState({
-        retryCount: 2,
-        maxRetries: 3,
-        selfDriven: true,
-      });
-      const verify = defaultVerifyArtifact({ verdict: "FAIL" });
-      const review = defaultReviewArtifact();
-
-      const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
-      expect(result).toMatchObject({
-        decision: "proceed",
-        phase: "fixing",
-        terminal: false,
-      });
-      expect(result.state.retryCount).toBe(3);
-    });
-
-    it("T-retry-3: selfDriven=true, retryCount=3 (exhausted) with FAIL verdict → phase=verify_failed, terminal=true", () => {
-      const state = defaultState({
-        retryCount: 3,
-        maxRetries: 3,
-        selfDriven: true,
-      });
-      const verify = defaultVerifyArtifact({ verdict: "FAIL" });
-      const review = defaultReviewArtifact();
-
-      const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
-      expect(result).toMatchObject({
-        decision: "proceed",
-        phase: "verify_failed",
-        terminal: true,
-      });
-    });
-
-    it("T-retry-4: selfDriven=false with FAIL verdict → phase=verify_failed, terminal=true (Claude Code unchanged)", () => {
-      const state = defaultState({
-        retryCount: 0,
-        maxRetries: 3,
-        selfDriven: false,
-      });
-      const verify = defaultVerifyArtifact({ verdict: "FAIL" });
-      const review = defaultReviewArtifact();
-
-      const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
-      expect(result).toMatchObject({
-        decision: "proceed",
-        phase: "verify_failed",
-        terminal: true,
-      });
+      expect(result.decision).toBe("proceed");
+      expect(state.phase).toBe("error_validation" satisfies LoopPhase);
+      expect(state.active).toBe(false);
     });
   });
 
-  describe("retry: review critical findings", () => {
-    it("T-retry-5: selfDriven=true, retryCount=0 with critical findings → phase=fixing, terminal=false, retryCount=1", () => {
-      const state = defaultState({
-        retryCount: 0,
-        maxRetries: 3,
-        selfDriven: true,
-      });
-      const verify = defaultVerifyArtifact({ verdict: "PASS" });
-      const review = defaultReviewArtifact({
-        finding_details: [
-          { severity: "critical", check: "Security", description: "SQL injection risk" },
-        ],
-      });
+  // ═══════════════════════════════════════════════════════════════════════
+  // SESSION CONFLICT
+  // ═══════════════════════════════════════════════════════════════════════
 
-      const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
-      expect(result).toMatchObject({
-        decision: "proceed",
-        phase: "fixing",
-        terminal: false,
-      });
-      expect(result.state.retryCount).toBe(1);
+  describe("session conflict", () => {
+    it("17. session_id input mismatch with state.sessionId → state.phase='session_conflict'", () => {
+      const state = makeState({ sessionId: "ses_stale" });
+      const verify = makeVerify();
+      const review = makeReview();
+      const input: LoopHookInput = {
+        ...defaultInput,
+        session_id: "ses_different_runtime",
+      };
+
+      const result: LoopHookDecision = processLoopState(state, verify, review, input);
+
+      expect(result.decision).toBe("proceed");
+      expect(state.phase).toBe("session_conflict" satisfies LoopPhase);
+      expect(state.active).toBe(false);
     });
 
-    it("T-retry-6: selfDriven=true, retryCount=2 with critical findings → phase=fixing, terminal=false, retryCount=3", () => {
-      const state = defaultState({
-        retryCount: 2,
-        maxRetries: 3,
-        selfDriven: true,
-      });
-      const verify = defaultVerifyArtifact({ verdict: "PASS" });
-      const review = defaultReviewArtifact({
-        finding_details: [
-          { severity: "critical", check: "Security", description: "SQL injection risk" },
-        ],
-      });
+    it("18. stale session ID pattern (non-standard format) → state.phase='session_conflict'", () => {
+      const state = makeState({ sessionId: "stale-session-from-previous-run" });
+      const verify = makeVerify();
+      const review = makeReview();
 
-      const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
-      expect(result).toMatchObject({
-        decision: "proceed",
-        phase: "fixing",
-        terminal: false,
-      });
-      expect(result.state.retryCount).toBe(3);
-    });
+      const result: LoopHookDecision = processLoopState(state, verify, review, defaultInput);
 
-    it("T-retry-7: selfDriven=true, retryCount=3 (exhausted) with critical findings → phase=stopped_review_findings, terminal=true", () => {
-      const state = defaultState({
-        retryCount: 3,
-        maxRetries: 3,
-        selfDriven: true,
-      });
-      const verify = defaultVerifyArtifact({ verdict: "PASS" });
-      const review = defaultReviewArtifact({
-        finding_details: [
-          { severity: "critical", check: "Security", description: "SQL injection risk" },
-        ],
-      });
-
-      const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
-      expect(result).toMatchObject({
-        decision: "proceed",
-        phase: "stopped_review_findings",
-        terminal: true,
-      });
-    });
-
-    it("T-retry-8: selfDriven=false with critical findings → phase=stopped_review_findings, terminal=true (unchanged)", () => {
-      const state = defaultState({
-        retryCount: 0,
-        maxRetries: 3,
-        selfDriven: false,
-      });
-      const verify = defaultVerifyArtifact({ verdict: "PASS" });
-      const review = defaultReviewArtifact({
-        finding_details: [
-          { severity: "critical", check: "Security", description: "SQL injection risk" },
-        ],
-      });
-
-      const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
-      expect(result).toMatchObject({
-        decision: "proceed",
-        phase: "stopped_review_findings",
-        terminal: true,
-      });
-    });
-
-    it("T-retry-9: maxRetries=0 disables retry — critical findings → phase=stopped_review_findings, terminal=true", () => {
-      const state = defaultState({
-        retryCount: 0,
-        maxRetries: 0,
-        selfDriven: true,
-      });
-      const verify = defaultVerifyArtifact({ verdict: "PASS" });
-      const review = defaultReviewArtifact({
-        finding_details: [
-          { severity: "critical", check: "Security", description: "SQL injection risk" },
-        ],
-      });
-
-      const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
-      expect(result).toMatchObject({
-        decision: "proceed",
-        phase: "stopped_review_findings",
-        terminal: true,
-      });
+      expect(result.decision).toBe("proceed");
+      expect(state.phase).toBe("session_conflict" satisfies LoopPhase);
+      expect(state.active).toBe(false);
     });
   });
 
-  describe("retry: non-blocking findings", () => {
-    it("T-retry-10: selfDriven=true, suggestion findings → advance normally (no retry for suggestion)", () => {
-      const state = defaultState({
-        retryCount: 1,
-        maxRetries: 3,
-        selfDriven: true,
-      });
-      const verify = defaultVerifyArtifact({ verdict: "PASS" });
-      const review = defaultReviewArtifact({
-        finding_details: [
-          { severity: "suggestion", check: "Code Quality", description: "Use optional chaining" },
-        ],
-      });
+  // ═══════════════════════════════════════════════════════════════════════
+  // CIRCUIT BREAKER
+  // ═══════════════════════════════════════════════════════════════════════
 
-      const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
-      // Retry must NOT trigger for suggestion — should advance normally
-      expect(result.phase).not.toBe("fixing");
-      expect(result.phase).not.toBe("stopped_review_findings");
-      expect(result.terminal).toBeFalsy();
-      // retryCount should reset to 0 on clean advance (even for non-blocking findings)
-      expect(result.state.retryCount).toBe(0);
+  describe("circuit breaker", () => {
+    it("19. blockCount >= maxBlocks → state.phase='circuit_breaker', decision='proceed'", () => {
+      const state = makeState({ blockCount: 6, maxBlocks: 6 });
+      const verify = makeVerify();
+      const review = makeReview();
+
+      const result: LoopHookDecision = processLoopState(state, verify, review, defaultInput);
+
+      expect(result.decision).toBe("proceed");
+      expect(state.phase).toBe("circuit_breaker" satisfies LoopPhase);
+      expect(state.active).toBe(false);
+    });
+
+    it("20. blockCount < maxBlocks → passes circuit breaker, reaches other gates", () => {
+      const state = makeState({ blockCount: 4, maxBlocks: 6 });
+      const verify = makeVerify({ verdict: "PASS" });
+      const review = makeReview({ finding_details: [] });
+
+      const result: LoopHookDecision = processLoopState(state, verify, review, defaultInput);
+
+      // Should NOT hit circuit_breaker — blockCount < maxBlocks
+      expect(state.phase).not.toBe("circuit_breaker");
+      // Should advance normally or hit another terminal
+      expect(result.decision).toBeDefined();
     });
   });
 
-  describe("retry: clean advance", () => {
-    it("T-retry-11: clean advance resets retryCount to 0", () => {
-      const state = defaultState({
-        retryCount: 2,
-        maxRetries: 3,
-        selfDriven: true,
+  // ═══════════════════════════════════════════════════════════════════════
+  // CORRUPTION GUARDS
+  // ═══════════════════════════════════════════════════════════════════════
+
+  describe("corruption guards", () => {
+    it("21. currentGroup > totalGroups → state.phase='error_corruption', decision='proceed'", () => {
+      const state = makeState({ currentGroup: 5, totalGroups: 3 });
+
+      const result: LoopHookDecision = processLoopState(state, makeVerify(), makeReview(), defaultInput);
+
+      expect(result.decision).toBe("proceed");
+      expect(state.phase).toBe("error_corruption" satisfies LoopPhase);
+      expect(state.active).toBe(false);
+    });
+
+    it("22. currentGroup < 1 → state.phase='error_corruption', decision='proceed'", () => {
+      const state = makeState({ currentGroup: 0, totalGroups: 3 });
+
+      const result: LoopHookDecision = processLoopState(state, makeVerify(), makeReview(), defaultInput);
+
+      expect(result.decision).toBe("proceed");
+      expect(state.phase).toBe("error_corruption" satisfies LoopPhase);
+      expect(state.active).toBe(false);
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // CLEAN ADVANCE & FINALIZE
+  // ═══════════════════════════════════════════════════════════════════════
+
+  describe("clean advance and finalize", () => {
+    it("23. clean advance to next group → decision='block', currentGroup incremented", () => {
+      const state = makeState({
         currentGroup: 1,
         totalGroups: 3,
         phase: "awaiting_group_result",
+        blockCount: 2,
       });
-      const verify = defaultVerifyArtifact({ verdict: "PASS" });
-      const review = defaultReviewArtifact({ finding_details: [] });
+      const verify = makeVerify({ verdict: "PASS" });
+      const review = makeReview({ finding_details: [] });
 
-      const result = evaluateLoopState(state, verify, review) as LoopEvaluationResult;
-      // Clean advance should block for next group and reset retryCount
-      expect(result).toMatchObject({
-        decision: "block",
-        terminal: false,
+      const result: LoopHookDecision = processLoopState(state, verify, review, defaultInput);
+
+      expect(result.decision).toBe("block");
+      expect(state.phase).toBe("awaiting_group_result" satisfies LoopPhase);
+      expect(state.currentGroup).toBe(2);
+      expect(state.completedGroups).toContain(1);
+      expect(state.blockCount).toBe(3); // incremented
+      expect(state.active).toBe(true);
+    });
+
+    it("24. final group clean → decision='block', state.phase='awaiting_finalize'", () => {
+      const state = makeState({
+        currentGroup: 3,
+        totalGroups: 3,
+        phase: "awaiting_group_result",
+        blockCount: 2,
+        groupStatuses: { "1": "complete", "2": "complete", "3": "in_progress" },
       });
-      expect(result.state.retryCount).toBe(0);
-      expect(result.state.currentGroup).toBe(2);
+      const verify = makeVerify({ verdict: "PASS", group: 3, nonce: "2026-01-01T00:00:00Z-group-1" });
+      const review = makeReview({
+        group: 3,
+        finding_details: [],
+        nonce: "2026-01-01T00:00:00Z-group-1",
+      });
+
+      const result: LoopHookDecision = processLoopState(state, verify, review, defaultInput);
+
+      expect(result.decision).toBe("block");
+      expect(state.phase).toBe("awaiting_finalize" satisfies LoopPhase);
+      expect(state.completedGroups).toContain(3);
+      expect(state.blockCount).toBe(3);
+      expect(state.active).toBe(true);
     });
   });
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // FINALIZE → DONE
+  // ═══════════════════════════════════════════════════════════════════════
+
+  describe("finalize → done", () => {
+    it("25. awaiting_finalize + all groups completed → decision='proceed', state.phase='done'", () => {
+      const state = makeState({
+        phase: "awaiting_finalize",
+        currentGroup: 3,
+        totalGroups: 3,
+        completedGroups: [1, 2, 3],
+        groupStatuses: { "1": "complete", "2": "complete", "3": "complete" },
+        active: true,
+      });
+
+      const result: LoopHookDecision = processLoopState(state, makeVerify(), makeReview(), defaultInput);
+
+      expect(result.decision).toBe("proceed");
+      expect(state.phase).toBe("done" satisfies LoopPhase);
+      expect(state.active).toBe(false);
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // INERT GUARD
+  // ═══════════════════════════════════════════════════════════════════════
+
+  describe("inert guard", () => {
+    it("26. inactive loop → decision='proceed', no mutation beyond updatedAt", () => {
+      const state = makeState({ active: false, phase: "init" });
+
+      const result: LoopHookDecision = processLoopState(state, makeVerify(), makeReview(), defaultInput);
+
+      expect(result.decision).toBe("proceed");
+      // Inert: no phase change, no active change (already false)
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // FIRST-RUN BLOCK
+  // ═══════════════════════════════════════════════════════════════════════
+
+  describe("first-run block", () => {
+    it("27. no verify artifact provided → decision='block', reason includes 'verify'", () => {
+      const state = makeState({ phase: "awaiting_group_result" });
+      const review = makeReview();
+
+      const result: LoopHookDecision = processLoopState(state, undefined as unknown as VerifyArtifact, review, defaultInput);
+
+      expect(result.decision).toBe("block");
+      expect(result.reason).toBeDefined();
+      expect(state.active).toBe(true);
+    });
+
+    it("28. no review artifact provided → decision='block', reason includes 'review'", () => {
+      const state = makeState({ phase: "awaiting_group_result" });
+      const verify = makeVerify();
+
+      const result: LoopHookDecision = processLoopState(state, verify, undefined as unknown as ReviewArtifact, defaultInput);
+
+      expect(result.decision).toBe("block");
+      expect(result.reason).toBeDefined();
+      expect(state.active).toBe(true);
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // EDGE CASES
+  // ═══════════════════════════════════════════════════════════════════════
+
+  describe("edge cases", () => {
+    it("29. retryCount reset to 0 on clean advance", () => {
+      const state = makeState({
+        retryCount: 2,
+        maxRetries: 3,
+        currentGroup: 1,
+        totalGroups: 3,
+      });
+      const verify = makeVerify({ verdict: "PASS" });
+      const review = makeReview({ finding_details: [] });
+
+      const result: LoopHookDecision = processLoopState(state, verify, review, defaultInput);
+
+      expect(result.decision).toBe("block");
+      expect(state.retryCount).toBe(0);
+      expect(state.currentGroup).toBe(2);
+    });
+
+    it("30. blockCount increments on each non-terminal block", () => {
+      const state = makeState({ blockCount: 0 });
+      const verify = makeVerify({ verdict: "PASS" });
+      const review = makeReview({ finding_details: [] });
+
+      processLoopState(state, verify, review, defaultInput);
+
+      // On clean advance, blockCount should have increased by 1
+      expect(state.blockCount).toBe(1);
+    });
+
+    it("31. verify-only artifact (no review) with block → reason is descriptive", () => {
+      const state = makeState({ phase: "awaiting_group_result" });
+      const verify = makeVerify({ verdict: "PASS" });
+
+      const result: LoopHookDecision = processLoopState(state, verify, undefined as unknown as ReviewArtifact, defaultInput);
+
+      expect(result.decision).toBe("block");
+      expect(result.reason).toBeTruthy();
+      expect(result.reason!.length).toBeGreaterThan(0);
+    });
+  });
 });

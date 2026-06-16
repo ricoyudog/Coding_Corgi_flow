@@ -1,193 +1,111 @@
 import { Command } from "commander";
 import { existsSync, readdirSync, readFileSync, writeFileSync, renameSync } from "node:fs";
 import { resolve } from "node:path";
-import {
-  isHooksDisabled,
-  findProjectRoot,
-  readStdinJson,
-} from "../../lib/hooks.js";
-import { evaluateLoopState } from "../../lib/loop-state.js";
-import type {
-  LoopState,
-  VerifyArtifact,
-  ReviewArtifact,
-} from "../../lib/loop-types.js";
-
-// ─── State Discovery ────────────────────────────────────────────────────
-
-/**
- * Scan both platform directories for an active loop state.
- * Returns the first active LoopState found with its platform dir, or null.
- */
-function findActiveState(projectRoot: string): { state: LoopState; platformDir: string } | null {
-  const platformDirs = [".claude/corgi-loop", ".opencode/corgi-loop"];
-
-  for (const dir of platformDirs) {
-    const loopDir = resolve(projectRoot, dir);
-    if (!existsSync(loopDir)) continue;
-
-    try {
-      const entries = readdirSync(loopDir, { withFileTypes: true });
-      for (const entry of entries) {
-        if (!entry.isDirectory()) continue;
-        const statePath = resolve(loopDir, entry.name, "state.json");
-        if (!existsSync(statePath)) continue;
-
-        const raw = readFileSync(statePath, "utf-8");
-        const state = JSON.parse(raw) as LoopState;
-        if (state.active) {
-          return { state, platformDir: dir };
-        }
-      }
-    } catch {
-      // Skip malformed directories
-      continue;
-    }
-  }
-
-  return null;
-}
-
-// ─── Artifact Reading ───────────────────────────────────────────────────
-
-function readVerifyArtifact(
-  projectRoot: string,
-  platformDir: string,
-  changeName: string,
-  currentGroup: number,
-): VerifyArtifact | undefined {
-  const path = resolve(
-    projectRoot,
-    platformDir,
-    changeName,
-    "groups",
-    String(currentGroup),
-    "verify.json",
-  );
-
-  if (!existsSync(path)) return undefined;
-
-  try {
-    const raw = readFileSync(path, "utf-8");
-    return JSON.parse(raw) as VerifyArtifact;
-  } catch {
-    return undefined;
-  }
-}
-
-function readReviewArtifact(
-  projectRoot: string,
-  platformDir: string,
-  changeName: string,
-  currentGroup: number,
-): ReviewArtifact | undefined {
-  const path = resolve(
-    projectRoot,
-    platformDir,
-    changeName,
-    "groups",
-    String(currentGroup),
-    "review.json",
-  );
-
-  if (!existsSync(path)) return undefined;
-
-  try {
-    const raw = readFileSync(path, "utf-8");
-    return JSON.parse(raw) as ReviewArtifact;
-  } catch {
-    return undefined;
-  }
-}
-
-// ─── Atomic Write ───────────────────────────────────────────────────────
-
-function writeStateAtomic(statePath: string, state: LoopState): void {
-  const tmpPath = statePath + ".tmp";
-  writeFileSync(tmpPath, JSON.stringify(state, null, 2), "utf-8");
-  renameSync(tmpPath, statePath);
-}
-
-// ─── Command ────────────────────────────────────────────────────────────
+import { isHooksDisabled, findProjectRoot, readStdinJson } from "../../lib/hooks.js";
+import { processLoopState } from "../../lib/loop-state.js";
+import type { LoopState, VerifyArtifact, ReviewArtifact } from "../../lib/loop-types.js";
 
 export function createHookLoopCheckCommand(): Command {
   const cmd = new Command("loop-check");
 
   cmd
-    .description("Evaluate Corgi Loop state machine (Loop hook)")
+    .description("Corgi Loop stop hook — orchestrates group-by-group execution")
     .option("--path <dir>", "Working directory", ".")
     .action(async (opts) => {
+      // 1. Inert guard: hooks disabled
       if (isHooksDisabled()) {
         process.exit(0);
       }
 
+      // 2. Project root detection
       const cwd = resolve(opts.path);
       const projectRoot = findProjectRoot(cwd);
-
       if (!projectRoot) {
         process.exit(0);
       }
-      const root = projectRoot; // Narrowed: non-null after exit guard
 
-      const hookInput = await readStdinJson();
-      // stop_hook_active guard: prevent re-entry into already-active hook cycle
-      // (The state machine's circuit breaker handles consecutive block limits)
-      if (hookInput.stop_hook_active) {
-        // Re-entry after a previous block — still evaluate to check for new artifacts
-        // Falls through to normal processing below
+      // 3. Read stdin (Stop hook input from Claude Code)
+      const stdinData = await readStdinJson();
+      const input = {
+        hook_event_name: "Stop",
+        stop_hook_active: stdinData?.stop_hook_active ?? false,
+        session_id: stdinData?.session_id ?? "",
+      };
+
+      // 4. Discover active loop state (glob-based: .claude/corgi-loop/*/state.json or .opencode/corgi-loop/*/state.json)
+      const stateRoots = [".claude/corgi-loop", ".opencode/corgi-loop"];
+      let state: LoopState | null = null;
+      let statePath = "";
+
+      for (const root of stateRoots) {
+        const loopDir = resolve(projectRoot, root);
+        if (!existsSync(loopDir)) continue;
+        try {
+          const entries = readdirSync(loopDir, { withFileTypes: true });
+          for (const entry of entries) {
+            if (!entry.isDirectory()) continue;
+            const candidate = resolve(loopDir, entry.name, "state.json");
+            if (!existsSync(candidate)) continue;
+            const raw = readFileSync(candidate, "utf-8");
+            const parsed = JSON.parse(raw);
+            if (parsed.active === true) {
+              state = parsed as LoopState;
+              statePath = candidate;
+              break;
+            }
+          }
+        } catch { /* corrupted state, skip */ }
+        if (state) break;
       }
 
-      // Discover active loop state across both platform directories
-      const found = findActiveState(root);
-      if (!found) {
-        process.stdout.write(JSON.stringify({ decision: "proceed" }));
+      // 5. No active loop → proceed normally
+      if (!state) {
+        console.log(JSON.stringify({ decision: "proceed" }));
         process.exit(0);
       }
 
-      // Non-null assertion: guard above exits when found is null
-      const { state, platformDir } = found!;
+      // 6. Load verify.json and review.json for current group
+      const groupDir = resolve(statePath, "..", "groups", String(state.currentGroup));
+      let verify: VerifyArtifact | undefined;
+      let review: ReviewArtifact | undefined;
 
-      // Read optional artifacts for the current group
-      const verifyArtifact = readVerifyArtifact(
-        root,
-        platformDir,
-        state.changeName,
-        state.currentGroup,
-      );
-
-      const reviewArtifact = readReviewArtifact(
-        root,
-        platformDir,
-        state.changeName,
-        state.currentGroup,
-      );
-
-      // Evaluate the state machine (pure function — no side effects)
-      const result = evaluateLoopState(state, verifyArtifact, reviewArtifact);
-
-      // Write mutated state back atomically
-      const statePath = resolve(
-        root,
-        platformDir,
-        state.changeName,
-        "state.json",
-      );
-      writeStateAtomic(statePath, result.state);
-
-      // Diagnostic: log fixing phase context to stderr
-      if (result.phase === "fixing") {
-        console.error(`Fix mode: retry ${result.state.retryCount}/${result.state.maxRetries}`);
+      const verifyPath = resolve(groupDir, "verify.json");
+      if (existsSync(verifyPath)) {
+        try {
+          verify = JSON.parse(readFileSync(verifyPath, "utf-8")) as VerifyArtifact;
+        } catch { /* malformed, let state machine catch it */ }
       }
 
-      // Output decision to stdout (without the state field)
-      const output = {
-        decision: result.decision,
-        phase: result.phase,
-        terminal: result.terminal,
-        reason: result.reason,
-      };
-      process.stdout.write(JSON.stringify(output));
+      const reviewPath = resolve(groupDir, "review.json");
+      if (existsSync(reviewPath)) {
+        try {
+          review = JSON.parse(readFileSync(reviewPath, "utf-8")) as ReviewArtifact;
+        } catch { /* malformed, let state machine catch it */ }
+      }
 
+      // 7. Call the state machine
+      const wasActive = state.active;
+      const result = processLoopState(state, verify!, review!, input);
+
+      // 8. Atomically write state mutations (tmp + rename)
+      const stateDir = resolve(statePath, "..");
+      const tmpPath = resolve(stateDir, "state.json.tmp");
+      writeFileSync(tmpPath, JSON.stringify(state, null, 2), "utf-8");
+      renameSync(tmpPath, statePath);
+
+      // 9. Output decision as JSON
+      // Include phase/terminal/reason — consumers (loop orchestration, integration
+      // tests, stop-check composition) depend on these fields to distinguish
+      // terminal stops from non-terminal blocks and to route on phase.
+      const output: Record<string, unknown> = {
+        decision: result.decision,
+        phase: state.phase,
+        terminal: wasActive && !state.active,
+      };
+      if (result.reason) {
+        output.reason = result.reason;
+      }
+      console.log(JSON.stringify(output));
       process.exit(0);
     });
 
