@@ -1,157 +1,51 @@
 {
-  "active_plan": "/mnt/e/code/openspec_gitflow_modified/.sisyphus/plans/release-v2.4.2.md",
-  "started_at": "2026-06-12T06:56:59.079Z",
+  "active_plan": "/mnt/e/code/openspec_gitflow_modified/.omo/plans/corgispec-hooks-migration.md",
+  "started_at": "2026-06-16T00:00:00.000Z",
   "session_ids": [
-    "opencode:ses_1461a7f82ffe0e76R3USD5HM2c"
+    "opencode:ses_1357443f1ffePkpOYECJDsNEw1"
   ],
-  "plan_name": "release-v2.4.2",
-  "session_origins": {
-    "opencode:ses_1461a7f82ffe0e76R3USD5HM2c": "direct"
-  },
+  "plan_name": "corgispec-hooks-migration",
+  "session_origins": {},
   "task_sessions": {
     "todo:1": {
       "task_key": "todo:1",
       "task_label": "1",
-      "task_title": "Pre-merge Cleanup: Remove `.worktrees/` from git + Remove Active Worktree",
-      "session_id": "ses_1455eb5cfffe4foGnmiwEN5DhK",
+      "task_title": "Write failing TDD test: default output becomes TypeScript plugin",
+      "session_id": "opencode:ses_131ed35cdffe0hArhOJscHjQn3",
       "agent": "Sisyphus-Junior",
       "category": "quick",
-      "updated_at": "2026-06-12T07:07:27.633Z"
-    },
-    "todo:2": {
-      "task_key": "todo:2",
-      "task_label": "2",
-      "task_title": "Version Bump + CHANGELOG Update",
-      "session_id": "ses_14556310effe7ODKFn5eFkwh6u",
-      "agent": "Sisyphus-Junior",
-      "category": "quick",
-      "updated_at": "2026-06-12T07:13:20.743Z"
-    },
-    "todo:3": {
-      "task_key": "todo:3",
-      "task_label": "3",
-      "task_title": "Test + Build Verification",
-      "session_id": "ses_14550bdb9ffeV7k1lerP45ZltN",
-      "agent": "Sisyphus-Junior",
-      "category": "quick",
-      "updated_at": "2026-06-12T07:21:58.622Z"
-    },
-    "todo:4": {
-      "task_key": "todo:4",
-      "task_label": "4",
-      "task_title": "Squash Merge to Master",
-      "session_id": "ses_14549e651ffesQ91pSBn1jJ8vu",
-      "agent": "Sisyphus-Junior",
-      "category": "quick",
-      "updated_at": "2026-06-12T07:27:24.970Z"
-    },
-    "todo:5": {
-      "task_key": "todo:5",
-      "task_label": "5",
-      "task_title": "Git Tag v2.4.2",
-      "session_id": "ses_14544e944ffeao2zsQIXWmNCFD",
-      "agent": "Sisyphus-Junior",
-      "category": "quick",
-      "updated_at": "2026-06-12T07:29:19.423Z"
-    },
-    "todo:6": {
-      "task_key": "todo:6",
-      "task_label": "6",
-      "task_title": "npm Publish",
-      "session_id": "ses_145433770ffekmsBOoKq64lKkH",
-      "agent": "Sisyphus-Junior",
-      "category": "quick",
-      "updated_at": "2026-06-12T07:33:51.265Z"
-    },
-    "todo:7": {
-      "task_key": "todo:7",
-      "task_label": "7",
-      "task_title": "GitHub Release",
-      "session_id": "ses_1453f0fb6ffewSUDQFiUGS74Aa",
-      "agent": "Sisyphus-Junior",
-      "category": "quick",
-      "updated_at": "2026-06-12T07:36:45.970Z"
+      "updated_at": "2026-06-16T01:38:50.347Z",
+      "started_at": "2026-06-16T01:38:50.347Z",
+      "status": "running"
     }
   },
   "schema_version": 2,
-  "active_work_id": "release-v2.4.2-legacy",
+  "active_work_id": "corgispec-hooks-migration",
   "works": {
-    "release-v2.4.2-legacy": {
-      "work_id": "release-v2.4.2-legacy",
-      "active_plan": "/mnt/e/code/openspec_gitflow_modified/.sisyphus/plans/release-v2.4.2.md",
-      "plan_name": "release-v2.4.2",
-      "started_at": "2026-06-12T06:56:59.079Z",
+    "corgispec-hooks-migration": {
+      "work_id": "corgispec-hooks-migration",
+      "active_plan": "/mnt/e/code/openspec_gitflow_modified/.omo/plans/corgispec-hooks-migration.md",
+      "plan_name": "corgispec-hooks-migration",
+      "started_at": "2026-06-16T00:00:00.000Z",
       "session_ids": [
-        "opencode:ses_1461a7f82ffe0e76R3USD5HM2c"
+        "opencode:ses_1357443f1ffePkpOYECJDsNEw1"
       ],
-      "session_origins": {
-        "opencode:ses_1461a7f82ffe0e76R3USD5HM2c": "direct"
-      },
       "task_sessions": {
         "todo:1": {
           "task_key": "todo:1",
           "task_label": "1",
-          "task_title": "Pre-merge Cleanup: Remove `.worktrees/` from git + Remove Active Worktree",
-          "session_id": "ses_1455eb5cfffe4foGnmiwEN5DhK",
+          "task_title": "Write failing TDD test: default output becomes TypeScript plugin",
+          "session_id": "opencode:ses_131ed35cdffe0hArhOJscHjQn3",
           "agent": "Sisyphus-Junior",
           "category": "quick",
-          "updated_at": "2026-06-12T07:07:27.633Z"
-        },
-        "todo:2": {
-          "task_key": "todo:2",
-          "task_label": "2",
-          "task_title": "Version Bump + CHANGELOG Update",
-          "session_id": "ses_14556310effe7ODKFn5eFkwh6u",
-          "agent": "Sisyphus-Junior",
-          "category": "quick",
-          "updated_at": "2026-06-12T07:13:20.743Z"
-        },
-        "todo:3": {
-          "task_key": "todo:3",
-          "task_label": "3",
-          "task_title": "Test + Build Verification",
-          "session_id": "ses_14550bdb9ffeV7k1lerP45ZltN",
-          "agent": "Sisyphus-Junior",
-          "category": "quick",
-          "updated_at": "2026-06-12T07:21:58.622Z"
-        },
-        "todo:4": {
-          "task_key": "todo:4",
-          "task_label": "4",
-          "task_title": "Squash Merge to Master",
-          "session_id": "ses_14549e651ffesQ91pSBn1jJ8vu",
-          "agent": "Sisyphus-Junior",
-          "category": "quick",
-          "updated_at": "2026-06-12T07:27:24.970Z"
-        },
-        "todo:5": {
-          "task_key": "todo:5",
-          "task_label": "5",
-          "task_title": "Git Tag v2.4.2",
-          "session_id": "ses_14544e944ffeao2zsQIXWmNCFD",
-          "agent": "Sisyphus-Junior",
-          "category": "quick",
-          "updated_at": "2026-06-12T07:29:19.423Z"
-        },
-        "todo:6": {
-          "task_key": "todo:6",
-          "task_label": "6",
-          "task_title": "npm Publish",
-          "session_id": "ses_145433770ffekmsBOoKq64lKkH",
-          "agent": "Sisyphus-Junior",
-          "category": "quick",
-          "updated_at": "2026-06-12T07:33:51.265Z"
-        },
-        "todo:7": {
-          "task_key": "todo:7",
-          "task_label": "7",
-          "task_title": "GitHub Release",
-          "session_id": "ses_1453f0fb6ffewSUDQFiUGS74Aa",
-          "agent": "Sisyphus-Junior",
-          "category": "quick",
-          "updated_at": "2026-06-12T07:36:45.970Z"
+          "updated_at": "2026-06-16T01:38:50.347Z",
+          "started_at": "2026-06-16T01:38:50.347Z",
+          "status": "running"
         }
-      }
+      },
+      "session_origins": {},
+      "updated_at": "2026-06-16T01:38:50.342Z"
     }
-  }
+  },
+  "updated_at": "2026-06-16T01:38:50.342Z"
 }
