@@ -131,14 +131,13 @@ describe("hooks generate", () => {
   });
 
   describe("OpenCode format", () => {
-    it("outputs Claude-compatible bridge format by default", () => {
+    it("outputs TypeScript plugin by default", () => {
       const output = execSync(`node ${CLI} hooks generate --platform opencode`, {
         encoding: "utf-8",
       });
 
-      const parsed = JSON.parse(output);
-      expect(parsed).toHaveProperty("hooks");
-      expect(parsed.hooks).toHaveProperty("SessionStart");
+      expect(output).toContain("import type { Plugin }");
+      expect(output).toContain("CorgiSpecDeep");
     });
 
     it("outputs TypeScript plugin with --deep", () => {

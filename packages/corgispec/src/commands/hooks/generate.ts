@@ -30,7 +30,7 @@ export function createHooksGenerateCommand(): Command {
     .option("--force", "Overwrite existing hook configuration")
     .option(
       "--deep",
-      "Generate deep TypeScript plugin (OpenCode only, ignored for others)"
+      "Deprecated: TypeScript plugin is now the default for OpenCode (flag is a no-op)"
     )
     .action((opts: GenerateOptions) => {
       if (!opts.platform) {
@@ -87,7 +87,7 @@ function showPlatformListing(): void {
     "  claude    Claude Code (.claude/settings.json → hooks key)"
   );
   console.log(
-    "  opencode  OpenCode (Claude Code bridge format, or --deep for TypeScript plugin)"
+    "  opencode  OpenCode (TypeScript plugin, default)"
   );
   console.log(
     "  codex     Codex (.codex/config.toml + .codex/hooks/*.py wrappers)"
@@ -272,15 +272,8 @@ function generateOpenCodeOutput(
   binaryPath: string,
   opts: GenerateOptions
 ): void {
-  if (opts.deep) {
-    const tsCode = buildOpenCodeDeepPlugin(binaryPath);
-    writeOutput(tsCode, opts.output, opts.force);
-    return;
-  }
-
-  const config = buildClaudeConfig(binaryPath);
-  const json = JSON.stringify(config, null, 2) + "\n";
-  writeOutput(json, opts.output, opts.force);
+  const tsCode = buildOpenCodeDeepPlugin(binaryPath);
+  writeOutput(tsCode, opts.output, opts.force);
 }
 
 function buildOpenCodeDeepPlugin(binaryPath: string): string {
@@ -288,6 +281,16 @@ function buildOpenCodeDeepPlugin(binaryPath: string): string {
 import { execSync } from "node:child_process";
 
 const BINARY = "${binaryPath}";
+
+function buildStdinPayload(tool: string, args: Record<string, unknown>): string {
+  return JSON.stringify({
+    tool_name: tool,
+    tool_input: {
+      file_path: args.filePath,
+      command: args.command,
+    },
+  });
+}
 
 export const CorgiSpecDeep: Plugin = async () => {
   return {
@@ -305,9 +308,57 @@ export const CorgiSpecDeep: Plugin = async () => {
         // Context injection is optional — skip on failure
       }
     },
+    "tool.execute.before": async (input, output) => {
+      const payload = buildStdinPayload(input.tool, output.args);
+      if (input.tool === "write" || input.tool === "edit") {
+        execSync(BINARY + " hook pre-write", { input: payload, encoding: "utf-8", timeout: 5000 });
+      }
+      if (input.tool === "bash") {
+        execSync(BINARY + " hook pre-bash", { input: payload, encoding: "utf-8", timeout: 5000 });
+      }
+    },
+    "tool.execute.after": async (input, output) => {
+      if (input.tool !== "write" && input.tool !== "edit") return;
+      try {
+        const payload = buildStdinPayload(input.tool, output.args);
+        execSync(BINARY + " hook post-write", { input: payload, encoding: "utf-8", timeout: 10000 });
+      } catch {
+        // Post-write validation is non-blocking
+      }
+    },
+    // session.idle (agent finished responding) — not session.deleted (explicit teardown, too late for loop-check).
+    event: async ({ event }) => {
+      if (event.type === "session.idle") {
+        try {
+          execSync(BINARY + " hook stop-check", { encoding: "utf-8", timeout: 10000 });
+        } catch {
+          // Stop validation is non-blocking
+        }
+        try {
+          execSync(BINARY + " hook loop-check", { encoding: "utf-8", timeout: 15000 });
+        } catch {
+          // Loop check is non-blocking
+        }
+      }
+      if (event.type === "session.compacted") {
+        try {
+          execSync(BINARY + " hook post-compact", { encoding: "utf-8", timeout: 10000 });
+        } catch {
+          // Post-compact recovery is non-blocking
+        }
+      }
+    },
   };
 };
 `;
+}
+
+function buildExecHookBlock(cmd: string, timeout: number): string {
+  return `      try {
+        execSync("${cmd}", { encoding: "utf-8", timeout: ${timeout}_000 });
+      } catch {
+        // Hook execution is best-effort
+      }`;
 }
 
 // ─── Codex Config ────────────────────────────────────────────────────────
