@@ -1,8 +1,0 @@
-**Worktree Path Resolution**: If a `worktreePath` parameter is provided (from corgispec-loop caller), resolve all file paths (`tasks.md`, spec files, implementation files) relative to `worktreePath` instead of the current working directory. If no `worktreePath` is provided, use the current working directory as normal.
-Otherwise, resolve:
-   - Set `worktreePath` to the absolute path of the current worktree (e.g., `/path/to/.worktrees/loop-corgi-edit/`)
-   - **When `worktreePath` is set, resolve all relative paths in subsequent steps against `worktreePath`**:
-     - `review.json` output path → `<worktreePath>/<platform>/corgi-loop/<change>/groups/<N>/review.json`
-     - `tasks.md` path → `<worktreePath>/openspec/changes/<change>/tasks.md`
-     - All `specs/` and change directory paths → prefix with `<worktreePath>/`
-Read `<worktreePath>/openspec/changes/<change>/tasks.md` to identify the group's task list. Confirm all tasks for group N are marked `[x]` before proceeding.
