@@ -7,7 +7,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   ArtifactResolver,
@@ -58,6 +58,7 @@ function fixtureStatus(): OpenSpecStatusResponse {
     template
       .replaceAll("${PLANNING_ROOT}", jsonStringFragment(planningRoot))
       .replaceAll("${CHANGES_DIR}", jsonStringFragment(changesDir))
+      .replaceAll("${CHANGE_ROOT}/", jsonStringFragment(`${changeRoot}${sep}`))
       .replaceAll("${CHANGE_ROOT}", jsonStringFragment(changeRoot))
   ) as OpenSpecStatusResponse;
 }
