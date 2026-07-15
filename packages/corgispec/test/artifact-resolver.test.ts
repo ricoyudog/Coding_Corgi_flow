@@ -109,7 +109,7 @@ describe("ArtifactResolver", () => {
       resolve(changeRoot, "specs/auth/spec.md"),
       resolve(changeRoot, "specs/session/nested/spec.md"),
     ]);
-    expect(resolved.artifactPaths.specs!.resolvedOutputPath).toContain("**/*.md");
+    expect(resolved.artifactPaths.specs!.resolvedOutputPath).toContain(normalize("**/*.md"));
     expect(provider.calls).toEqual([
       { changeName: "add-auth", options: { store: "shared-product" } },
     ]);
