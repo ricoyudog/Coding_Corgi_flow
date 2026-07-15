@@ -12,7 +12,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import { parse, relative, resolve } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -821,6 +821,68 @@ describe("canonical convergence evidence v2", () => {
     await expect(derive(f)).rejects.toMatchObject({
       code: "canonical_git_mismatch",
     });
+  });
+
+  it("accepts a physical system-path alias above runRoot without weakening anchored checks", async () => {
+    const f = fixture();
+    addAttempt(f, { verdict: "PASS" });
+    commitCurrent(f);
+    const aliasReader = diskReader({
+      async realpath(path) {
+        const physical = realpathSync(path);
+        const root = parse(physical).root;
+        return resolve(root, "__synthetic-system-alias__", relative(root, physical));
+      },
+    });
+    const finalizationInput = {
+      inspection: inspection(f),
+      attemptsRoot: f.attemptsRoot,
+      reviewTriagePath: f.triagePath,
+      currentGit: f.currentGit,
+      reader: aliasReader,
+    };
+
+    await expect(assertCanonicalFinalizationEvidenceV2(finalizationInput)).resolves.toMatchObject({
+      runId: f.state.runId,
+      completedGroupIds: ["1"],
+    });
+    finalize(f);
+    await expect(deriveCanonicalConvergenceEvidenceV2({
+      ...finalizationInput,
+      inspection: inspection(f),
+    })).resolves.toMatchObject({
+      evidence: [{ status: "pass" }],
+      verifiedAttempts: [{ result: "pass" }],
+    });
+  });
+
+  it("rejects a non-canonical triage location and a symlinked runRoot anchor", async () => {
+    const misplaced = fixture();
+    const misplacedTriage = resolve(misplaced.root, "nested/review-triage.jsonl");
+    mkdirSync(resolve(misplaced.root, "nested"));
+    writeFileSync(misplacedTriage, "", "utf8");
+    await expect(deriveCanonicalConvergenceEvidenceV2({
+      inspection: inspection(misplaced),
+      attemptsRoot: misplaced.attemptsRoot,
+      reviewTriagePath: misplacedTriage,
+      currentGit: misplaced.currentGit,
+    })).rejects.toMatchObject({ code: "canonical_triage_invalid" });
+
+    const anchored = fixture();
+    const baseReader = diskReader();
+    const anchorReader = diskReader({
+      async lstat(path) {
+        if (resolve(path) === resolve(anchored.root)) return "symlink";
+        return await baseReader.lstat(path);
+      },
+    });
+    await expect(deriveCanonicalConvergenceEvidenceV2({
+      inspection: inspection(anchored),
+      attemptsRoot: anchored.attemptsRoot,
+      reviewTriagePath: anchored.triagePath,
+      currentGit: anchored.currentGit,
+      reader: anchorReader,
+    })).rejects.toMatchObject({ code: "canonical_attempt_corrupt" });
   });
 
   it.skipIf(process.platform === "win32")(

@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   symlinkSync,
   truncateSync,
@@ -453,6 +454,7 @@ describe("LoopStoreV2 portable canonical identifiers", () => {
     const root = projectRoot();
     const { store, state } = await initialized(root);
     const before = canonicalBytes(store);
+    const beforeRunEntries = readdirSync(store.paths("change-a").runs).sort();
     const candidate = structuredClone(state);
     candidate.runId = "Run-A";
     candidate.nonce = "nonce-case-collision";
@@ -460,7 +462,7 @@ describe("LoopStoreV2 portable canonical identifiers", () => {
     await expect(store.initialize({ state: candidate, event: candidateEvent }))
       .rejects.toThrow(/case-fold collision/u);
     expect(canonicalBytes(store)).toEqual(before);
-    expect(existsSync(resolve(store.paths("change-a").runs, "Run-A"))).toBe(false);
+    expect(readdirSync(store.paths("change-a").runs).sort()).toEqual(beforeRunEntries);
   });
 });
 

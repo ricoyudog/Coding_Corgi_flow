@@ -143,6 +143,16 @@ describe("migrateLegacyLoopV2", () => {
       "legacy/claude/current-group/review.json",
     ]);
     expect(existsSync(paths.migrationMarker!)).toBe(true);
+    const marker = JSON.parse(readFileSync(paths.migrationMarker!, "utf8"));
+    expect(marker.sources.map((entry: { path: string }) => entry.path)).toEqual([
+      ".claude/corgi-loop/change-a/state.json",
+      ".claude/corgi-loop/change-a/groups/2/verify.json",
+      ".claude/corgi-loop/change-a/groups/2/review.json",
+    ]);
+    expect(marker.staleArtifacts).toEqual([
+      "legacy/claude/current-group/verify.json",
+      "legacy/claude/current-group/review.json",
+    ]);
     expect(readFileSync(source, "utf8")).toBe(JSON.stringify(legacyState()));
   });
 
@@ -456,6 +466,11 @@ describe("verifyLegacyMigrationArchiveV2", () => {
       ...marker,
       staleArtifacts: ["../outside/verify.json"],
     })],
+    ["backslash", (marker: Record<string, unknown>) => {
+      const sources = structuredClone(marker["sources"] as Array<Record<string, unknown>>);
+      sources[0]!.path = ".claude\\corgi-loop\\change-a\\state.json";
+      return { ...marker, sources };
+    }],
     ["duplicate", (marker: Record<string, unknown>) => ({
       ...marker,
       staleArtifacts: [

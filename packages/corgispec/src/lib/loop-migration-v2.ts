@@ -122,16 +122,16 @@ function portableRelativeMarkerPath(value: unknown, label: string): string {
     isAbsolute(value) ||
     /^[A-Za-z]:/u.test(value) ||
     value.startsWith("\\") ||
+    value.includes("\\") ||
     value.includes("\0")
   ) {
     archiveError(`${label} must be a safe relative path`);
   }
-  const normalized = value.replaceAll("\\", "/");
-  const segments = normalized.split("/");
+  const segments = value.split("/");
   if (segments.some((segment) => !segment || segment === "." || segment === "..")) {
     archiveError(`${label} contains path traversal`);
   }
-  return normalized;
+  return value;
 }
 
 async function regularFileWithoutSymlink(
@@ -318,7 +318,14 @@ function safeRelative(root: string, path: string): string {
       `Legacy path escapes project root: ${path}`,
     );
   }
-  return result;
+  const segments = result.split(sep);
+  if (segments.some((segment) => segment.includes("\\"))) {
+    throw new LegacyMigrationV2Error(
+      "LEGACY_INCOMPATIBLE",
+      `Legacy path cannot be represented portably: ${path}`,
+    );
+  }
+  return segments.join("/");
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -334,7 +341,7 @@ async function exists(path: string): Promise<boolean> {
 async function assertNoSymlink(root: string, path: string): Promise<void> {
   const rel = safeRelative(root, path);
   let cursor = root;
-  for (const part of rel.split(sep)) {
+  for (const part of rel.split("/")) {
     cursor = resolve(cursor, part);
     try {
       if ((await lstat(cursor)).isSymbolicLink()) {

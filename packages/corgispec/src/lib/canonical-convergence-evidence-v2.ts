@@ -5,7 +5,7 @@ import {
   realpath as nodeRealpath,
 } from "node:fs/promises";
 import { isDeepStrictEqual } from "node:util";
-import { isAbsolute, posix, relative, resolve, sep } from "node:path";
+import { dirname, isAbsolute, posix, relative, resolve, sep } from "node:path";
 
 import type {
   ConvergenceEvidenceV2,
@@ -281,8 +281,59 @@ function review(value: unknown, path: string): CanonicalReviewFileV2 {
   return value as unknown as CanonicalReviewFileV2;
 }
 
+interface CanonicalPathAnchorV2 {
+  lexicalRoot: string;
+  physicalRoot: string;
+}
+
+function relativeWithinCanonicalRootV2(
+  anchor: CanonicalPathAnchorV2,
+  path: string,
+  label: string,
+  code: CanonicalConvergenceEvidenceErrorCodeV2,
+): string {
+  const rel = relative(anchor.lexicalRoot, resolve(path));
+  if (rel === "" || (!rel.startsWith(`..${sep}`) && rel !== ".." && !isAbsolute(rel))) {
+    return rel;
+  }
+  fail(code, `Canonical ${label} escapes the canonical run root`, {
+    path,
+    runRoot: anchor.lexicalRoot,
+  });
+}
+
+async function canonicalPathAnchorV2(
+  reader: CanonicalEvidenceReaderV2,
+  runRoot: string,
+  code: CanonicalConvergenceEvidenceErrorCodeV2,
+): Promise<CanonicalPathAnchorV2> {
+  if (typeof reader.lstat !== "function" || typeof reader.realpath !== "function") {
+    fail(code, "Canonical reader cannot verify canonical run root symlink ancestry", {
+      path: runRoot,
+    });
+  }
+  try {
+    const lexicalRoot = resolve(runRoot);
+    const kind = await reader.lstat(lexicalRoot);
+    if (kind !== "directory") {
+      fail(code, "Canonical run root must be a non-symlink directory", {
+        path: lexicalRoot,
+        kind,
+      });
+    }
+    return {
+      lexicalRoot,
+      physicalRoot: resolve(await reader.realpath(lexicalRoot)),
+    };
+  } catch (error) {
+    if (error instanceof CanonicalConvergenceEvidenceErrorV2) throw error;
+    fail(code, "Cannot verify canonical run root", { path: runRoot }, error);
+  }
+}
+
 async function assertCanonicalPathV2(
   reader: CanonicalEvidenceReaderV2,
+  anchor: CanonicalPathAnchorV2,
   path: string,
   expectedKind: "file" | "directory",
   label: string,
@@ -291,21 +342,28 @@ async function assertCanonicalPathV2(
   if (typeof reader.lstat !== "function" || typeof reader.realpath !== "function") {
     fail(code, `Canonical reader cannot verify ${label} symlink ancestry`, { path });
   }
+  const canonicalPath = resolve(path);
+  const rel = relativeWithinCanonicalRootV2(anchor, canonicalPath, label, code);
   try {
-    const kind = await reader.lstat(path);
+    const kind = await reader.lstat(canonicalPath);
     if (kind !== expectedKind) {
-      fail(code, `Canonical ${label} must be a non-symlink ${expectedKind}`, { path, kind });
+      fail(code, `Canonical ${label} must be a non-symlink ${expectedKind}`, {
+        path: canonicalPath,
+        kind,
+      });
     }
-    const actual = resolve(await reader.realpath(path));
-    if (actual !== resolve(path)) {
-      fail(code, `Canonical ${label} resolves through a symlink ancestor`, {
-        path,
+    const actual = resolve(await reader.realpath(canonicalPath));
+    const expected = resolve(anchor.physicalRoot, rel);
+    if (actual !== expected) {
+      fail(code, `Canonical ${label} resolves outside its anchored path`, {
+        path: canonicalPath,
         actual,
+        expected,
       });
     }
   } catch (error) {
     if (error instanceof CanonicalConvergenceEvidenceErrorV2) throw error;
-    fail(code, `Cannot verify canonical ${label}`, { path }, error);
+    fail(code, `Cannot verify canonical ${label}`, { path: canonicalPath }, error);
   }
 }
 
@@ -319,16 +377,26 @@ async function triageEntries(
   reader: CanonicalEvidenceReaderV2,
   path: string | undefined,
   runId: string,
+  anchor: CanonicalPathAnchorV2,
 ): Promise<Array<{ stored: ReviewTriageEntryV2; canonical: FindingTriageV2 }>> {
   if (path === undefined) return [];
+  const canonicalPath = resolve(path);
+  const expectedPath = resolve(anchor.lexicalRoot, "review-triage.jsonl");
+  if (canonicalPath !== expectedPath) {
+    fail("canonical_triage_invalid", "Review triage log is not the canonical run-level path", {
+      path: canonicalPath,
+      expected: expectedPath,
+    });
+  }
   await assertCanonicalPathV2(
     reader,
-    resolve(path),
+    anchor,
+    canonicalPath,
     "file",
     "review triage log",
     "canonical_triage_invalid",
   );
-  const bytes = await requiredBytes(reader, path, "review triage log");
+  const bytes = await requiredBytes(reader, canonicalPath, "review triage log");
   const text = Buffer.from(bytes).toString("utf8");
   if (!text.trim()) return [];
   const result: Array<{ stored: ReviewTriageEntryV2; canonical: FindingTriageV2 }> = [];
@@ -617,6 +685,7 @@ function expectedEvaluation(
 
 async function verifyAttempt(
   reader: CanonicalEvidenceReaderV2,
+  anchor: CanonicalPathAnchorV2,
   attemptsRoot: string,
   state: LoopStateV2,
   bundleEvent: BundleSubmittedEventV2,
@@ -634,9 +703,17 @@ async function verifyAttempt(
   const directory = resolve(groupDirectory, String(bundleEvent.attempt));
   assertContainedAttemptPath(root, groupDirectory, "Task Group directory");
   assertContainedAttemptPath(root, directory, "attempt directory");
-  await assertCanonicalPathV2(reader, root, "directory", "attemptsRoot", "canonical_attempt_corrupt");
   await assertCanonicalPathV2(
     reader,
+    anchor,
+    root,
+    "directory",
+    "attemptsRoot",
+    "canonical_attempt_corrupt",
+  );
+  await assertCanonicalPathV2(
+    reader,
+    anchor,
     groupDirectory,
     "directory",
     "Task Group attempt directory",
@@ -644,6 +721,7 @@ async function verifyAttempt(
   );
   await assertCanonicalPathV2(
     reader,
+    anchor,
     directory,
     "directory",
     "attempt directory",
@@ -917,7 +995,17 @@ async function deriveCanonicalConvergenceEvidenceInternal(
       }));
     },
   };
-  const allTriage = await triageEntries(reader, input.reviewTriagePath, state.runId);
+  const anchor = await canonicalPathAnchorV2(
+    reader,
+    dirname(resolve(input.attemptsRoot)),
+    "canonical_attempt_corrupt",
+  );
+  const allTriage = await triageEntries(
+    reader,
+    input.reviewTriagePath,
+    state.runId,
+    anchor,
+  );
   const bundleEvents = input.inspection.events
     .map((entry) => entry.event)
     .filter((event): event is BundleSubmittedEventV2 => event.type === "bundle_submitted");
@@ -949,6 +1037,7 @@ async function deriveCanonicalConvergenceEvidenceInternal(
     }
     attempts.push(await verifyAttempt(
       reader,
+      anchor,
       input.attemptsRoot,
       state,
       bundleEvent,

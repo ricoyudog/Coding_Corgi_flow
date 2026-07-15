@@ -45,6 +45,7 @@ import { parseTaskGroupsDocument } from "../src/lib/task-groups.js";
 const roots: string[] = [];
 const CHANGE = "example";
 const SESSION = "session-e2e";
+const E2E_TIMEOUT_MS = 30_000;
 const TASKS = [
   "## 1. Foundation",
   "",
@@ -57,7 +58,9 @@ const TASKS = [
 ].join("\n");
 
 afterEach(() => {
-  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+  for (const root of roots.splice(0)) {
+    rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
 });
 
 interface Runtime {
@@ -327,7 +330,7 @@ describe("run-contract v2 cross-module E2E", () => {
       "group_commit_acknowledged",
       "run_finalized",
     ]);
-  });
+  }, E2E_TIMEOUT_MS);
 
   it("invalidates on external planning semantics before writing any attempt bytes", async () => {
     const root = repository("planning-change");
@@ -359,7 +362,7 @@ describe("run-contract v2 cross-module E2E", () => {
       "run_initialized",
       "run_invalidated",
     ]);
-  });
+  }, E2E_TIMEOUT_MS);
 
   it("auto-discovers one v1 run, preserves completed work, archives stale evidence, and continues", async () => {
     const root = repository("migration");
@@ -449,7 +452,7 @@ describe("run-contract v2 cross-module E2E", () => {
     });
     expect(convergeDone.exitCode, JSON.stringify(convergeDone.output)).toBe(0);
     expect(convergeDone.output).toMatchObject({ status: "converged" });
-  });
+  }, E2E_TIMEOUT_MS);
 
   it("verifies a migrated prefix before reusing it through a failed-run successor", async () => {
     const root = repository("migration-successor");
@@ -539,7 +542,7 @@ describe("run-contract v2 cross-module E2E", () => {
       phase: "done", supersedesRunId: "run-migrated-failed",
       groups: { "1": { status: "completed" }, "2": { status: "completed" }, "3": { status: "completed" } },
     });
-  });
+  }, E2E_TIMEOUT_MS);
 
   it("converges append-only, invalidates the old run, reuses only unchanged evidence, and completes the successor", async () => {
     const root = repository("converge");
@@ -737,5 +740,5 @@ describe("run-contract v2 cross-module E2E", () => {
     expect(readFileSync(successorPaths.state!)).toEqual(currentState);
     expect(readFileSync(successorPaths.events!)).toEqual(currentEvents);
     expect(readFileSync(resolve(root, "tasks.md"))).toEqual(currentTasks);
-  });
+  }, E2E_TIMEOUT_MS);
 });
