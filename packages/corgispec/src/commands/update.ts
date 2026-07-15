@@ -7,14 +7,17 @@ import {
 import { loadConfigFromDir } from "../lib/config.js";
 import { inspectLegacyLoop } from "../lib/legacy-loop.js";
 import { lifecycleError } from "../lib/lifecycle.js";
+import { LoopStoreV2, type LoopStoreInspectionV2 } from "../lib/loop-store-v2.js";
 import {
   createOpenSpecAdapter,
   type OpenSpecAdapter,
 } from "../lib/openspec-adapter.js";
+import { isActiveLoopPhaseV2 } from "../lib/run-contract-v2.js";
 
 export interface UpdateCommandDependencies {
   createAdapter?: (cwd: string) => OpenSpecAdapter;
   createResolver?: (adapter: OpenSpecAdapter) => ArtifactResolver;
+  createLoopStore?: (cwd: string) => Pick<LoopStoreV2, "peek">;
 }
 
 export function createUpdateCommand(
@@ -23,6 +26,7 @@ export function createUpdateCommand(
   const cmd = new Command("update");
   const adapterFactory = dependencies.createAdapter ?? ((cwd) => createOpenSpecAdapter(cwd));
   const resolverFactory = dependencies.createResolver ?? ((adapter) => createArtifactResolver(adapter));
+  const loopStoreFactory = dependencies.createLoopStore ?? ((cwd) => new LoopStoreV2({ projectRoot: cwd }));
 
   cmd
     .description("Output planning-only reconciliation context for an existing change")
@@ -41,8 +45,28 @@ export function createUpdateCommand(
         const adapter = adapterFactory(cwd);
         const resolved = await resolverFactory(adapter).resolve(change, { store: opts.store });
         const legacyLoop = inspectLegacyLoop(cwd, change);
+        const canonicalLoop: LoopStoreInspectionV2 = await loopStoreFactory(cwd).peek(change);
         const activeRuns = legacyLoop.runs.filter((run) => run.active);
+        const activeV2 = canonicalLoop.state && isActiveLoopPhaseV2(canonicalLoop.state.phase)
+          ? canonicalLoop.state
+          : null;
+        const pendingConvergence = canonicalLoop.state?.phase === "invalidated" &&
+          canonicalLoop.state.blockedReason?.details?.["operation"] === "converge"
+          ? canonicalLoop.state
+          : null;
         const blockers = [
+          ...(pendingConvergence
+            ? [{
+                code: "PENDING_CONVERGENCE",
+                message: `Planning updates are blocked while canonical run '${pendingConvergence.runId}' has a recoverable convergence intent. Retry corgispec converge with its original confirmation token first.`,
+              }]
+            : []),
+          ...(activeV2
+            ? [{
+                code: "ACTIVE_V2_RUN",
+                message: `Planning updates are blocked while canonical run '${activeV2.runId}' is active. Finalize or invalidate it first.`,
+              }]
+            : []),
           ...(activeRuns.length > 0
             ? [{
                 code: "ACTIVE_V1_RUN",
@@ -68,6 +92,7 @@ export function createUpdateCommand(
           "Read existing files only from artifactPaths.<id>.existingOutputPaths.",
           "Never write resolvedOutputPath when it contains a glob.",
           "Show and confirm one artifact-scoped diff before each write.",
+          "Never edit planning while a durable convergence intent is pending; recover it with the original confirmation token.",
           "Run OpenSpec strict validation and corgispec ready after reconciliation.",
         ];
         const output = {
@@ -94,6 +119,14 @@ export function createUpdateCommand(
           projectContext: config.context ?? "",
           rules: config.rules ?? {},
           legacyLoop,
+          canonicalLoop: canonicalLoop.state
+            ? {
+                runId: canonicalLoop.state.runId,
+                phase: canonicalLoop.state.phase,
+                stateRevision: canonicalLoop.state.stateRevision,
+                nonce: canonicalLoop.state.nonce,
+              }
+            : null,
           guardrails,
           constraints: guardrails,
         };

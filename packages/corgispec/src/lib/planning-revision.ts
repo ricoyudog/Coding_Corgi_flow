@@ -48,14 +48,14 @@ export async function computePlanningRevision(
   appendField(hash, REVISION_FORMAT);
   appendField(hash, input.schemaName);
 
-  for (const artifactId of Object.keys(input.artifactPaths).sort()) {
+  for (const artifactId of Object.keys(input.artifactPaths).sort(compareCodeUnits)) {
     const artifact = input.artifactPaths[artifactId]!;
     appendField(hash, "artifact");
     appendField(hash, artifactId);
     appendField(hash, normalizePortablePath(artifact.outputPath));
 
     const concretePaths = [...new Set(artifact.existingOutputPaths)].sort((left, right) =>
-      normalizePortablePath(left).localeCompare(normalizePortablePath(right))
+      compareCodeUnits(normalizePortablePath(left), normalizePortablePath(right))
     );
     appendField(hash, String(concretePaths.length));
 
@@ -90,6 +90,11 @@ export async function computePlanningRevision(
   }
 
   return `sha256:${hash.digest("hex")}`;
+}
+
+/** Locale-independent ordering keeps revisions identical across ICU builds. */
+function compareCodeUnits(left: string, right: string): number {
+  return left === right ? 0 : left < right ? -1 : 1;
 }
 
 export function normalizePortablePath(filePath: string): string {

@@ -338,7 +338,7 @@ export async function resolveHookChanges(
   );
 
   return resolvedChanges.sort((left, right) =>
-    left.name.localeCompare(right.name) || left.commandRoot.localeCompare(right.commandRoot)
+    compareCodeUnits(left.name, right.name) || compareCodeUnits(left.commandRoot, right.commandRoot)
   );
 }
 
@@ -644,4 +644,8 @@ function formatCurrentGroup(summary: TaskGroupSummary | null): string | null {
 
 function isPortableAbsolute(value: string): boolean {
   return resolve(value) === value || /^[A-Za-z]:[\\/]/.test(value) || /^\\\\[^\\]/.test(value);
+}
+
+function compareCodeUnits(left: string, right: string): number {
+  return left === right ? 0 : left < right ? -1 : 1;
 }

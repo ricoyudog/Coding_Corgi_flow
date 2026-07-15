@@ -16,6 +16,8 @@ import { createReviewCommand } from "../commands/review.js";
 import { createArchiveCommand } from "../commands/archive.js";
 import { createReadyCommand } from "../commands/ready.js";
 import { createUpdateCommand } from "../commands/update.js";
+import { createLoopV2Command } from "../commands/loop-v2.js";
+import { createConvergeCommand } from "../commands/converge.js";
 import { createInitCommand } from "../commands/init.js";
 import { createDoctorCommand } from "../commands/doctor.js";
 import { createHookSessionStartCommand } from "../commands/hooks/session-start.js";
@@ -68,6 +70,8 @@ program.addCommand(createReviewCommand());
 program.addCommand(createArchiveCommand());
 program.addCommand(createUpdateCommand());
 program.addCommand(createReadyCommand());
+program.addCommand(createLoopV2Command());
+program.addCommand(createConvergeCommand());
 
 // Hook subcommands (corgispec hook <name>)
 program.addCommand(createHookCommand());
@@ -78,4 +82,4 @@ hooksCmd.description("Generate hook configuration for AI platforms (use 'hooks g
 hooksCmd.addCommand(createHooksGenerateCommand());
 program.addCommand(hooksCmd);
 
-program.parse();
+await program.parseAsync();

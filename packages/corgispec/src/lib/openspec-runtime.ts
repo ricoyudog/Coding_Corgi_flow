@@ -10,6 +10,8 @@ export interface CommandRequest {
   cwd: string;
   timeoutMs?: number;
   env?: NodeJS.ProcessEnv;
+  /** Optional exact stdin bytes. Omitted commands keep stdin closed. */
+  stdin?: string | Uint8Array;
 }
 
 export interface CommandResult {
@@ -64,7 +66,7 @@ export class NodeCommandRunner implements CommandRunner {
         env: request.env ? { ...process.env, ...request.env } : process.env,
         shell: false,
         windowsHide: true,
-        stdio: ["ignore", "pipe", "pipe"],
+        stdio: ["pipe", "pipe", "pipe"],
       });
 
       child.stdout.setEncoding("utf8");
@@ -80,6 +82,25 @@ export class NodeCommandRunner implements CommandRunner {
         timedOut = true;
         child.kill("SIGKILL");
       }, timeoutMs);
+
+      child.stdin.on("error", (error: NodeJS.ErrnoException) => {
+        // A command may intentionally exit without consuming a large stdin.
+        // EPIPE is therefore a normal early-close outcome; every other stream
+        // failure retains the runner's spawn-failure semantics.
+        if (error.code === "EPIPE" || settled) return;
+        settled = true;
+        clearTimeout(timer);
+        child.kill("SIGKILL");
+        reject(new CommandRunnerError(
+          `Failed to write stdin for '${request.command}': ${error.message}`,
+          "spawn_failed",
+          error,
+        ));
+      });
+
+      // Always close stdin promptly. Commands without input retain the previous
+      // EOF behavior; callers that opt in get exactly the supplied bytes.
+      child.stdin.end(request.stdin);
 
       child.once("error", (error) => {
         if (settled) return;

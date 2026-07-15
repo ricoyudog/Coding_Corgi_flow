@@ -1,8 +1,8 @@
 {
   "slug": "corgispec-review-loop",
   "tier": "molecule",
-  "version": "1.0.0",
-  "description": "Automated loop review — runs quality checks and writes review.json without human gate. Used by the corgi-loop executor.",
+  "version": "2.0.0",
+  "description": "Collect structured Run Contract v2 review findings in memory for canonical CLI submission without writing lifecycle artifacts.",
   "depends_on": [],
   "platform": "universal",
   "tags": [

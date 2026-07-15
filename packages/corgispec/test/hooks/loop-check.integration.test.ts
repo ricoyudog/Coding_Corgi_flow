@@ -1,389 +1,242 @@
-// Integration tests for hook loop-check CLI.
-// Runs the FULL pipeline: stdin JSON -> hook CLI -> stdout JSON + state mutation.
-// Uses execSync to invoke `corgispec hook loop-check` against real temp dirs.
-
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { execSync } from "node:child_process";
-import { installFakeOpenSpec, setupFakeChange } from "./fake-openspec.js";
+import { resolve } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  createInitialLoopStateV2,
+  createRunInitializedEventV2,
+  reduceLoopEventV2,
+} from "../../src/lib/loop-reducer-v2.js";
+import { LoopStoreV2 } from "../../src/lib/loop-store-v2.js";
+import type { ArtifactHashV2, LoopStateV2 } from "../../src/lib/run-contract-v2.js";
 
 const CLI = resolve(__dirname, "../../dist/corgispec.js");
+const roots: string[] = [];
 
-// Helpers
+afterEach(() => {
+  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+});
 
-const NONCE = "2026-06-10T00:00:00.000Z";
+describe("Run Contract v2 loop-check hook", () => {
+  it("passes session identity through and returns a structured phase action", async () => {
+    const root = project("active");
+    await seed(root, "change-a", "run-a", "session-a");
 
-interface LoopState {
-  active: boolean;
-  changeName: string;
-  sessionId: string;
-  nonce: string;
-  currentGroup: number;
-  totalGroups: number;
-  phase: string;
-  worktreePath: string;
-  platform: string;
-  autoApprovalPolicy: { allowCommitPush: boolean; allowPassWithWarnings: boolean };
-  startedAt: string;
-  updatedAt: string;
-  completedGroups: number[];
-  groupStatuses: Record<string, string>;
-  pushStatus: Record<string, string>;
-  blockCount: number;
-  maxBlocks: number;
-  maxGroups: number;
-}
-
-interface VerifyArtifact {
-  schemaVersion: number;
-  changeName: string;
-  group: number;
-  nonce: string;
-  verdict: "PASS" | "PASS_WITH_WARNINGS" | "FAIL";
-  summary?: string;
-  evidence: Array<{
-    kind: string;
-    command?: string;
-    description?: string;
-    status: string;
-    exitCode?: number;
-    provenance: "cli-emitted" | "llm-interpreted";
-  }>;
-}
-
-interface ReviewArtifact {
-  schemaVersion: number;
-  changeName: string;
-  group: number;
-  nonce: string;
-  finding_details: Array<{
-    severity: string;
-    check: string;
-    requirement?: string;
-    file?: string;
-    description: string;
-  }>;
-}
-
-function defaultState(overrides: Partial<LoopState> = {}): LoopState {
-  return {
-    active: true,
-    changeName: "my-change",
-    sessionId: "session-test-123",
-    nonce: NONCE,
-    currentGroup: 1,
-    totalGroups: 3,
-    phase: "init",
-    worktreePath: "/tmp/test",
-    platform: "github-tracked",
-    autoApprovalPolicy: { allowCommitPush: true, allowPassWithWarnings: true },
-    startedAt: "2026-06-10T00:00:00.000Z",
-    updatedAt: "2026-06-10T00:00:00.000Z",
-    completedGroups: [],
-    groupStatuses: {},
-    pushStatus: {},
-    blockCount: 0,
-    maxBlocks: 10,
-    maxGroups: 5,
-    ...overrides,
-  };
-}
-
-function defaultVerify(overrides: Partial<VerifyArtifact> = {}): VerifyArtifact {
-  return {
-    schemaVersion: 1,
-    changeName: "my-change",
-    group: 1,
-    nonce: NONCE,
-    verdict: "PASS",
-    evidence: [
-      {
-        kind: "test",
-        command: "npm test",
-        status: "pass",
-        exitCode: 0,
-        provenance: "cli-emitted",
-      },
-    ],
-    ...overrides,
-  };
-}
-
-function defaultReview(overrides: Partial<ReviewArtifact> = {}): ReviewArtifact {
-  return {
-    schemaVersion: 1,
-    changeName: "my-change",
-    group: 1,
-    nonce: NONCE,
-    finding_details: [],
-    ...overrides,
-  };
-}
-
-function runLoopCheck(
-  tempDir: string,
-  stdin: object = {},
-): { exitCode: number; stdout: Record<string, unknown> } {
-  try {
-    const output = execSync("node " + CLI + " hook loop-check --path " + tempDir, {
-      encoding: "utf-8",
-      input: JSON.stringify(stdin),
-      env: { ...process.env, CORGISPEC_HOOKS_DISABLE: undefined },
+    const result = runHook(root, {
+      hook_event_name: "Stop",
+      stop_hook_active: false,
+      session_id: "session-a",
     });
-    return { exitCode: 0, stdout: JSON.parse(output.trim() || "{}") };
-  } catch (err: any) {
-    const stdout = err.stdout?.trim() || "{}";
-    return { exitCode: err.status ?? 1, stdout: JSON.parse(stdout) };
-  }
-}
 
-function runStopCheck(
-  tempDir: string,
-  stdin: object = {},
-  env: NodeJS.ProcessEnv = { ...process.env, CORGISPEC_HOOKS_DISABLE: undefined },
-): { exitCode: number; stdout: string; stderr: string } {
-  try {
-    const output = execSync("node " + CLI + " hook stop-check --path " + tempDir, {
-      encoding: "utf-8",
-      input: JSON.stringify(stdin),
-      env,
-    });
-    return { exitCode: 0, stdout: output || "", stderr: "" };
-  } catch (err: any) {
-    return {
-      exitCode: err.status ?? 1,
-      stdout: err.stdout?.toString() || "",
-      stderr: err.stderr?.toString() || "",
-    };
-  }
-}
-
-function writeState(tempDir: string, state: LoopState): void {
-  const stateDir = resolve(tempDir, ".claude/corgi-loop", state.changeName);
-  mkdirSync(stateDir, { recursive: true });
-  writeFileSync(resolve(stateDir, "state.json"), JSON.stringify(state, null, 2), "utf-8");
-}
-
-function writeVerify(tempDir: string, artifact: VerifyArtifact): void {
-  const groupDir = resolve(
-    tempDir,
-    ".claude/corgi-loop",
-    artifact.changeName,
-    "groups",
-    String(artifact.group),
-  );
-  mkdirSync(groupDir, { recursive: true });
-  writeFileSync(resolve(groupDir, "verify.json"), JSON.stringify(artifact, null, 2), "utf-8");
-}
-
-function writeReview(tempDir: string, artifact: ReviewArtifact): void {
-  const groupDir = resolve(
-    tempDir,
-    ".claude/corgi-loop",
-    artifact.changeName,
-    "groups",
-    String(artifact.group),
-  );
-  mkdirSync(groupDir, { recursive: true });
-  writeFileSync(resolve(groupDir, "review.json"), JSON.stringify(artifact, null, 2), "utf-8");
-}
-
-function readState(tempDir: string, changeName: string): LoopState {
-  const statePath = resolve(tempDir, ".claude/corgi-loop", changeName, "state.json");
-  return JSON.parse(readFileSync(statePath, "utf-8")) as LoopState;
-}
-
-function setupProject(tempDir: string): void {
-  mkdirSync(resolve(tempDir, "openspec"), { recursive: true });
-  writeFileSync(resolve(tempDir, "openspec/config.yaml"), "schema: github-tracked\n");
-}
-
-// Test Suite
-
-describe("hook loop-check (integration)", () => {
-  let tempDir: string;
-
-  beforeEach(() => {
-    tempDir = resolve(
-      tmpdir(),
-      "corgispec-loop-check-" + String(Date.now()) + "-" + Math.random().toString(36).slice(2),
-    );
-    mkdirSync(tempDir, { recursive: true });
-    setupProject(tempDir);
-  });
-
-  afterEach(() => {
-    rmSync(tempDir, { recursive: true, force: true });
-  });
-
-  // Scenario 1: Golden path
-
-  it("golden path: 3 groups all clean -> 3 blocks -> done", { timeout: 30000 }, () => {
-    // Initial state: group 1 of 3
-    const state1 = defaultState({
-      currentGroup: 1,
-      totalGroups: 3,
-      phase: "awaiting_group_result",
-    });
-    writeState(tempDir, state1);
-
-    // Group 1: PASS verify + clean review
-    writeVerify(tempDir, defaultVerify({ group: 1 }));
-    writeReview(tempDir, defaultReview({ group: 1 }));
-
-    // Invoke 1: group 1 passes -> block, advance to group 2
-    const result1 = runLoopCheck(tempDir);
-    expect(result1.exitCode).toBe(0);
-    expect(result1.stdout.decision).toBe("block");
-    expect(result1.stdout.terminal).toBeFalsy();
-    const updated1 = readState(tempDir, "my-change");
-    expect(updated1.currentGroup).toBe(2);
-    expect(updated1.completedGroups).toContain(1);
-    expect(updated1.blockCount).toBe(1);
-
-    // Group 2: PASS verify + clean review
-    writeVerify(tempDir, defaultVerify({ group: 2 }));
-    writeReview(tempDir, defaultReview({ group: 2 }));
-
-    // Invoke 2: group 2 passes -> block, advance to group 3
-    const result2 = runLoopCheck(tempDir);
-    expect(result2.exitCode).toBe(0);
-    expect(result2.stdout.decision).toBe("block");
-    expect(result2.stdout.terminal).toBeFalsy();
-    const updated2 = readState(tempDir, "my-change");
-    expect(updated2.currentGroup).toBe(3);
-    expect(updated2.completedGroups).toContain(2);
-    expect(updated2.blockCount).toBe(2);
-
-    // Group 3 (last): PASS verify + clean review
-    writeVerify(tempDir, defaultVerify({ group: 3 }));
-    writeReview(tempDir, defaultReview({ group: 3 }));
-
-    // Invoke 3: last group passes -> block, phase=awaiting_finalize
-    const result3 = runLoopCheck(tempDir);
-    expect(result3.exitCode).toBe(0);
-    expect(result3.stdout.decision).toBe("block");
-    expect(result3.stdout.phase).toBe("awaiting_finalize");
-    expect(result3.stdout.terminal).toBeFalsy();
-    const updated3 = readState(tempDir, "my-change");
-    expect(updated3.completedGroups).toEqual([1, 2, 3]);
-    expect(updated3.phase).toBe("awaiting_finalize");
-    expect(updated3.blockCount).toBe(3);
-
-    // Invoke 4: all finalized -> proceed, done, terminal
-    const result4 = runLoopCheck(tempDir);
-    expect(result4.exitCode).toBe(0);
-    expect(result4.stdout.decision).toBe("proceed");
-    expect(result4.stdout.phase).toBe("done");
-    expect(result4.stdout.terminal).toBe(true);
-    const updated4 = readState(tempDir, "my-change");
-    expect(updated4.active).toBe(false);
-    expect(updated4.phase).toBe("done");
-  });
-
-  // Scenario 2: Failure path
-
-  it("failure path: group 2 critical finding -> terminal stopped_review_findings", { timeout: 15000 }, () => {
-    // State after group 1 passed (currentGroup=2)
-    const state2 = defaultState({
-      currentGroup: 2,
-      totalGroups: 3,
-      phase: "awaiting_group_result",
-      completedGroups: [1],
-      groupStatuses: { "1": "complete" },
-      blockCount: 1,
-    });
-    writeState(tempDir, state2);
-
-    // Group 2: PASS verify but CRITICAL finding in review
-    writeVerify(tempDir, defaultVerify({ group: 2 }));
-    writeReview(
-      tempDir,
-      defaultReview({
-        group: 2,
-        finding_details: [
-          {
-            severity: "critical",
-            check: "Security",
-            description: "SQL injection vulnerability in user query",
-          },
-        ],
-      }),
-    );
-
-    const result = runLoopCheck(tempDir);
     expect(result.exitCode).toBe(0);
-    expect(result.stdout.decision).toBe("proceed");
-    expect(result.stdout.phase).toBe("stopped_review_findings");
-    expect(result.stdout.terminal).toBe(true);
-    expect(result.stdout.reason).toContain("critical");
-
-    // State should be deactivated
-    const updated = readState(tempDir, "my-change");
-    expect(updated.active).toBe(false);
-    expect(updated.phase).toBe("stopped_review_findings");
-  });
-
-  // Scenario 3: Verify fail
-
-  it("verify fail: group 1 verdict FAIL -> terminal verify_failed", () => {
-    // Initial state: group 1 of 3
-    const state1 = defaultState({
-      currentGroup: 1,
-      totalGroups: 3,
+    expect(result.stderr).toBe("");
+    expect(result.stdout).toMatchObject({
+      schemaVersion: 2,
+      decision: "block",
+      status: "active",
+      changeName: "change-a",
+      runId: "run-a",
       phase: "awaiting_group_result",
+      terminal: false,
+      action: { type: "dispatch_group", groupId: "1", attempt: 1 },
     });
-    writeState(tempDir, state1);
-
-    // Group 1: FAIL verdict
-    writeVerify(tempDir, defaultVerify({ verdict: "FAIL", group: 1 }));
-    writeReview(tempDir, defaultReview({ group: 1 }));
-
-    const result = runLoopCheck(tempDir);
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout.decision).toBe("proceed");
-    expect(result.stdout.phase).toBe("verify_failed");
-    expect(result.stdout.terminal).toBe(true);
-    expect(result.stdout.reason).toContain("FAIL");
-
-    // State should be deactivated
-    const updated = readState(tempDir, "my-change");
-    expect(updated.active).toBe(false);
-    expect(updated.phase).toBe("verify_failed");
   });
 
-  // Scenario 4: stop-check composition
+  it("fails session conflict without changing state, events, or current pointer", async () => {
+    const root = project("session-conflict");
+    await seed(root, "change-a", "run-a", "session-a");
+    const runRoot = resolve(root, ".corgi/loop/change-a/runs/run-a");
+    const watched = [
+      resolve(runRoot, "state.json"),
+      resolve(runRoot, "events.jsonl"),
+      resolve(root, ".corgi/loop/change-a/current.json"),
+    ];
+    const before = watched.map((path) => readFileSync(path));
 
-  it("stop-check exits 0 when loop is active (integration with loop state)", () => {
-    // Create an active loop state
-    const state = defaultState({
-      currentGroup: 1,
-      totalGroups: 3,
-      phase: "awaiting_group_result",
-    });
-    writeState(tempDir, state);
+    const result = runHook(root, { session_id: "session-other" });
 
-    // stop-check should detect the active loop state and exit 0
-    // (deferring to loop-check instead of its own task-check logic)
-    const result = runStopCheck(tempDir);
-    expect(result.exitCode).toBe(0);
-  });
-
-  it("stop-check exits 2 when no loop and has incomplete tasks", () => {
-    // No loop state -> stop-check falls through to normal task check
-    const change = setupFakeChange({
-      projectRoot: tempDir,
-      changeName: "wip-change",
-      taskContent: "## 1. Implementation\n\n- [ ] 1.1 Not done yet\n",
-    });
-    const openspec = installFakeOpenSpec(tempDir, {
-      listRoot: change.planningRoot,
-      statuses: { "wip-change": change.status },
-    });
-
-    const result = runStopCheck(tempDir, {}, openspec.env);
     expect(result.exitCode).toBe(2);
+    expect(result.stdout).toMatchObject({
+      decision: "proceed",
+      status: "contract_error",
+      error: { code: "session_conflict" },
+    });
+    watched.forEach((path, index) => expect(readFileSync(path)).toEqual(before[index]));
+  });
+
+  it("does not repair a stale current pointer for a conflicting Stop-hook session", async () => {
+    const root = project("session-conflict-stale-pointer");
+    await seed(root, "change-a", "run-a", "session-a");
+    const runRoot = resolve(root, ".corgi/loop/change-a/runs/run-a");
+    const current = resolve(root, ".corgi/loop/change-a/current.json");
+    const statePath = resolve(runRoot, "state.json");
+    const eventsPath = resolve(runRoot, "events.jsonl");
+    unlinkSync(current);
+    const before = [readFileSync(statePath), readFileSync(eventsPath)];
+
+    const result = runHook(root, { session_id: "session-other" });
+
+    expect(result.exitCode).toBe(2);
+    expect(result.stdout).toMatchObject({
+      status: "contract_error",
+      error: { code: "session_conflict" },
+    });
+    expect(existsSync(current)).toBe(false);
+    expect(readFileSync(statePath)).toEqual(before[0]);
+    expect(readFileSync(eventsPath)).toEqual(before[1]);
+  });
+
+  it("fails closed when more than one change has an active run", async () => {
+    const root = project("multiple");
+    await seed(root, "change-a", "run-a", "session-a");
+    await seed(root, "change-b", "run-b", "session-a");
+
+    const result = runHook(root, { session_id: "session-a" });
+
+    expect(result.exitCode).toBe(2);
+    expect(result.stdout).toMatchObject({
+      status: "contract_error",
+      error: { code: "multiple_active_changes" },
+    });
+  });
+
+  it("relays terminal state without attempting another mutation", async () => {
+    const root = project("terminal");
+    const state = await seed(root, "change-a", "run-a", "session-a");
+    const occurredAt = "2026-07-15T00:01:00.000Z";
+    const event = {
+      schemaVersion: 2 as const,
+      type: "run_invalidated" as const,
+      runId: state.runId,
+      seq: 1,
+      expectedStateRevision: 0,
+      expectedNonce: state.nonce,
+      nextNonce: "nonce-terminal",
+      occurredAt,
+      actor: state.owner,
+      reason: {
+        code: "manual" as const,
+        message: "stopped by test",
+        details: {},
+      },
+    };
+    const next = reduceLoopEventV2(state, event).postState;
+    await new LoopStoreV2({ projectRoot: root }).transition({
+      changeName: state.changeName,
+      runId: state.runId,
+      sessionId: state.sessionId,
+      expectedStateRevision: state.stateRevision,
+      expectedNonce: state.nonce,
+      event,
+      nextState: next,
+    });
+    const eventsPath = resolve(root, ".corgi/loop/change-a/runs/run-a/events.jsonl");
+    const before = readFileSync(eventsPath);
+
+    const result = runHook(root, { session_id: "session-a" });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toMatchObject({
+      decision: "proceed",
+      status: "terminal",
+      phase: "invalidated",
+      terminal: true,
+      action: { type: "terminal" },
+      reason: "stopped by test",
+    });
+    expect(readFileSync(eventsPath)).toEqual(before);
+  });
+
+  it("honors stop-hook re-entry and an empty canonical store", () => {
+    const root = project("idle");
+    expect(runHook(root, { stop_hook_active: true }).stdout).toMatchObject({
+      decision: "proceed",
+      status: "idle",
+    });
+    expect(runHook(root, { session_id: "none" }).stdout).toMatchObject({
+      decision: "proceed",
+      status: "idle",
+    });
+  });
+
+  it("returns pure JSON and exit 2 for malformed hook stdin", () => {
+    const root = project("bad-stdin");
+    const result = spawnSync(
+      process.execPath,
+      [CLI, "hook", "loop-check", "--path", root],
+      { input: "{bad", encoding: "utf8" },
+    );
+
+    expect(result.status).toBe(2);
+    expect(result.stderr).toBe("");
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      status: "contract_error",
+      error: { code: "hook_contract_error" },
+    });
   });
 });
+
+function project(label: string): string {
+  const root = resolve(
+    tmpdir(),
+    `corgispec-loop-hook-v2-${label}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  );
+  roots.push(root);
+  mkdirSync(resolve(root, "openspec"), { recursive: true });
+  writeFileSync(resolve(root, "openspec/config.yaml"), "schema: test\n");
+  return root;
+}
+
+async function seed(
+  root: string,
+  changeName: string,
+  runId: string,
+  sessionId: string,
+): Promise<LoopStateV2> {
+  const state = createInitialLoopStateV2({
+    changeName,
+    runId,
+    owner: { id: "hook-test", kind: "automation" },
+    sessionId,
+    mode: "hook-driven",
+    nonce: `nonce-${runId}`,
+    planningRevision: hash("a"),
+    baselineGitRevision: "baseline",
+    workspaceFingerprint: hash("b"),
+    policy: {
+      requireCleanReview: true,
+      requireCliPass: true,
+      requireCleanWorktreeForCommit: true,
+      requirePush: false,
+    },
+    limits: { maxGroups: 10, maxAttemptsPerGroup: 3, maxEvents: 100 },
+    groups: [{ id: "1", taskGroupFingerprint: hash("c") }],
+    startedAt: "2026-07-15T00:00:00.000Z",
+  });
+  await new LoopStoreV2({ projectRoot: root }).initialize({
+    state,
+    event: createRunInitializedEventV2(state),
+  });
+  return state;
+}
+
+function runHook(
+  root: string,
+  input: Record<string, unknown>,
+): { exitCode: number | null; stdout: Record<string, unknown>; stderr: string } {
+  const result = spawnSync(
+    process.execPath,
+    [CLI, "hook", "loop-check", "--path", root],
+    { input: JSON.stringify(input), encoding: "utf8" },
+  );
+  return {
+    exitCode: result.status,
+    stdout: JSON.parse(result.stdout),
+    stderr: result.stderr,
+  };
+}
+
+function hash(character: string): ArtifactHashV2 {
+  return `sha256:${character.repeat(64)}` as ArtifactHashV2;
+}

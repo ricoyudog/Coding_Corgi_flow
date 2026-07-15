@@ -3,6 +3,7 @@ node_modules/
 
 # Orchestration state
 .omx/
+.corgi/loop/
 
 # Playwright MCP
 .playwright-mcp/

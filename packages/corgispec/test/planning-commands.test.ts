@@ -227,4 +227,88 @@ describe("planning CLI JSON contracts", () => {
       blockers: [{ code: "CORRUPT_V1_STATE" }],
     });
   });
+
+  it("update blocks an active canonical v2 run without mutating it", async () => {
+    const runner = new QueueRunner([result(status)]);
+    const adapter = createOpenSpecAdapter(root, runner, { verifyRuntime: false });
+    const peek = vi.fn(async () => ({
+      current: null,
+      events: [],
+      recovered: false,
+      repairedTrailingEvent: false,
+      state: {
+        schemaVersion: 2,
+        runId: "run-active",
+        phase: "fixing",
+        stateRevision: 4,
+        nonce: "nonce-4",
+      },
+    }));
+
+    await createUpdateCommand({
+      createAdapter: () => adapter,
+      createLoopStore: () => ({ peek }) as never,
+    }).parseAsync(
+      ["change-a", "--json", "--path", root],
+      { from: "user" },
+    );
+
+    expect(process.exitCode).toBe(1);
+    expect(JSON.parse(String(log.mock.calls[0]![0]))).toMatchObject({
+      status: "blocked",
+      reasonCode: "ACTIVE_V2_RUN",
+      blockers: [{ code: "ACTIVE_V2_RUN" }],
+      canonicalLoop: {
+        runId: "run-active",
+        phase: "fixing",
+        stateRevision: 4,
+        nonce: "nonce-4",
+      },
+    });
+    expect(peek).toHaveBeenCalledWith("change-a");
+  });
+
+  it("update blocks planning writes while a durable convergence intent is pending", async () => {
+    const runner = new QueueRunner([result(status)]);
+    const adapter = createOpenSpecAdapter(root, runner, { verifyRuntime: false });
+    const peek = vi.fn(async () => ({
+      current: null,
+      events: [],
+      recovered: false,
+      repairedTrailingEvent: false,
+      recoveryRequired: false,
+      state: {
+        schemaVersion: 2,
+        runId: "run-awaiting-convergence-recovery",
+        phase: "invalidated",
+        stateRevision: 7,
+        nonce: "nonce-7",
+        blockedReason: {
+          code: "planning_invalidated",
+          message: "convergence append interrupted",
+          details: { operation: "converge", convergenceIntent: {} },
+        },
+      },
+    }));
+
+    await createUpdateCommand({
+      createAdapter: () => adapter,
+      createLoopStore: () => ({ peek }) as never,
+    }).parseAsync(
+      ["change-a", "--json", "--path", root],
+      { from: "user" },
+    );
+
+    expect(process.exitCode).toBe(1);
+    expect(JSON.parse(String(log.mock.calls[0]![0]))).toMatchObject({
+      status: "blocked",
+      reasonCode: "PENDING_CONVERGENCE",
+      blockers: [{ code: "PENDING_CONVERGENCE" }],
+      canonicalLoop: {
+        runId: "run-awaiting-convergence-recovery",
+        phase: "invalidated",
+      },
+    });
+    expect(peek).toHaveBeenCalledWith("change-a");
+  });
 });
