@@ -56,10 +56,14 @@ function fixtureStatus(): OpenSpecStatusResponse {
   );
   return JSON.parse(
     template
-      .replaceAll("${PLANNING_ROOT}", planningRoot)
-      .replaceAll("${CHANGES_DIR}", changesDir)
-      .replaceAll("${CHANGE_ROOT}", changeRoot)
+      .replaceAll("${PLANNING_ROOT}", jsonStringFragment(planningRoot))
+      .replaceAll("${CHANGES_DIR}", jsonStringFragment(changesDir))
+      .replaceAll("${CHANGE_ROOT}", jsonStringFragment(changeRoot))
   ) as OpenSpecStatusResponse;
+}
+
+function jsonStringFragment(value: string): string {
+  return JSON.stringify(value).slice(1, -1);
 }
 
 class StatusProvider implements ArtifactStatusProvider {

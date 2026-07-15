@@ -2,7 +2,7 @@ import { execSync, spawnSync } from "node:child_process";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, resolve } from "node:path";
+import { delimiter, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runBootstrap } from "../src/lib/bootstrap.js";
 
@@ -12,6 +12,7 @@ const CLI = resolve(PACKAGE_ROOT, "dist/corgispec.js");
 const ASSETS_ROOT = resolve(PACKAGE_ROOT, "assets");
 const TEST_ROOT = resolve(tmpdir(), `corgispec-bootstrap-${Date.now()}`);
 const ORIGINAL_OPENSPEC_BIN = process.env["CORGISPEC_OPENSPEC_BIN"];
+const ORIGINAL_PATH = process.env["PATH"];
 
 function bootstrapEnv(pathValue: string | undefined): NodeJS.ProcessEnv {
   return {
@@ -110,6 +111,7 @@ describe("bootstrap library", () => {
     delete process.env["CORGISPEC_FAKE_SCHEMA_RESULT"];
     delete process.env["CORGISPEC_FAKE_LOG"];
     process.env["CORGISPEC_OPENSPEC_BIN"] = createFakeOpenSpecBin(TEST_ROOT);
+    process.env["PATH"] = `${createFakeGhBin(TEST_ROOT)}${delimiter}${ORIGINAL_PATH ?? ""}`;
   });
 
   afterEach(() => {
@@ -120,6 +122,11 @@ describe("bootstrap library", () => {
     }
     delete process.env["CORGISPEC_FAKE_SCHEMA_RESULT"];
     delete process.env["CORGISPEC_FAKE_LOG"];
+    if (ORIGINAL_PATH === undefined) {
+      delete process.env["PATH"];
+    } else {
+      process.env["PATH"] = ORIGINAL_PATH;
+    }
     rmSync(TEST_ROOT, { recursive: true, force: true });
   });
 
