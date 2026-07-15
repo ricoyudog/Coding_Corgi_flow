@@ -301,6 +301,35 @@ describe("assertWritableArtifactPath", () => {
     ).rejects.toMatchObject({ code: "symlink_escape" });
   });
 
+  it("rejects a dangling final symlink instead of treating it as a new file", async () => {
+    const outside = resolve(testDir, "outside");
+    mkdirSync(outside);
+    const missingOutsideTarget = resolve(outside, "nonexistent.md");
+    const linkedArtifact = resolve(changeRoot, "link.md");
+    symlinkSync(missingOutsideTarget, linkedArtifact, "file");
+
+    const guardedWrite = async (): Promise<void> => {
+      const approved = await assertWritableArtifactPath({ changeRoot }, linkedArtifact);
+      writeFileSync(approved, "must never reach the outside target\n");
+    };
+    await expect(guardedWrite()).rejects.toMatchObject({
+      code: "symlink_escape",
+      targetPath: linkedArtifact,
+    });
+    expect(() => readFileSync(missingOutsideTarget)).toThrow();
+  });
+
+  it("fails closed when a missing descendant is below an existing file", async () => {
+    writeArtifact("not-a-directory", "regular file\n");
+
+    await expect(
+      assertWritableArtifactPath({ changeRoot }, "not-a-directory/child.md")
+    ).rejects.toMatchObject({
+      code: "path_unavailable",
+      targetPath: "not-a-directory/child.md",
+    });
+  });
+
   it("validates a nested glob through its static ancestor without treating it as a file", async () => {
     await expect(
       assertArtifactOutputPath({ changeRoot }, resolve(changeRoot, "specs/**/*.md"), true)

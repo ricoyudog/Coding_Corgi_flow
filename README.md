@@ -55,7 +55,7 @@ Coding Corgi Flow is the **community extension** of [OpenSpec](https://github.co
 | 🧩 **Composable Skills** | Atoms → Molecules → Compounds with validated metadata |
 | 🪝 **Session Hooks** | Lifecycle hooks (pre-write, pre-bash, session-start…) with context gates |
 | 🔄 **Automated Pipeline (Loop)** | One-command apply-verify-review per group with auto-approve/fix, zero human gates |
-| 📦 **One-command Install** | `npm i -g corgispec` → `corgispec bootstrap` → done |
+| 📦 **One-command Install** | `npm i -g corgispec@next` → `corgispec bootstrap` → done |
 
 It ships as an npm CLI (`corgispec`), a Claude Code / Codex plugin, and a set of slash commands for OpenCode, Claude Code, and Codex.
 
@@ -78,11 +78,11 @@ Choose your path:
 
 ```bash
 npm install -g @fission-ai/openspec@^1.6.0
-npm install -g /path/to/corgispec-3.0.0-rc.1.tgz
+npm install -g corgispec@next
 corgispec doctor --path /path/to/your-project
 ```
 
-The RC is distributed as a verified tarball/CI artifact and is not published to the npm registry. Replace `/path/to/...` with the downloaded artifact path.
+`next` is the prerelease channel and currently resolves to `3.0.0-rc.1`. For a reproducible install, pin it with `npm install -g corgispec@3.0.0-rc.1`. The unqualified `corgispec` package and the `latest` tag remain on stable `2.4.3`; they do not install this RC.
 
 Options: `--platform <platforms>` (claude, opencode, codex; default: all), `--scope <scope>` (global, local, both; default: global). When TTY is detected and flags are not provided, interactive prompts ask for platform and scope.
 
@@ -277,8 +277,8 @@ Hooks give you **lifecycle control** over AI sessions — validate context befor
 
 | Command | Purpose |
 |---|---|
-| `corgispec hooks generate` | Generate hook config for AI platforms: Claude Code (JSON), OpenCode (JSON/TS), Codex (TOML+Python) |
-| `corgispec hook <name>` | Invoke a runtime hook where `name` is one of: `session-start`, `pre-write`, `post-write`, `pre-bash`, `post-compact`, `stop-check` |
+| `corgispec hooks generate --platform <name>` | Generate hook config for `claude`, `opencode`, or `codex`: Claude Code JSON, an OpenCode TypeScript plugin, or Codex TOML plus Node `.cjs` wrappers |
+| `corgispec hook <name>` | Invoke a runtime hook where `name` is one of: `session-start`, `pre-write`, `post-write`, `pre-bash`, `post-compact`, `stop-check`, `loop-check` |
 
 ### Available Hooks
 
@@ -290,6 +290,9 @@ Hooks give you **lifecycle control** over AI sessions — validate context befor
 | `pre-bash` | Before shell commands | Block destructive ops, enforce allowlists |
 | `post-compact` | After context compaction | Ensure session-bridge is updated |
 | `stop-check` | Before session ends | Validate shutdown state, flush memory |
+| `loop-check` | Before a loop-driven session ends | Inspect canonical Run Contract v2 state and return the required next action |
+
+Claude Code and Codex have awaited lifecycle hooks, so a non-zero `stop-check` or `loop-check` exit can stop completion directly. OpenCode 1.18.x does not expose an awaited stop hook: its generated plugin observes `session.idle`, preserves hook stdout/stderr, and calls `session.promptAsync` to re-enter the interactive session when work remains. The authoritative hard gates are still `corgispec ready` and the canonical `corgispec loop ...` state transitions. A one-shot `opencode run` can tear down before that asynchronous re-entry completes, so automation should explicitly inspect the ready/loop CLI result instead of treating idle as completion.
 
 ### Context Gates
 
@@ -298,12 +301,12 @@ Every molecule skill includes a **context gate** — a structured pre-execution 
 ```text
 # Example: corgispec-apply checks for:
 ✓ openspec/config.yaml exists
-✓ Active change directory found
-✓ tasks.md has uncompleted groups
+✓ OpenSpec resolves one authoritative change root
+✓ The configured task artifact has uncompleted groups
 ✓ Issue tracker reachable
 ```
 
-Hooks are **opt-in** — existing projects work without them. Run `corgispec hooks generate` to get started.
+Hooks are **opt-in** — existing projects work without them. Run `corgispec hooks generate --platform <name>` to get started.
 
 ---
 
@@ -336,7 +339,7 @@ Canonical state is stored under `.corgi/loop/<change>/`, with atomic per-run sna
 
 **Design principle:** *Hard Logic Orchestrates, LLM Executes.* The CLI owns state-machine transitions, validation, evidence identity, locks, recovery, and circuit breakers. The LLM skill executes bounded work and submits truthful evidence through the CLI.
 
-→ **[Full Loop Guide](wiki/guides/loop-guide.md)**
+→ **[Full Loop Guide](.opencode/skills/compounds/corgispec-loop/SKILL.md)**
 
 ---
 
@@ -497,7 +500,7 @@ rules:
 
 ### Migrating from CorgiSpec 2.x
 
-1. Upgrade to Node >=20.19.0 and OpenSpec >=1.6.0 <2.0.0, then install the verified `corgispec-3.0.0-rc.1.tgz` artifact.
+1. Upgrade to Node >=20.19.0 and OpenSpec >=1.6.0 <2.0.0, then install `corgispec@next` (currently `3.0.0-rc.1`) or pin `corgispec@3.0.0-rc.1` exactly. The unqualified package remains stable `2.4.3` via `latest`.
 2. Keep your existing schema name, but make the inferred tracker explicit:
 
    ```yaml
@@ -568,7 +571,7 @@ openspec/
 | Article | Lang | Description |
 |---|---|---|
 | [Cross-Session Memory](docs/cross-session-memory.md) | EN / [中文](docs/cross-session-memory.zh-TW.md) | Architecture, lifecycle, migration |
-| [OpenSpec 落地 GitHub](docs/superpowers/articles/2026-04-28-corgispec-github-workflow-zhihu.md) | 中文 | Spec → Issue → Review → Git pipeline integration |
+| [OpenSpec 落地 GitHub](docs/superpowers/articles/2026-04-28-openspec-github-workflow-zhihu.md) | 中文 | Spec → Issue → Review → Git pipeline integration |
 
 ---
 
@@ -631,6 +634,6 @@ If you find this useful, please ⭐ [OpenSpec](https://github.com/Fission-AI/Ope
 
 ## 📸 Image Credits
 
-- **Hero Banner** & **Pipeline Illustration** & **Architecture Diagram** & **Memory Vault** — AI-generated via the [README visual upgrade plan](wiki/decisions/readme-visual-upgrade.md)
-- **Corgi Comics** (chaos, confident, journey, knowledge) — AI-generated, prompts in [comic workflow guide](docs/articles/corgi-comic-workflow.md)
+- **Hero Banner** & **Pipeline Illustration** & **Architecture Diagram** & **Memory Vault** — AI-generated for this project
+- **Corgi Comics** (chaos, confident, journey, knowledge) — AI-generated for the project articles
 - **Feature Screenshots** — from real usage of Coding Corgi Flow on GitHub/GitLab projects

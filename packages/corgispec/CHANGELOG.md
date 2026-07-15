@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.0.0-rc.1] - 2026-07-15
+## [3.0.0-rc.1] - 2026-07-16
 
 ### Breaking
 
@@ -31,6 +31,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hook integrations for Claude Code, OpenCode, and Codex now pass session identity, stdin, stdout, stderr, and exit codes through the v2 CLI contract.
 - `doctor` and bootstrap now probe the real OpenSpec runtime and schema contract before managed writes instead of reporting a fixed prerequisite pass.
 - Clean-checkout tests rebuild bundled assets first. The release check now includes build, typecheck, coverage thresholds, and an installable npm tarball smoke test.
+
+### Fixed
+
+- Hardened writable artifact paths, loop locks, attempt bundles, and convergence temporaries against dangling symlinks, replacement races, path traversal, partial initialization, and pre-rename process crashes.
+- Convergence now serializes by the canonical external Store target across worktrees, and planning revisions bind to the authoritative change root.
+- The loop event budget reserves a durable terminal slot; a session-changing `resume` can be retried idempotently only with the exact original session, CAS token, and normalized arguments.
+- OpenCode idle handling now reflects its fire-and-forget event contract and requests interactive continuation through `session.promptAsync`. OpenCode and Codex generated hooks invoke the resolved JavaScript CLI entry through Node directly, avoiding Python and Windows npm `.cmd`/`.bat` shims while preserving stdin, stdout, stderr, and exit status.
 
 ### Migration
 

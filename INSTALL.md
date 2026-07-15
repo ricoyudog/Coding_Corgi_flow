@@ -13,12 +13,12 @@ OpenSpec 1.3–1.5 are unsupported; do not continue with a compatibility fallbac
 ```bash
 node --version
 npm install -g @fission-ai/openspec@^1.6.0
-npm install -g /path/to/corgispec-3.0.0-rc.1.tgz
+npm install -g corgispec@next
 openspec --version
 corgispec --version
 ```
 
-Obtain the verified RC tarball from the CI artifact or produce it from a clean source checkout using the verification steps below. The RC is not published to the npm registry.
+`next` is the npm prerelease channel and currently resolves to `corgispec@3.0.0-rc.1`. Use `npm install -g corgispec@3.0.0-rc.1` when an exact, reproducible version is required. Do not use the unqualified package name for this upgrade: `corgispec` and `corgispec@latest` remain on stable `2.4.3`.
 
 ## Fresh bootstrap
 
@@ -82,11 +82,25 @@ corgispec update <change> --path /path/to/project --store <store-id> --json
 corgispec ready <change> --path /path/to/project --store <store-id> --strict --json
 ```
 
-The `update` CLI does not edit files. Use `/corgi:update <change>` (Claude Code), `/corgi-update <change>` (OpenCode), or `$corgispec-update` (Codex) to reconcile planning artifacts; the skill must show and confirm each artifact-scoped diff. Follow it with the platform's ready skill or `corgispec ready`. `update` returns `1` when an active legacy v1 loop blocks planning changes and `2` for contract errors.
+The `update` CLI does not edit files. Use `/corgi:update <change>` (Claude Code), `/corgi-update <change>` (OpenCode), or `$corgispec-update` (Codex) to reconcile planning artifacts; the skill must show and confirm each artifact-scoped diff. Follow it with the platform's ready skill or `corgispec ready`. `update` returns `1` when an active or recovery-pending loop blocks planning changes and `2` for contract errors.
+
+Evaluate implementation convergence only while planning, Git, and evidence revisions are fresh:
+
+```bash
+corgispec converge <change> --path /path/to/project --json
+```
+
+The first call is read-only. If it reports an implementation gap, the matching platform skill presents the evidence and a proposed successor Task Group for confirmation. A confirmed operation appends only that new group and can be resumed idempotently with its `confirmationToken`; it never rewrites old groups.
+
+## Optional lifecycle hooks
+
+The hook CLI has two entry points: generate platform configuration with `corgispec hooks generate --platform <claude|opencode|codex>`, and invoke a generated bridge with `corgispec hook <name>`. Codex generation writes TOML plus Node `.cjs` wrappers; it does not require Python. Generated stop handling includes both `stop-check` and `loop-check`.
+
+OpenCode 1.18.x has no awaited stop hook. Its TypeScript plugin observes `session.idle`, preserves hook stdout/stderr, and uses `session.promptAsync` to re-enter an interactive session when canonical work remains. Treat `corgispec ready` and `corgispec loop ...` as the hard gates. For one-shot `opencode run` automation, inspect those CLI results explicitly because process teardown can race the asynchronous re-entry.
 
 ## Clean source and package verification
 
-When validating this repository or preparing the RC tarball, start from a clean checkout and run:
+When validating this repository or preparing the RC release, start from a clean checkout and run:
 
 ```bash
 cd packages/corgispec
@@ -95,7 +109,7 @@ npm run release:check
 npm pack
 ```
 
-The release check rebuilds bundled assets, builds and typechecks the package, runs the complete test and coverage gates, creates a temporary npm tarball, installs it into a temporary project, and smoke-tests the packaged CLI and asset checksums. The final `npm pack` writes `corgispec-3.0.0-rc.1.tgz` for delivery. Do not run `npm publish`.
+The release check rebuilds bundled assets, builds and typechecks the package, runs the complete test and coverage gates, creates a temporary npm tarball, installs it into a temporary project, and smoke-tests the packaged CLI and asset checksums. The optional final `npm pack` writes `corgispec-3.0.0-rc.1.tgz` for release verification or offline installation; normal consumers install the prerelease from npm with `corgispec@next`.
 
 ## Rules
 

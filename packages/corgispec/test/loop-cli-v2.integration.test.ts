@@ -458,6 +458,64 @@ describe("loop v2 command functions with real Git and store", () => {
     });
   });
 
+  it("reserves the final event slot instead of leaving an active run unable to finalize", async () => {
+    const root = repo("event-limit-final-slot");
+    const planning = planningSnapshot();
+    const dependencies = deps(planning);
+    const initialized = await executeLoopV2({
+      operation: "init",
+      projectRoot: root,
+      changeName: "example",
+      sessionId: "session-1",
+      ownerId: "agent-1",
+      runId: "run-event-limit-final-slot",
+      maxEvents: 3,
+    }, dependencies);
+    const initial = initialized.output.state!;
+    writeFileSync(resolve(root, "README.md"), "implementation\n");
+    const submitted = await executeLoopV2({
+      operation: "submit",
+      projectRoot: root,
+      changeName: "example",
+      ...token(initial),
+      bundle: await submissionFor(root, initial, "PASS", "bundle-final-slot"),
+    }, dependencies);
+    expect(submitted.output.state).toMatchObject({
+      phase: "awaiting_group_commit",
+      lastEventSeq: 2,
+    });
+    git(root, "add", "README.md");
+    git(root, "commit", "-m", "implementation");
+
+    const acknowledged = await executeLoopV2({
+      operation: "ack-commit",
+      projectRoot: root,
+      changeName: "example",
+      ...token(submitted.output.state!),
+    }, dependencies);
+
+    expect(acknowledged.exitCode).toBe(1);
+    expect(acknowledged.output.state).toMatchObject({
+      phase: "circuit_breaker",
+      lastEventSeq: 3,
+      groups: { "1": { commit: { status: "pending" } } },
+      blockedReason: {
+        code: "circuit_breaker",
+        details: { maxEvents: 3, eventCost: 1 },
+      },
+    });
+    const events = readFileSync(resolve(
+      root,
+      ".corgi/loop/example/runs/run-event-limit-final-slot/events.jsonl",
+    ), "utf8").trim().split("\n").map((line) => JSON.parse(line).event.type);
+    expect(events).toEqual([
+      "run_initialized",
+      "bundle_submitted",
+      "evaluation_completed",
+      "run_blocked",
+    ]);
+  });
+
   it("accepts only human triage for a real review fingerprint and persists it via the store", async () => {
     const root = repo("triage");
     const planning = planningSnapshot();
@@ -1337,14 +1395,15 @@ describe("loop v2 command functions with real Git and store", () => {
     }, dependencies);
     expect(failed.output.state?.phase).toBe("verification_failed");
 
-    const resume = await executeLoopV2({
+    const resumeRequest = {
       operation: "resume",
       projectRoot: root,
       changeName: "example",
       ...token(failed.output.state!),
       newSessionId: "session-new",
       maxAttemptsPerGroup: 3,
-    }, dependencies);
+    } as const;
+    const resume = await executeLoopV2(resumeRequest, dependencies);
     expect(resume.exitCode).toBe(0);
     expect(resume.output.state).toMatchObject({
       phase: "fixing",
@@ -1352,6 +1411,42 @@ describe("loop v2 command functions with real Git and store", () => {
       stateRevision: 3,
       nonce: "nonce-resumed",
     });
+
+    const runRoot = resolve(root, ".corgi/loop/example/runs/run-resume");
+    const canonicalPaths = [
+      resolve(root, ".corgi/loop/example/current.json"),
+      resolve(runRoot, "events.jsonl"),
+      resolve(runRoot, "state.json"),
+    ];
+    const afterResume = canonicalPaths.map((path) => readFileSync(path));
+    const replayed = await executeLoopV2(resumeRequest, dependencies);
+    expect(replayed).toMatchObject({
+      exitCode: 0,
+      output: {
+        idempotent: true,
+        state: {
+          phase: "fixing",
+          sessionId: "session-new",
+          stateRevision: 3,
+          nonce: "nonce-resumed",
+        },
+      },
+    });
+    expect(canonicalPaths.map((path) => readFileSync(path))).toEqual(afterResume);
+
+    const conflicts = [
+      { newSessionId: "session-other" },
+      { targetPhase: "awaiting_group_result" as const },
+      { maxAttemptsPerGroup: 4 },
+    ];
+    for (const conflict of conflicts) {
+      const rejected = await executeLoopV2({ ...resumeRequest, ...conflict }, dependencies);
+      expect(rejected).toMatchObject({
+        exitCode: 2,
+        output: { error: { code: "session_conflict" } },
+      });
+      expect(canonicalPaths.map((path) => readFileSync(path))).toEqual(afterResume);
+    }
   });
 });
 

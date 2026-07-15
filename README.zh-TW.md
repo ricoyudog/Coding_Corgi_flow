@@ -54,8 +54,8 @@ Coding Corgi Flow 是 [OpenSpec](https://github.com/Fission-AI/OpenSpec)（由 [
 | 🌿 **Worktree 隔離** | 平行處理多個 change，各自在獨立 git worktree（opt-in） |
 | 🧩 **可組合 Skill** | Atoms → Molecules → Compounds，附帶驗證過的 metadata |
 | 🪝 **Session Hooks** | 生命週期 hooks（pre-write、pre-bash、session-start…）搭配 context gates |
-| 🔄 **自動化管線（Loop）** | 一條指令 apply-verify-review 每個 group，自動批准/修復，零人工關卡 |
-| 📦 **一行指令安裝** | `npm i -g corgispec` → `corgispec bootstrap` → 完成 |
+| 🔄 **自動化管線（Loop）** | Run Contract v2 管理每個 group 的 apply、evidence、review、commit 與 crash 復原 |
+| 📦 **一行指令安裝** | `npm i -g corgispec@next` → `corgispec bootstrap` → 完成 |
 
 以 npm CLI（`corgispec`）、Claude Code / Codex plugin，以及 OpenCode、Claude Code、Codex 的 slash command 形式發佈。
 
@@ -78,12 +78,12 @@ Coding Corgi Flow 是 [OpenSpec](https://github.com/Fission-AI/OpenSpec)（由 [
 
 ```bash
 npm install -g @fission-ai/openspec@^1.6.0
-npm install -g /path/to/corgispec-3.0.0-rc.1.tgz
+npm install -g corgispec@next
 corgispec doctor --path /path/to/your-project
 corgispec bootstrap --target /path/to/your-project --schema github-tracked
 ```
 
-此 RC 以驗證過的 tarball/CI artifact 發佈，不會 publish 到 npm registry。請把 `/path/to/...` 換成下載後的 artifact 路徑。
+`next` 是預發布頻道，目前指向 `3.0.0-rc.1`。若要可重現的安裝，請使用 `npm install -g corgispec@3.0.0-rc.1` 鎖定版本。未加版本的 `corgispec` 與 `latest` tag 仍維持穩定版 `2.4.3`，不會安裝此 RC。
 
 **B. Claude Code / Codex Plugin**
 
@@ -138,7 +138,8 @@ Fetch and follow instructions from https://raw.githubusercontent.com/ricoyudog/C
 | `/corgi-apply` | 執行一個 Task Group，同步 closeout，暫停等 review |
 | `/corgi-verify` | 自動化品質關卡 — lint、build、tests、spec coverage |
 | `/corgi-review` | 五軸審查，蒐集證據，approve/reject/discuss |
-| `/corgi-loop` | 自動化管線 — 對每個 Task Group 執行 apply、verify、review，severity-based 自動批准與修復迴圈 |
+| `/corgi-loop` | Run Contract v2 管線 — 以 CAS 保護 apply、evidence、review、commit、復原與 finalize |
+| `/corgi-converge` | 比對新鮮的 planning、Git 與 evidence；實作有缺口時，確認後只附加一個 successor Task Group |
 | `/corgi-human-qa` | 人工 QA 關卡 — 路由至專業 QA atom（smoke、UI、API、CLI、backend、exploratory） |
 | `/corgi-archive` | 關閉 issue、同步 delta spec、萃取知識、清理 |
 | `/corgi-explore` | 思考夥伴 — 探索想法、釐清需求 |
@@ -163,9 +164,14 @@ corgispec ready add-auth --strict --json
 
 # 需要時明確選取 OpenSpec Store。
 corgispec ready add-auth --store shared-product --strict --json
+
+# 唯讀 convergence 評估；確認是另一次綁定 token 的呼叫。
+corgispec converge add-auth --json
 ```
 
-`ready` 的退出碼：`0` 表示 ready、`1` 表示規劃 blocker、`2` 表示環境或 contract 錯誤。`update` 的退出碼：`0` 表示可開始協調、`1` 表示 active legacy loop 阻擋規劃修改、`2` 表示 contract 錯誤。在 agent session 中，Claude Code 使用 `/corgi:update <change>`、`/corgi:ready <change>`；OpenCode 使用 `/corgi-update <change>`、`/corgi-ready <change>`；Codex 使用已安裝的 `$corgispec-update`、`$corgispec-ready` skills。
+經確認的 converge 操作可從 crash 復原。若確認呼叫中斷，以相同的 `confirmationToken` 重跑；CLI 會冪等地恢復 durable intent，且仍是 planning 與 loop state 的唯一 writer。
+
+`ready` 的退出碼：`0` 表示 ready、`1` 表示規劃 blocker、`2` 表示環境或 contract 錯誤。`update` 的退出碼：`0` 表示可開始協調、`1` 表示 active 或待復原的 loop 阻擋規劃修改、`2` 表示 contract 錯誤。在 agent session 中，Claude Code 使用 `/corgi:update`、`/corgi:ready`、`/corgi:converge`；OpenCode 使用對應的 dash 命名指令；Codex 使用已安裝的對應 skills。
 
 ---
 
@@ -254,12 +260,10 @@ Hooks 讓你對 AI session 擁有 **生命週期控制** — 在執行前驗證�
 
 ### CLI 指令
 
-```bash
-corgispec hooks generate   # 為專案產生 hook 設定（TOML）
-corgispec hooks install    # 安裝 hooks 到 .opencode/hooks/
-corgispec hooks status     # 顯示當前 hook 狀態
-corgispec hooks doctor     # 診斷 hook 設定問題
-```
+| 指令 | 用途 |
+|---|---|
+| `corgispec hooks generate --platform <name>` | 為 `claude`、`opencode` 或 `codex` 產生 hook 設定：Claude Code JSON、OpenCode TypeScript plugin，或 Codex TOML 搭配 Node `.cjs` wrappers |
+| `corgispec hook <name>` | 呼叫 runtime hook；`name` 可為 `session-start`、`pre-write`、`post-write`、`pre-bash`、`post-compact`、`stop-check`、`loop-check` |
 
 ### 可用 Hooks
 
@@ -271,6 +275,9 @@ corgispec hooks doctor     # 診斷 hook 設定問題
 | `pre-bash` | Shell 指令前 | 阻擋破壞性操作、強制白名單 |
 | `post-compact` | 上下文壓縮後 | 確保 session-bridge 已更新 |
 | `stop-check` | Session 結束前 | 驗證關閉狀態、flush 記憶 |
+| `loop-check` | Loop 驅動的 session 結束前 | 檢查 canonical Run Contract v2 state，回傳必須執行的下一個 action |
+
+Claude Code 與 Codex 提供可 awaited 的 lifecycle hook，因此 `stop-check` 或 `loop-check` 非零退出碼可直接阻擋完成。OpenCode 1.18.x 沒有可 awaited 的 stop hook：產生的 plugin 會在 `session.idle` 觀察狀態、保留 hook stdout/stderr，並在尚有工作時透過 `session.promptAsync` 重入互動 session。真正的硬關卡仍是 `corgispec ready` 與 canonical `corgispec loop ...` 狀態轉換。單次 `opencode run` 可能在異步重入完成前就 teardown，所以自動化應明確檢查 ready/loop CLI 結果，不能把 idle 當作完成。
 
 ### Context Gates
 
@@ -279,12 +286,12 @@ corgispec hooks doctor     # 診斷 hook 設定問題
 ```text
 # 範例：corgispec-apply 檢查：
 ✓ openspec/config.yaml 存在
-✓ 找到活躍的 change 目錄
-✓ tasks.md 有未完成的 group
+✓ OpenSpec 解析出唯一的 authoritative change root
+✓ 設定的 task artifact 有未完成的 group
 ✓ Issue tracker 可連線
 ```
 
-Hooks 是 **opt-in** — 現有專案不需要 hooks 也能正常運作。執行 `corgispec hooks generate` 開始使用。
+Hooks 是 **opt-in** — 現有專案不需要 hooks 也能正常運作。執行 `corgispec hooks generate --platform <name>` 開始使用。
 
 ---
 
@@ -297,13 +304,13 @@ Hooks 是 **opt-in** — 現有專案不需要 hooks 也能正常運作。執行
 /corgi:loop <change-name>
 ```
 
-**功能說明：** 每次呼叫執行一個完整的 **Task Group 組合**（apply → verify → review-evidence），寫出機器可讀的 artifact（`verify.json`、`review.json`），並將生命週期決策委派給一個確定性的 **stop hook** — 一個 13-gate TypeScript 狀態機。
+**功能說明：** 每次呼叫執行一個有邊界的 **Task Group attempt**（apply → verify → review evidence），再提交給確定性的 Run Contract v2 CLI。Skill 不會直接寫入 lifecycle 檔案；檔案鎖、CAS、event replay、evidence 驗證、commit acknowledgement 與 finalization 都由 CLI 掌控。
 
 | 模式 | 行為 |
 |---|---|
-| **自動批准** | 零 critical 且零 important 發現 → group 批准、commit、push、推進下一 group |
-| **自動修復迴圈** | 任何 critical/important 發現 → 實作修復、重新驗證、重新審查（最多 3 次重試） |
-| **熔斷器** | `blockCount` 超過 `maxBlocks`（7）→ 停止，防止無限迴圈 |
+| **批准並 commit** | 乾淨的 evidence/review → `awaiting_group_commit`；CLI 驗證乾淨且匹配的 commit tree 後才推進 |
+| **自動修復迴圈** | 自驅模式失敗且仍有 retry budget → `fixing`；hook-driven 或重試用盡時確定性終止 |
+| **Crash 復原** | 將已 fsync 的 event replay 到 atomic snapshot；只有被截斷的最後一筆 JSONL 可自動修復 |
 
 **平台差異：**
 
@@ -313,9 +320,11 @@ Hooks 是 **opt-in** — 現有專案不需要 hooks 也能正常運作。執行
 | 失敗處理 | 立即停止 | 自動重試最多 3 次 |
 | 指令 | `/corgi:loop <name>` | `/corgi-loop <name>` |
 
-**設計原則：** *Hard Logic Orchestrates, LLM Executes.* Hook（TypeScript）擁有所有生命週期決策 — 狀態機轉換、JSON schema 驗證、severity 推導、熔斷器。LLM skill 只執行有限的工作並寫出結構化 artifact。
+Canonical state 儲存在 `.corgi/loop/<change>/`，每個 run 使用 atomic snapshot 與 append-only event/triage log。每次修改都帶有 `stateRevision + nonce`；stale token 或衝突 session 不會改動檔案系統。
 
-→ **[完整 Loop 指南](wiki/guides/loop-guide.md)**
+**設計原則：** *Hard Logic Orchestrates, LLM Executes.* CLI 掌控狀態轉換、驗證、evidence identity、檔案鎖、復原與熔斷。LLM skill 只執行有邊界的工作，並透過 CLI 提交真實 evidence。
+
+→ **[完整 Loop 指南](.opencode/skills/compounds/corgispec-loop/SKILL.md)**
 
 ---
 
@@ -435,7 +444,7 @@ apply:
 | 記憶健康 | 無 | 14 項 lint（新鮮度、上限、連結、萃取） |
 | Skill 架構 | 扁平檔案 | Atoms → Molecules → Compounds + schema 驗證 |
 | Session hooks | 無 | 生命週期 hooks（pre-write、pre-bash、session-start…）+ context gates |
-| 自動化管線 | 無 | 一條指令 loop：每個 group 自動 apply、verify、review，含 auto-approve/fix |
+| 自動化管線 | 無 | Run Contract v2：每個 group 的 CAS、evidence、review、commit acknowledgement 與 crash 復原 |
 | Plugin 市集 | 無 | Claude Code `/plugin install` + Codex marketplace |
 
 ---
@@ -476,7 +485,7 @@ rules:
 
 ### 從 CorgiSpec 2.x 遷移
 
-1. 升級至 Node >=20.19.0 與 OpenSpec >=1.6.0 <2.0.0，再安裝驗證過的 `corgispec-3.0.0-rc.1.tgz` artifact。
+1. 升級至 Node >=20.19.0 與 OpenSpec >=1.6.0 <2.0.0，再安裝 `corgispec@next`（目前為 `3.0.0-rc.1`），或精確鎖定 `corgispec@3.0.0-rc.1`。未加版本的 package 仍透過 `latest` 取得穩定版 `2.4.3`。
 2. 保留既有 schema 名稱，但明確寫出原先推斷的 tracker：
 
    ```yaml
@@ -546,7 +555,7 @@ openspec/
 | 文章 | 語言 | 說明 |
 |---|---|---|
 | [跨 Session 記憶](docs/cross-session-memory.zh-TW.md) | 中文 / [EN](docs/cross-session-memory.md) | 架構、生命週期、遷移 |
-| [OpenSpec 落地 GitHub](docs/superpowers/articles/2026-04-28-corgispec-github-workflow-zhihu.md) | 中文 | Spec → Issue → Review → Git 管線整合 |
+| [OpenSpec 落地 GitHub](docs/superpowers/articles/2026-04-28-openspec-github-workflow-zhihu.md) | 中文 | Spec → Issue → Review → Git 管線整合 |
 
 ---
 
@@ -609,6 +618,6 @@ Installer 支援四種模式：
 
 ## 📸 圖片來源
 
-- **Hero Banner** & **管線插圖** & **架構圖** & **記憶金庫** — AI 生成，依據 [README 視覺升級計畫](wiki/decisions/readme-visual-upgrade.md)
-- **柯基漫畫**（chaos、confident、journey、knowledge）— AI 生成，提示詞見 [漫畫工作流指南](docs/articles/corgi-comic-workflow.md)
+- **Hero Banner** & **管線插圖** & **架構圖** & **記憶金庫** — 為此專案 AI 生成
+- **柯基漫畫**（chaos、confident、journey、knowledge）— 為專案文章 AI 生成
 - **功能截圖** — Coding Corgi Flow 在真實 GitHub/GitLab 專案的實際畫面

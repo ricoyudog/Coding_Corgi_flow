@@ -35,6 +35,7 @@ import type {
   EvaluationCompletedEventV2,
   LoopStateV2,
   RunInitializedEventV2,
+  RunResumedEventV2,
 } from "../src/lib/run-contract-v2.js";
 import { reduceLoopEventV2 } from "../src/lib/loop-reducer-v2.js";
 
@@ -302,6 +303,68 @@ describe("LoopStoreV2 layout and transitions", () => {
     expect(readFileSync(paths.events!, "utf8").trim().split("\n")).toHaveLength(2);
   });
 
+  it("replays a latest resume with its superseded source session and exact CAS only", async () => {
+    const projectRoot = root();
+    const store = new LoopStoreV2({ projectRoot });
+    const value = state({ mode: "hook-driven" });
+    await store.initialize({ state: value, event: initialEvent(value) });
+
+    const submit = submitted(value);
+    await store.transition({ ...cas(value), ...submit });
+    const failureEvent: EvaluationCompletedEventV2 = {
+      schemaVersion: 2,
+      type: "evaluation_completed",
+      runId: value.runId,
+      seq: 2,
+      expectedStateRevision: 1,
+      expectedNonce: "nonce-1",
+      nextNonce: "nonce-2",
+      occurredAt: "2026-01-01T00:00:02.000Z",
+      actor: { id: "agent-a", kind: "agent" },
+      groupId: "TG-1",
+      attempt: 1,
+      result: "verification_failed",
+      evidenceHash: H,
+      reviewHash: H2,
+      reviewClean: true,
+      reason: { code: "verification_failed", message: "tests failed", details: {} },
+    };
+    const failed = reduceLoopEventV2(submit.nextState, failureEvent).postState;
+    await store.transition({ ...cas(submit.nextState), event: failureEvent, nextState: failed });
+
+    const resumeEvent: RunResumedEventV2 = {
+      schemaVersion: 2,
+      type: "run_resumed",
+      runId: value.runId,
+      seq: 3,
+      expectedStateRevision: 2,
+      expectedNonce: "nonce-2",
+      nextNonce: "nonce-3",
+      occurredAt: "2026-01-01T00:00:03.000Z",
+      actor: { id: "agent-a", kind: "agent" },
+      sessionId: "session-b",
+      targetPhase: "fixing",
+      maxAttemptsPerGroup: 3,
+    };
+    const resumed = reduceLoopEventV2(failed, resumeEvent).postState;
+    const resumeInput = { ...cas(failed), event: resumeEvent, nextState: resumed };
+    await expect(store.transition(resumeInput)).resolves.toEqual(resumed);
+
+    const paths = store.paths(value.changeName, value.runId);
+    const beforeRetry = [paths.current, paths.events!, paths.state!]
+      .map((path) => readFileSync(path));
+    await expect(store.transition(resumeInput)).resolves.toEqual(resumed);
+    expect([paths.current, paths.events!, paths.state!].map((path) => readFileSync(path)))
+      .toEqual(beforeRetry);
+
+    await expect(store.transition({ ...resumeInput, sessionId: "session-other" }))
+      .rejects.toBeInstanceOf(LoopStoreSessionConflictError);
+    await expect(store.transition({ ...resumeInput, expectedNonce: "different-cas" }))
+      .rejects.toBeInstanceOf(LoopStoreSessionConflictError);
+    expect([paths.current, paths.events!, paths.state!].map((path) => readFileSync(path)))
+      .toEqual(beforeRetry);
+  });
+
   it("supports idempotent initialization but rejects a competing active run", async () => {
     const projectRoot = root();
     const { store, value } = await initializedStore(projectRoot);
@@ -330,6 +393,43 @@ describe("LoopStoreV2 layout and transitions", () => {
       if (faultPoint === "before_event_append") {
         expect(existsSync(store.paths("change-a", "run-a").runRoot!)).toBe(false);
       }
+      armed = false;
+      await expect(store.initialize({ state: value, event })).resolves.toEqual(value);
+      await expect(store.inspect("change-a")).resolves.toMatchObject({
+        state: { runId: "run-a" },
+        events: [{ event: { type: "run_initialized" } }],
+      });
+    },
+  );
+
+  it.each([
+    ["before_initialization_rename", false],
+    ["after_initialization_rename", true],
+  ] as const)(
+    "retries initialization across publication fault %s",
+    async (faultPoint, published) => {
+      const projectRoot = root();
+      let armed = true;
+      const store = new LoopStoreV2({
+        projectRoot,
+        faults: (point) => {
+          if (armed && point === faultPoint) throw new Error(`init:${faultPoint}`);
+        },
+      });
+      const value = state();
+      const event = initialEvent(value);
+      const paths = store.paths("change-a", "run-a");
+
+      await expect(store.initialize({ state: value, event }))
+        .rejects.toThrow(`init:${faultPoint}`);
+      expect(existsSync(paths.runRoot!)).toBe(published);
+      expect(readdirSync(paths.runs).filter((name) => name.startsWith(".init-"))).toEqual([]);
+      if (published) {
+        expect(JSON.parse(readFileSync(paths.state!, "utf8"))).toEqual(value);
+        expect(readFileSync(paths.events!, "utf8").trim().split("\n")).toHaveLength(1);
+        expect(existsSync(paths.current)).toBe(false);
+      }
+
       armed = false;
       await expect(store.initialize({ state: value, event })).resolves.toEqual(value);
       await expect(store.inspect("change-a")).resolves.toMatchObject({
@@ -786,6 +886,52 @@ describe("LoopStoreV2 attempt and review artifacts", () => {
     rmSync(resolve(committed.path, "bundle.json"));
     await expect(store.writeAttemptBundle(input)).rejects.toBeInstanceOf(LoopStoreCorruptionError);
   });
+
+  it.skipIf(process.platform === "win32")(
+    "rejects symlinked bundle, evidence, and review leaves before transaction logs change",
+    async () => {
+      const projectRoot = root();
+      const outside = root();
+      const { store, value } = await initializedStore(projectRoot);
+      const input = bundleInput(value);
+      input.files["review.json"] = { findings: [] };
+      const committed = await store.writeAttemptBundle(input);
+      const submit = submitted(value);
+      const triage = {
+        schemaVersion: 2 as const,
+        runId: value.runId,
+        groupId: "TG-1",
+        attempt: 1,
+        bundleId: "bundle-1",
+        findingFingerprint: H,
+        action: "dismissed" as const,
+        actor: { kind: "human" as const, id: "reviewer" },
+        reason: "Must remain unwritten on unsafe storage",
+        occurredAt: T1,
+      };
+      const paths = store.paths("change-a", "run-a");
+
+      for (const leaf of ["bundle.json", "evidence.json", "review.json"]) {
+        const canonical = resolve(committed.path, leaf);
+        const external = resolve(outside, leaf);
+        const original = readFileSync(canonical);
+        writeFileSync(external, original);
+        rmSync(canonical);
+        symlinkSync(external, canonical);
+        const before = [paths.events!, paths.reviewTriage!].map((path) => readFileSync(path));
+
+        await expect(store.submitAttemptTransaction({
+          ...input,
+          transitions: [submit],
+          triageEntries: [triage],
+        })).rejects.toBeInstanceOf(LoopStorePathError);
+        expect([paths.events!, paths.reviewTriage!].map((path) => readFileSync(path))).toEqual(before);
+
+        rmSync(canonical);
+        writeFileSync(canonical, original);
+      }
+    },
+  );
 
   it("does not expose a partial attempt when artifact or marker writes fail", async () => {
     for (const faultPoint of ["after_bundle_artifacts_fsync", "after_bundle_marker_fsync"] as const) {
@@ -1509,7 +1655,7 @@ describe("LoopStoreV2 path and legacy guards", () => {
       projectRoot: syncRoot,
       fs: {
         open: async (path, flags, mode) => {
-          if (typeof flags === "number" && flags === 0 && path.endsWith("run-a")) throw denied;
+          if (typeof flags === "number" && flags === 0 && path.includes(".init-run-a-")) throw denied;
           return realOpen(path, flags, mode);
         },
       },
@@ -1603,6 +1749,47 @@ describe("LoopStoreV2 path and legacy guards", () => {
     }));
     await expect(new LoopStoreV2({ projectRoot, lockStaleMs: 60_000 }).inspect("change-a"))
       .rejects.toBeInstanceOf(LoopStoreLockedError);
+    rmSync(lock);
+  });
+
+  it("restores a replacement owner raced into stale-lock reclamation", async () => {
+    const projectRoot = root();
+    const { store } = await initializedStore(projectRoot);
+    const lock = store.paths("change-a").lock;
+    writeFileSync(lock, JSON.stringify({
+      token: "stale-owner",
+      pid: 1,
+      hostname: "remote-host",
+      acquiredAt: "2000-01-01T00:00:00.000Z",
+    }));
+    utimesSync(lock, new Date(0), new Date(0));
+    const replacement = JSON.stringify({
+      token: "replacement-owner",
+      pid: process.pid,
+      hostname: (await import("node:os")).hostname(),
+      acquiredAt: new Date().toISOString(),
+    });
+    const { rename: realRename } = await import("node:fs/promises");
+    let replaced = false;
+    const contender = new LoopStoreV2({
+      projectRoot,
+      lockStaleMs: 1_000,
+      fs: {
+        rename: async (from, to) => {
+          if (!replaced && from === lock && to.includes(".stale-")) {
+            rmSync(from);
+            writeFileSync(from, replacement);
+            replaced = true;
+          }
+          await realRename(from, to);
+        },
+      },
+    });
+
+    await expect(contender.inspect("change-a")).rejects.toBeInstanceOf(LoopStoreLockedError);
+    expect(replaced).toBe(true);
+    expect(readFileSync(lock, "utf8")).toBe(replacement);
+    expect(readdirSync(dirname(lock)).filter((name) => name.includes(".stale-"))).toEqual([]);
     rmSync(lock);
   });
 

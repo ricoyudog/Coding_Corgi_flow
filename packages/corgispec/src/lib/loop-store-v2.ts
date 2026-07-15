@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { constants as fsConstants, type Dirent, type Stats } from "node:fs";
 import {
   access as nodeAccess,
+  link as nodeLink,
   lstat as nodeLstat,
   mkdir as nodeMkdir,
   open as nodeOpen,
@@ -43,6 +44,8 @@ import {
 
 export type LoopStoreFaultPoint =
   | "after_lock_acquired"
+  | "before_initialization_rename"
+  | "after_initialization_rename"
   | "before_event_append"
   | "after_event_write"
   | "after_event_fsync"
@@ -77,6 +80,7 @@ export type LoopStoreFaultInjector = (
 /** The deliberately small filesystem surface used by the store. */
 export interface LoopStoreFileSystem {
   access(path: string, mode?: number): Promise<void>;
+  link(existingPath: string, newPath: string): Promise<void>;
   lstat(path: string): Promise<Stats>;
   mkdir(path: string, options: { recursive: true }): Promise<string | undefined>;
   open(path: string, flags: string | number, mode?: number): Promise<FileHandle>;
@@ -92,6 +96,7 @@ export interface LoopStoreFileSystem {
 
 const defaultFileSystem: LoopStoreFileSystem = {
   access: nodeAccess,
+  link: nodeLink,
   lstat: nodeLstat,
   mkdir: nodeMkdir,
   open: nodeOpen,
@@ -402,6 +407,10 @@ function isAlreadyExists(error: unknown): boolean {
   );
 }
 
+function sameFileIdentity(left: Stats, right: Stats): boolean {
+  return left.dev === right.dev && left.ino === right.ino;
+}
+
 function validateSegment(value: string, label: string): string {
   if (
     !SAFE_SEGMENT.test(value) ||
@@ -572,21 +581,37 @@ export class LoopStoreV2 {
       }
 
       const paths = this.requireRunPaths(changeName, runId);
-      await this.ensureDirectory(paths.runRoot);
+      const staging = this.initializationStagingPaths(paths, runId);
+      await this.ensureDirectory(staging.runRoot);
       const record: LoopEventRecordV2 = {
         schemaVersion: 2,
         event: input.event,
         postState: input.state,
       };
       assertLoopEventRecordV2(record);
+      let published = false;
       try {
-        await this.appendEventRecord(paths, record);
-        await this.atomicWriteState(paths, input.state);
-        await this.ensureEmptyFile(paths.reviewTriage);
+        // Initialization is assembled event-first in a hidden staging directory.
+        // scanRuns deliberately ignores hidden directories, so process death at
+        // any point before the rename cannot publish a corrupt canonical run.
+        await this.appendEventRecord(staging, record);
+        await this.atomicWriteState(staging, input.state);
+        await this.ensureEmptyFile(staging.reviewTriage);
+        await this.syncDirectory(staging.runRoot);
+        await this.fault("before_initialization_rename", input.state, paths.runRoot);
+        await this.fs.rename(staging.runRoot, paths.runRoot);
+        published = true;
+        await this.syncDirectory(paths.runs);
+        await this.fault("after_initialization_rename", input.state, paths.runRoot);
         await this.atomicWriteCurrent(input.state, changeName);
         return input.state;
       } catch (error) {
-        await this.cleanupFailedInitialization(paths, input.event);
+        if (published) {
+          await this.cleanupFailedInitialization(paths, input.event);
+        } else {
+          await this.fs.rm(staging.runRoot, { recursive: true, force: true }).catch(() => undefined);
+          await this.syncDirectory(paths.runs).catch(() => undefined);
+        }
         throw error;
       }
     });
@@ -715,12 +740,34 @@ export class LoopStoreV2 {
     this.assertRecordBindings(input.event, input.nextState);
     return this.withChangeLock(input.changeName, false, async () => {
       const current = await this.loadSelectedRun(input);
-      if (current.state.sessionId !== input.sessionId) {
-        throw new LoopStoreSessionConflictError(input.sessionId, current.state.sessionId);
-      }
       const historical = current.events.find(
         (record) => record.event.seq === input.event.seq,
       );
+      if (current.state.sessionId !== input.sessionId) {
+        // An exact retry of the latest resume is allowed to present the
+        // superseded session id: the first attempt durably changed it before
+        // the caller received the response. Bind this exception to the
+        // original CAS/source session and to the unchanged current snapshot.
+        const source = historical?.event.type === "run_resumed"
+          ? current.events.find((record) =>
+              record.event.seq === historical.event.seq - 1 &&
+              record.postState.stateRevision === input.expectedStateRevision &&
+              record.postState.nonce === input.expectedNonce
+            )?.postState
+          : undefined;
+        if (
+          historical?.event.type === "run_resumed" &&
+          input.expectedStateRevision === historical.event.expectedStateRevision &&
+          input.expectedNonce === historical.event.expectedNonce &&
+          source?.sessionId === input.sessionId &&
+          isDeepStrictEqual(historical.event, input.event) &&
+          isDeepStrictEqual(historical.postState, input.nextState) &&
+          isDeepStrictEqual(historical.postState, current.state)
+        ) {
+          return historical.postState;
+        }
+        throw new LoopStoreSessionConflictError(input.sessionId, current.state.sessionId);
+      }
       if (historical) {
         if (
           isDeepStrictEqual(historical.event, input.event) &&
@@ -841,14 +888,6 @@ export class LoopStoreV2 {
         input.runId,
         input.triageEntries ?? [],
       );
-      for (const entry of input.triageEntries ?? []) {
-        await this.appendReviewTriageUnlocked(
-          transactionPaths,
-          input,
-          entry,
-        );
-      }
-
       let bundle: AttemptBundleWriteResultV2;
       const paths = this.requireRunPaths(input.changeName, input.runId);
       const target = resolve(paths.attempts, input.groupId, String(input.attempt));
@@ -857,6 +896,17 @@ export class LoopStoreV2 {
         bundle = { path: target, idempotent: true };
       } else {
         bundle = await this.writeAttemptBundleUnlocked(input);
+      }
+
+      // Validate or durably publish the immutable attempt before appending any
+      // triage or state events. This keeps an unsafe idempotent leaf from
+      // causing a partial canonical transaction.
+      for (const entry of input.triageEntries ?? []) {
+        await this.appendReviewTriageUnlocked(
+          transactionPaths,
+          input,
+          entry,
+        );
       }
 
       if (committedPrefix === input.transitions.length) {
@@ -1653,6 +1703,26 @@ export class LoopStoreV2 {
     await this.ensureEmptyFile(paths.reviewTriage);
   }
 
+  private initializationStagingPaths(
+    paths: RequiredRunPaths,
+    runId: string,
+  ): RequiredRunPaths {
+    const runRoot = resolve(
+      paths.runs,
+      `.init-${runId}-${process.pid}-${randomUUID()}`,
+    );
+    assertContained(paths.runs, runRoot);
+    return {
+      ...paths,
+      runRoot,
+      state: resolve(runRoot, "state.json"),
+      events: resolve(runRoot, "events.jsonl"),
+      reviewTriage: resolve(runRoot, "review-triage.jsonl"),
+      attempts: resolve(runRoot, "attempts"),
+      migrationMarker: resolve(runRoot, "migration-v1.json"),
+    };
+  }
+
   private async cleanupFailedInitialization(
     paths: RequiredRunPaths,
     event: LoopEventV2,
@@ -1888,6 +1958,7 @@ export class LoopStoreV2 {
     input: WriteAttemptBundleV2Input,
   ): Promise<void> {
     const marker = resolve(target, "bundle.json");
+    await this.assertSafeExisting(marker);
     if (!(await this.pathExists(marker))) {
       throw new LoopStoreCorruptionError(`Incomplete attempt directory has no bundle.json: ${target}`);
     }
@@ -2154,9 +2225,14 @@ export class LoopStoreV2 {
     let bytes: Buffer;
     let metadata: Stats;
     try {
-      [bytes, metadata] = await Promise.all([this.fs.readFile(path), this.fs.stat(path)]);
+      metadata = await this.fs.lstat(path);
+      if (metadata.isSymbolicLink() || !metadata.isFile()) {
+        throw new LoopStorePathError(`Unsafe loop lock entry: ${path}`);
+      }
+      bytes = await this.fs.readFile(path);
     } catch (error) {
-      return isMissing(error);
+      if (isMissing(error)) return true;
+      throw error;
     }
     let lock: { token?: string; pid?: number; hostname?: string; acquiredAt?: string } = {};
     try {
@@ -2200,13 +2276,62 @@ export class LoopStoreV2 {
     try {
       await this.fs.rename(path, quarantine);
     } catch (error) {
-      return isMissing(error);
+      if (isMissing(error)) return true;
+      throw error;
+    }
+
+    let claimedMetadata: Stats;
+    let claimedBytes: Buffer;
+    try {
+      claimedMetadata = await this.fs.lstat(quarantine);
+    } catch (error) {
+      await this.restoreClaimedLock(quarantine, path);
+      if (isMissing(error)) return false;
+      throw error;
+    }
+    if (
+      claimedMetadata.isSymbolicLink() ||
+      !claimedMetadata.isFile()
+    ) {
+      await this.restoreClaimedLock(quarantine, path);
+      return false;
     }
     try {
-      await this.fs.rm(quarantine, { recursive: true, force: true });
+      claimedBytes = await this.fs.readFile(quarantine);
+    } catch (error) {
+      await this.restoreClaimedLock(quarantine, path);
+      if (isMissing(error)) return false;
+      throw error;
+    }
+    if (
+      !sameFileIdentity(metadata, claimedMetadata) ||
+      !bytes.equals(claimedBytes)
+    ) {
+      await this.restoreClaimedLock(quarantine, path);
+      return false;
+    }
+    try {
+      await this.fs.unlink(quarantine);
+      await this.syncDirectory(dirname(path));
       return true;
     } catch {
       return false;
+    }
+  }
+
+  private async restoreClaimedLock(quarantine: string, path: string): Promise<void> {
+    try {
+      // link() is O_EXCL-like and therefore cannot overwrite a third owner's
+      // canonical lock. Once restored, removing the quarantine name preserves
+      // the exact inode that was claimed by rename.
+      await this.fs.link(quarantine, path);
+      await this.fs.unlink(quarantine);
+      await this.syncDirectory(dirname(path));
+    } catch (error) {
+      if (!isAlreadyExists(error)) {
+        // Leave the locally named quarantine in place rather than deleting an
+        // entry whose ownership was not proven.
+      }
     }
   }
 

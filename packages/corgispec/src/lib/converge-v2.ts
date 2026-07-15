@@ -1,5 +1,15 @@
-import { createHash, randomUUID } from "node:crypto";
-import { open, readFile, rename, rm, stat } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { constants } from "node:fs";
+import {
+  lstat,
+  mkdir,
+  open,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  stat,
+} from "node:fs/promises";
 import path from "node:path";
 import { assertWritableArtifactPath } from "./artifact-resolver.js";
 import type { OpenSpecArtifactPath } from "./openspec-adapter.js";
@@ -109,6 +119,7 @@ export type ConvergeErrorCode =
   | "converge_git_changed"
   | "converge_task_artifact_changed"
   | "converge_store_required"
+  | "converge_temporary_conflict"
   | "converge_append_failed_after_invalidation"
   | "converge_post_append_planning_invalid"
   | "converge_post_append_revision_mismatch";
@@ -258,6 +269,13 @@ export interface ApplyConvergenceDependenciesV2 {
 }
 
 export interface ConvergenceAppendFaultsV2 {
+  afterTemporaryOpen?(): void | Promise<void>;
+  afterTemporaryChmod?(): void | Promise<void>;
+  afterTemporaryTruncate?(): void | Promise<void>;
+  afterTemporaryWrite?(): void | Promise<void>;
+  afterTemporaryFsync?(): void | Promise<void>;
+  afterTemporaryClose?(): void | Promise<void>;
+  beforeRename?(): void | Promise<void>;
   afterRename?(): void | Promise<void>;
   afterDirectoryFsync?(): void | Promise<void>;
 }
@@ -509,6 +527,9 @@ export async function computeRunPlanningRevisionV2(input: {
   const hash = createHash("sha256");
   appendRevisionField(hash, "corgispec-run-planning-revision-v2");
   appendRevisionField(hash, input.schemaName);
+  // A run and its confirmation token must identify the authoritative OpenSpec
+  // target, not merely a byte-identical copy with the same change name.
+  appendRevisionField(hash, path.resolve(input.changeRoot).replace(/\\/g, "/"));
   for (const artifactId of Object.keys(input.artifactPaths).sort()) {
     const artifact = input.artifactPaths[artifactId]!;
     appendRevisionField(hash, artifactId);
@@ -586,26 +607,261 @@ export async function appendConvergenceTaskGroupAtomicallyV2(
   }
   const next = renderConvergenceTaskContentV2(current, markdown);
   const originalMode = (await stat(taskArtifactPath)).mode & 0o777;
-  const temporary = path.join(
-    path.dirname(taskArtifactPath),
-    `.${path.basename(taskArtifactPath)}.${randomUUID()}.tmp`,
+  const temporary = await convergenceTemporaryPathV2(
+    taskArtifactPath,
+    expectedContent,
+    next,
   );
-  let handle;
+  let handle: Awaited<ReturnType<typeof open>> | undefined;
+  let handleClosed = false;
+  let ownsTemporary = false;
   try {
-    handle = await open(temporary, "wx", originalMode);
+    try {
+      handle = await open(temporary, "wx", originalMode);
+      ownsTemporary = true;
+    } catch (error) {
+      if (!hasFileSystemCode(error, "EEXIST")) throw error;
+      handle = await openRecoverableConvergenceTemporaryV2(temporary, next);
+      ownsTemporary = true;
+    }
+    await faults.afterTemporaryOpen?.();
     await handle.chmod(originalMode);
-    await handle.writeFile(next, "utf8");
+    await faults.afterTemporaryChmod?.();
+    await handle.truncate(0);
+    await faults.afterTemporaryTruncate?.();
+    await writeFileHandleExactlyV2(handle, Buffer.from(next, "utf8"));
+    await faults.afterTemporaryWrite?.();
     await handle.sync();
+    await faults.afterTemporaryFsync?.();
     await handle.close();
-    handle = undefined;
+    handleClosed = true;
+    await faults.afterTemporaryClose?.();
+    await faults.beforeRename?.();
     await rename(temporary, taskArtifactPath);
     await faults.afterRename?.();
     await syncContainingDirectory(path.dirname(taskArtifactPath));
+    if (path.dirname(temporary) !== path.dirname(taskArtifactPath)) {
+      await syncContainingDirectory(path.dirname(temporary));
+    }
     await faults.afterDirectoryFsync?.();
   } finally {
-    if (handle) await handle.close().catch(() => undefined);
-    await rm(temporary, { force: true }).catch(() => undefined);
+    if (handle && !handleClosed) await handle.close().catch(() => undefined);
+    if (ownsTemporary) {
+      await rm(temporary, { force: true }).catch(() => undefined);
+    }
   }
+}
+
+const CONVERGENCE_TEMP_FORMAT = "corgispec-convergence-temporary-v2";
+
+/**
+ * Return an operation-specific temporary path. When the task artifact belongs
+ * to a Git worktree, the file lives below `.corgi/loop`, which is already
+ * excluded from the canonical workspace fingerprint. External OpenSpec Stores
+ * and worktree mount points fall back to a sibling on the target filesystem so
+ * rename remains atomic.
+ */
+async function convergenceTemporaryPathV2(
+  taskArtifactPath: string,
+  expectedContent: string,
+  nextContent: string,
+): Promise<string> {
+  const targetDirectory = path.dirname(taskArtifactPath);
+  const repositoryRoot = await findNearestRepositoryRootV2(targetDirectory);
+  let temporaryDirectory = targetDirectory;
+  if (repositoryRoot) {
+    const managedDirectory = await ensureConvergenceTemporaryDirectoryV2(repositoryRoot);
+    const [targetDevice, managedDevice] = await Promise.all([
+      stat(targetDirectory),
+      stat(managedDirectory),
+    ]);
+    // rename is atomic only within one filesystem. A worktree may contain a
+    // mount point, so retain the sibling fallback in that uncommon layout.
+    if (targetDevice.dev === managedDevice.dev) temporaryDirectory = managedDirectory;
+  }
+  const hash = createHash("sha256");
+  appendTemporaryHashField(hash, CONVERGENCE_TEMP_FORMAT);
+  appendTemporaryHashField(hash, path.resolve(taskArtifactPath));
+  appendTemporaryHashField(hash, expectedContent);
+  appendTemporaryHashField(hash, nextContent);
+  return path.join(
+    temporaryDirectory,
+    `.corgispec-converge-v2-${hash.digest("hex")}.tmp`,
+  );
+}
+
+async function findNearestRepositoryRootV2(start: string): Promise<string | undefined> {
+  let cursor = path.resolve(start);
+  while (true) {
+    try {
+      const marker = await lstat(path.join(cursor, ".git"));
+      if (!marker.isSymbolicLink() && (marker.isDirectory() || marker.isFile())) {
+        return cursor;
+      }
+      return undefined;
+    } catch (error) {
+      if (!hasFileSystemCode(error, "ENOENT")) return undefined;
+    }
+    const parent = path.dirname(cursor);
+    if (parent === cursor) return undefined;
+    cursor = parent;
+  }
+}
+
+async function ensureConvergenceTemporaryDirectoryV2(
+  repositoryRoot: string,
+): Promise<string> {
+  const canonicalRepositoryRoot = await realpath(repositoryRoot);
+  let parent = repositoryRoot;
+  for (const segment of [".corgi", "loop", ".converge-tmp"]) {
+    const directory = path.join(parent, segment);
+    try {
+      await mkdir(directory, { mode: 0o700 });
+    } catch (error) {
+      if (!hasFileSystemCode(error, "EEXIST")) throw error;
+    }
+    const entry = await lstat(directory);
+    if (entry.isSymbolicLink() || !entry.isDirectory()) {
+      throw temporaryConflict(
+        directory,
+        "the managed temporary directory is not a real directory",
+      );
+    }
+    const canonicalDirectory = await realpath(directory);
+    if (!isNativePathInside(canonicalRepositoryRoot, canonicalDirectory)) {
+      throw temporaryConflict(
+        directory,
+        "the managed temporary directory escapes the repository",
+      );
+    }
+    parent = directory;
+  }
+  return parent;
+}
+
+async function openRecoverableConvergenceTemporaryV2(
+  temporary: string,
+  nextContent: string,
+): Promise<Awaited<ReturnType<typeof open>>> {
+  const beforeOpen = await lstat(temporary);
+  if (beforeOpen.isSymbolicLink() || !beforeOpen.isFile()) {
+    throw temporaryConflict(temporary, "the managed path is not a regular file");
+  }
+  const noFollow = process.platform === "win32" ? 0 : constants.O_NOFOLLOW;
+  const handle = await open(temporary, constants.O_RDWR | noFollow);
+  try {
+    const [opened, afterOpen] = await Promise.all([
+      handle.stat(),
+      lstat(temporary),
+    ]);
+    if (
+      !opened.isFile() ||
+      afterOpen.isSymbolicLink() ||
+      !afterOpen.isFile() ||
+      !sameFileIdentityV2(beforeOpen, opened) ||
+      !sameFileIdentityV2(opened, afterOpen)
+    ) {
+      throw temporaryConflict(temporary, "the managed path changed while it was opened");
+    }
+    const existing = await readFileHandleExactlyV2(handle, opened.size, temporary);
+    const afterRead = await handle.stat();
+    if (!sameFileIdentityV2(opened, afterRead) || afterRead.size !== opened.size) {
+      throw temporaryConflict(temporary, "the managed file changed while it was inspected");
+    }
+    const expected = Buffer.from(nextContent, "utf8");
+    if (
+      existing.byteLength > expected.byteLength ||
+      !expected.subarray(0, existing.byteLength).equals(existing)
+    ) {
+      throw temporaryConflict(
+        temporary,
+        "the managed file does not contain a recoverable prefix",
+      );
+    }
+    return handle;
+  } catch (error) {
+    await handle.close().catch(() => undefined);
+    throw error;
+  }
+}
+
+async function readFileHandleExactlyV2(
+  handle: Awaited<ReturnType<typeof open>>,
+  size: number,
+  temporary: string,
+): Promise<Buffer> {
+  const content = Buffer.alloc(size);
+  let offset = 0;
+  while (offset < size) {
+    const { bytesRead } = await handle.read(content, offset, size - offset, offset);
+    if (bytesRead === 0) {
+      throw temporaryConflict(temporary, "the managed file became truncated while reading");
+    }
+    offset += bytesRead;
+  }
+  return content;
+}
+
+async function writeFileHandleExactlyV2(
+  handle: Awaited<ReturnType<typeof open>>,
+  content: Buffer,
+): Promise<void> {
+  let offset = 0;
+  while (offset < content.byteLength) {
+    const { bytesWritten } = await handle.write(
+      content,
+      offset,
+      content.byteLength - offset,
+      offset,
+    );
+    if (bytesWritten === 0) {
+      throw new Error("Failed to make progress writing convergence temporary");
+    }
+    offset += bytesWritten;
+  }
+}
+
+function sameFileIdentityV2(
+  left: { dev: number; ino: number },
+  right: { dev: number; ino: number },
+): boolean {
+  return left.dev === right.dev && left.ino === right.ino;
+}
+
+function temporaryConflict(temporary: string, reason: string): ConvergeErrorV2 {
+  return new ConvergeErrorV2(
+    `Cannot recover convergence temporary file '${temporary}': ${reason}`,
+    "converge_temporary_conflict",
+    { temporary, reason },
+  );
+}
+
+function appendTemporaryHashField(
+  hash: ReturnType<typeof createHash>,
+  value: string,
+): void {
+  const bytes = Buffer.from(value, "utf8");
+  hash.update(`${bytes.byteLength}:`);
+  hash.update(bytes);
+  hash.update(";");
+}
+
+function isNativePathInside(root: string, candidate: string): boolean {
+  const relative = path.relative(path.resolve(root), path.resolve(candidate));
+  return relative === "" || (
+    relative !== ".." &&
+    !relative.startsWith(`..${path.sep}`) &&
+    !path.isAbsolute(relative)
+  );
+}
+
+function hasFileSystemCode(error: unknown, code: string): boolean {
+  return Boolean(
+    error &&
+    typeof error === "object" &&
+    "code" in error &&
+    String(error.code) === code
+  );
 }
 
 async function syncContainingDirectory(directory: string): Promise<void> {

@@ -1,4 +1,4 @@
-import { realpath, stat } from "node:fs/promises";
+import { lstat, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import {
   type OpenSpecActionContext,
@@ -230,6 +230,39 @@ export async function assertWritableArtifactPath(
       return absoluteCandidate;
     } catch (error) {
       if (error instanceof ArtifactResolverError) throw error;
+
+      // realpath(2) reports ENOENT for both a genuinely missing path and a
+      // dangling symlink. Only the former is safe to handle by walking to the
+      // parent. lstat deliberately does not follow the final link, so a
+      // dangling link can never be mistaken for a new regular file target.
+      try {
+        const entry = await lstat(existingAncestor);
+        if (entry.isSymbolicLink()) {
+          throw new ArtifactResolverError(
+            `Write target contains an unresolved symlink: ${candidate}`,
+            "symlink_escape",
+            candidate,
+            error
+          );
+        }
+        throw new ArtifactResolverError(
+          `Existing write target could not be resolved: ${candidate}`,
+          "path_unavailable",
+          candidate,
+          error
+        );
+      } catch (inspectionError) {
+        if (inspectionError instanceof ArtifactResolverError) throw inspectionError;
+        if (!hasFileSystemCode(inspectionError, "ENOENT")) {
+          throw new ArtifactResolverError(
+            `Write target could not be inspected: ${candidate}`,
+            "path_unavailable",
+            candidate,
+            inspectionError
+          );
+        }
+      }
+
       const parent = path.dirname(existingAncestor);
       if (parent === existingAncestor) {
         throw new ArtifactResolverError(
@@ -242,6 +275,15 @@ export async function assertWritableArtifactPath(
       existingAncestor = parent;
     }
   }
+}
+
+function hasFileSystemCode(error: unknown, code: string): boolean {
+  return Boolean(
+    error &&
+    typeof error === "object" &&
+    "code" in error &&
+    String(error.code) === code
+  );
 }
 
 /**
