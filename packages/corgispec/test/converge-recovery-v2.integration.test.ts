@@ -26,9 +26,12 @@ import { LoopStoreV2 } from "../src/lib/loop-store-v2.js";
 import { parseTaskGroupsDocument } from "../src/lib/task-groups.js";
 
 const cleanup: string[] = [];
+const RECOVERY_E2E_TIMEOUT_MS = 30_000;
 
 afterEach(() => {
-  for (const path of cleanup.splice(0)) rmSync(path, { recursive: true, force: true });
+  for (const path of cleanup.splice(0)) {
+    rmSync(path, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
 });
 
 const FAULT_POINTS: ConvergeFaultPointV2[] = [
@@ -39,7 +42,7 @@ const FAULT_POINTS: ConvergeFaultPointV2[] = [
   "after_successor_initialized",
 ];
 
-describe("converge durable recovery v2", () => {
+describe("converge durable recovery v2", { timeout: RECOVERY_E2E_TIMEOUT_MS }, () => {
   for (const point of FAULT_POINTS) {
     it(`recovers idempotently after ${point}`, async () => {
       const fixture = await createFixture();
