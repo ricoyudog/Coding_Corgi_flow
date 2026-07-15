@@ -7,7 +7,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve, sep } from "node:path";
+import { dirname, join, normalize, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   ArtifactResolver,
@@ -54,13 +54,21 @@ function fixtureStatus(): OpenSpecStatusResponse {
     new URL("./fixtures/openspec-1.6/status-complete.json", import.meta.url),
     "utf8"
   );
-  return JSON.parse(
+  const status = JSON.parse(
     template
       .replaceAll("${PLANNING_ROOT}", jsonStringFragment(planningRoot))
       .replaceAll("${CHANGES_DIR}", jsonStringFragment(changesDir))
-      .replaceAll("${CHANGE_ROOT}/", jsonStringFragment(`${changeRoot}${sep}`))
       .replaceAll("${CHANGE_ROOT}", jsonStringFragment(changeRoot))
   ) as OpenSpecStatusResponse;
+
+  // The checked-in fixture intentionally uses OpenSpec's portable `/` JSON
+  // spelling. Convert only concrete filesystem paths to the host spelling so
+  // this test exercises the same authoritative paths OpenSpec emits on each OS.
+  for (const artifact of Object.values(status.artifactPaths)) {
+    artifact.resolvedOutputPath = normalize(artifact.resolvedOutputPath);
+    artifact.existingOutputPaths = artifact.existingOutputPaths.map(normalize);
+  }
+  return status;
 }
 
 function jsonStringFragment(value: string): string {
