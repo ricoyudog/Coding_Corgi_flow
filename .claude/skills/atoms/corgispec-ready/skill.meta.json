@@ -1,0 +1,22 @@
+{
+  "slug": "corgispec-ready",
+  "tier": "atom",
+  "version": "1.0.0",
+  "description": "Report deterministic and semantic planning-readiness findings without changing files",
+  "depends_on": [],
+  "platform": "universal",
+  "tags": [
+    "lifecycle",
+    "planning",
+    "readiness",
+    "validation"
+  ],
+  "installation": {
+    "targets": [
+      "opencode",
+      "claude",
+      "codex"
+    ],
+    "base_path": "atoms/corgispec-ready"
+  }
+}

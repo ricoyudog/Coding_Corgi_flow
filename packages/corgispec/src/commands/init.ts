@@ -8,6 +8,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const CONFIG_TEMPLATE = `schema: {{schema}}
 
+corgi:
+  tracking:
+    provider: {{trackingProvider}}
+{{taskArtifactConfig}}
+
 # Worktree isolation (optional)
 # When enabled, each change gets its own git worktree + feature branch
 # for parallel development. All propose/apply/review work happens
@@ -39,21 +44,25 @@ const CONFIG_TEMPLATE = `schema: {{schema}}
 #       - Break tasks into chunks of max 2 hours
 `;
 
-const VALID_SCHEMAS = ["gitlab-tracked", "github-tracked"] as const;
+const VALID_TRACKING_PROVIDERS = ["github", "gitlab", "none"] as const;
 const VALID_PLATFORMS = ["claude", "opencode", "codex", "all"] as const;
 
-type SchemaOption = (typeof VALID_SCHEMAS)[number];
 type PlatformOption = (typeof VALID_PLATFORMS)[number];
+type TrackingProviderOption = (typeof VALID_TRACKING_PROVIDERS)[number];
 
 interface InitOptions {
   schema?: string;
+  trackingProvider?: string;
+  taskArtifact?: string;
   platform?: string;
   path: string;
 }
 
 export interface InitializeOpenSpecOptions {
   target: string;
-  schema: SchemaOption;
+  schema: string;
+  trackingProvider?: TrackingProviderOption;
+  taskArtifactId?: string;
   bundledSchemasDir?: string | null;
 }
 
@@ -65,8 +74,10 @@ export function createInitCommand(): Command {
     .argument("[path]", "Target directory (default: current directory)")
     .option(
       "--schema <schema>",
-      "Schema to use (github-tracked or gitlab-tracked)"
+      "OpenSpec schema to use (built-in or custom)"
     )
+    .option("--tracking-provider <provider>", "Issue tracker (github, gitlab, none)")
+    .option("--task-artifact <id>", "Artifact id containing executable Task Groups")
     .option(
       "--platform <platform>",
       "Create platform skill directories (claude, opencode, codex, all)"
@@ -84,22 +95,49 @@ export function createInitCommand(): Command {
         }
 
         // Validate schema option
-        const schema = (opts.schema ?? "github-tracked") as SchemaOption;
-        if (!VALID_SCHEMAS.includes(schema)) {
+        const schema = opts.schema ?? "github-tracked";
+        if (!/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(schema)) {
           console.error(
-            `Error: Invalid schema '${opts.schema}'. Supported: ${VALID_SCHEMAS.join(", ")}`
+            `Error: Invalid schema '${opts.schema}'. Use a kebab-case OpenSpec schema name.`
           );
           process.exitCode = 1; return;
         }
+        const inferredProvider =
+          schema === "github-tracked"
+            ? "github"
+            : schema === "gitlab-tracked"
+              ? "gitlab"
+              : "none";
+        const trackingProvider = (opts.trackingProvider ?? inferredProvider) as TrackingProviderOption;
+        if (!VALID_TRACKING_PROVIDERS.includes(trackingProvider)) {
+          console.error(
+            `Error: Invalid tracking provider '${opts.trackingProvider}'. Supported: ${VALID_TRACKING_PROVIDERS.join(", ")}`
+          );
+          process.exitCode = 1;
+          return;
+        }
+        const explicitTaskArtifact = opts.taskArtifact?.trim();
+        if (opts.taskArtifact !== undefined && !explicitTaskArtifact) {
+          console.error("Error: --task-artifact must be a non-empty artifact id");
+          process.exitCode = 1;
+          return;
+        }
+        const taskArtifactId =
+          explicitTaskArtifact ??
+          (schema === "github-tracked" || schema === "gitlab-tracked" ? "tasks" : undefined);
 
         initializeOpenSpec({
           target,
           schema,
+          trackingProvider,
+          taskArtifactId,
           bundledSchemasDir: findBundledSchemas(),
         });
 
         console.log(`Initialized Corgi in ${target}`);
         console.log(`  Schema: ${schema}`);
+        console.log(`  Tracking: ${trackingProvider}`);
+        console.log(`  Task artifact: ${taskArtifactId ?? "not configured"}`);
         console.log(`  Config: openspec/config.yaml`);
         console.log(`  Changes: openspec/changes/`);
         console.log(`  Schemas: openspec/schemas/`);
@@ -168,7 +206,25 @@ export function initializeOpenSpec(options: InitializeOpenSpecOptions): void {
   mkdirSync(resolve(openspecDir, "schemas"), { recursive: true });
   mkdirSync(resolve(openspecDir, "specs"), { recursive: true });
 
-  const configContent = CONFIG_TEMPLATE.replace("{{schema}}", options.schema);
+  const trackingProvider =
+    options.trackingProvider ??
+    (options.schema === "github-tracked"
+      ? "github"
+      : options.schema === "gitlab-tracked"
+        ? "gitlab"
+        : "none");
+  const taskArtifactId =
+    options.taskArtifactId ??
+    (options.schema === "github-tracked" || options.schema === "gitlab-tracked"
+      ? "tasks"
+      : undefined);
+  const configContent = CONFIG_TEMPLATE
+    .replace("{{schema}}", options.schema)
+    .replace("{{trackingProvider}}", trackingProvider)
+    .replace(
+      "{{taskArtifactConfig}}",
+      taskArtifactId ? `  taskArtifactId: ${taskArtifactId}` : "",
+    );
   writeFileSync(configPath, configContent);
 
   if (!options.bundledSchemasDir) {

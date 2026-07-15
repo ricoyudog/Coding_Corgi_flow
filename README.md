@@ -65,9 +65,10 @@ It ships as an npm CLI (`corgispec`), a Claude Code / Codex plugin, and a set of
 
 ### Prerequisites
 
-- **Node.js 18+**
+- **Node.js >=20.19.0**
+- **OpenSpec CLI >=1.6.0 <2.0.0** — OpenSpec 1.3–1.5 are not supported by CorgiSpec 3
 - **An LLM Agent** — OpenCode, Claude Code, Cursor, AmpCode, etc.
-- **`gh` CLI** (for GitHub) or **`glab` CLI** (for GitLab)
+- **`gh` CLI** (for GitHub) or **`glab` CLI** (for GitLab), only when issue tracking is enabled
 
 ### Install & Bootstrap
 
@@ -76,8 +77,12 @@ Choose your path:
 **A. npm (recommended)**
 
 ```bash
-npm install -g corgispec
+npm install -g @fission-ai/openspec@^1.6.0
+npm install -g /path/to/corgispec-3.0.0-rc.1.tgz
+corgispec doctor --path /path/to/your-project
 ```
+
+The RC is distributed as a verified tarball/CI artifact and is not published to the npm registry. Replace `/path/to/...` with the downloaded artifact path.
 
 Options: `--platform <platforms>` (claude, opencode, codex; default: all), `--scope <scope>` (global, local, both; default: global). When TTY is detected and flags are not provided, interactive prompts ask for platform and scope.
 
@@ -143,6 +148,8 @@ Then: `apply` → `verify` → `review` → `human-qa` → `archive`. One Task G
 | Command              | What it does                                                                                                       |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `/corgi-propose`     | Generate planning artifacts (proposal, specs, design, tasks) + create issues                                       |
+| `/corgi-update`      | Reconcile existing planning artifacts, with one confirmed artifact-scoped diff at a time                           |
+| `/corgi-ready`       | Check deterministic planning integrity before apply or loop                                                        |
 | `/corgi-apply`       | Execute one Task Group, sync closeout, pause for review                                                            |
 | `/corgi-verify`      | Automated quality gate — lint, build, tests, spec coverage                                                         |
 | `/corgi-review`      | 5-axis review with evidence gathering, approve/reject/discuss                                                      |
@@ -157,6 +164,23 @@ Then: `apply` → `verify` → `review` → `human-qa` → `archive`. One Task G
 | `/corgi-ask`         | Answer questions from the vault with budget-aware retrieval                                                        |
 
 > Claude Code uses `/corgi:<command>` syntax (e.g., `/corgi:propose`). Platform auto-detected from `config.yaml`.
+
+### Planning integrity in 3.0 RC
+
+OpenSpec 1.6 JSON is the source of truth for artifact dependencies, glob-expanded files, instructions, and locations. Corgi uses the returned `planningHome`, `changeRoot`, `artifactPaths`, and `actionContext`; it does not assume a local `openspec/changes/<name>` directory or hard-code artifact filenames. This also allows a change selected from an OpenSpec Store to live outside the current repository.
+
+```bash
+# Read-only coordination context; the skill performs confirmed planning edits.
+corgispec update add-auth --json
+
+# Deterministic preflight. --strict also promotes warnings to blockers.
+corgispec ready add-auth --strict --json
+
+# Select an OpenSpec Store explicitly when needed.
+corgispec ready add-auth --store shared-product --strict --json
+```
+
+For `ready`, exit code `0` means ready, `1` means a planning blocker, and `2` means an environment or contract error. `update` uses `0` when coordination may proceed, `1` when an active legacy loop blocks planning edits, and `2` for contract errors. In agent sessions, use `/corgi:update <change>` and `/corgi:ready <change>` (Claude Code), `/corgi-update <change>` and `/corgi-ready <change>` (OpenCode), or the installed `$corgispec-update` and `$corgispec-ready` skills (Codex).
 
 ---
 
@@ -339,7 +363,7 @@ node bin/ds-skills.js list --path ../.. --tier atom --platform github
 
 ## 📐 Schemas
 
-A schema defines the artifact pipeline. Both bundled schemas (`gitlab-tracked`, `github-tracked`) produce the same 4-artifact pipeline:
+A schema defines the artifact pipeline. CorgiSpec accepts any OpenSpec schema name and follows the artifact graph and paths reported by OpenSpec. The two bundled schemas (`gitlab-tracked`, `github-tracked`) produce the following 4-artifact pipeline:
 
 | Artifact | File | Purpose |
 |---|---|---|
@@ -434,7 +458,13 @@ Set `schema: my-schema` in `config.yaml`.
 All settings live in `openspec/config.yaml`:
 
 ```yaml
-schema: github-tracked       # or gitlab-tracked
+schema: product-delivery     # any installed OpenSpec schema
+
+# Optional Corgi-specific settings
+corgi:
+  tracking:
+    provider: github         # github | gitlab | none
+  taskArtifactId: tasks      # artifact containing executable Task Groups
 
 # Optional: worktree isolation for parallel changes
 isolation:
@@ -455,7 +485,26 @@ rules:
     - Max 2 hours per task
 ```
 
-The installer manages only the `schema` and `isolation` keys. Add `context` and `rules` yourself.
+`schema` selects only the OpenSpec workflow; it no longer selects an issue tracker. `corgi.taskArtifactId` may be omitted only when the schema exposes an artifact whose id is exactly `tasks`. Apply and ready require that artifact to resolve to one concrete file. The installer preserves project-owned `context` and `rules`.
+
+### Migrating from CorgiSpec 2.x
+
+1. Upgrade to Node >=20.19.0 and OpenSpec >=1.6.0 <2.0.0, then install the verified `corgispec-3.0.0-rc.1.tgz` artifact.
+2. Keep your existing schema name, but make the inferred tracker explicit:
+
+   ```yaml
+   schema: github-tracked
+   corgi:
+     tracking:
+       provider: github
+     taskArtifactId: tasks
+   ```
+
+   Use `gitlab` for `gitlab-tracked`, or `none` when no issue integration is wanted. Legacy inference remains readable during migration and `corgispec doctor` reports the recommended edit.
+3. Run `corgispec doctor --path .`, followed by `corgispec ready <change> --strict --json` for every active change. Resolve all blockers before apply.
+4. If the change belongs to a Store, repeat lifecycle commands with `--store <id>` and use only the authoritative paths returned in JSON.
+
+OpenSpec 1.3–1.5 cannot be used as a fallback. Upgrade OpenSpec first if doctor reports `openspec_version_unsupported`.
 
 For full install/update/verify reference (fresh install, managed update, local modifications, legacy migration), see [Install / Update / Verify Workflow](#-install--update--verify-reference) below.
 

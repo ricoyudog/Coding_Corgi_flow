@@ -1,8 +1,25 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { resolve, relative } from "node:path";
-import { execSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { relative, resolve } from "node:path";
+import {
+  assertWritableArtifactPath,
+  createArtifactResolver,
+  type ArtifactResolver,
+  type ResolvedChangeArtifacts,
+} from "./artifact-resolver.js";
 import type { OpenSpecConfig } from "./config.js";
 import { findConfigPath, loadConfig } from "./config.js";
+import {
+  resolveOptionalTaskArtifactId,
+  summarizeTaskGroups,
+  type TaskGroupSummary,
+} from "./lifecycle.js";
+import {
+  createOpenSpecAdapter,
+  type OpenSpecAdapter,
+  type OpenSpecCommandOptions,
+} from "./openspec-adapter.js";
+import { isPathInside } from "./planning-revision.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
@@ -20,6 +37,44 @@ export interface ActiveChange {
   currentGroup: string | null;
 }
 
+export interface ResolvedHookChange {
+  name: string;
+  /** Directory from which the authoritative OpenSpec query was made. */
+  commandRoot: string;
+  worktreePath: string | null;
+  resolved: ResolvedChangeArtifacts;
+  taskSummary: TaskGroupSummary | null;
+}
+
+type HookOpenSpecAdapter = Pick<OpenSpecAdapter, "listChanges" | "getStatus">;
+
+/** Injectable process/filesystem seams used by hook contract tests. */
+export interface HookPlanningDependencies {
+  createAdapter?: (cwd: string) => HookOpenSpecAdapter;
+  createResolver?: (adapter: HookOpenSpecAdapter) => ArtifactResolver;
+  listWorktrees?: (cwd: string) => string[];
+  currentBranch?: (cwd: string) => string;
+}
+
+export interface HookPlanningOptions extends Pick<OpenSpecCommandOptions, "store"> {}
+
+export type HookPlanningErrorCode =
+  | "worktree_discovery_failed"
+  | "ambiguous_change"
+  | "openspec_contract_mismatch"
+  | "task_artifact_missing";
+
+export class HookPlanningError extends Error {
+  constructor(
+    message: string,
+    public readonly code: HookPlanningErrorCode,
+    public readonly details: Record<string, unknown> = {},
+  ) {
+    super(message);
+    this.name = "HookPlanningError";
+  }
+}
+
 export interface HookInput {
   tool_name?: string;
   tool_input?: {
@@ -27,6 +82,8 @@ export interface HookInput {
     command?: string;
   };
   stop_reason?: string;
+  stop_hook_active?: boolean;
+  session_id?: string;
   compact_trigger?: string;
 }
 
@@ -62,22 +119,25 @@ export function findProjectRoot(startDir: string): string | null {
 /**
  * Gather full session context for a project.
  */
-export function gatherSessionContext(cwd: string): SessionContext | null {
+export async function gatherSessionContext(
+  cwd: string,
+  options: HookPlanningOptions = {},
+  dependencies: HookPlanningDependencies = {},
+): Promise<SessionContext | null> {
   const configPath = findConfigPath(cwd);
   if (!configPath) return null;
 
-  let config: OpenSpecConfig;
-  try {
-    config = loadConfig(configPath);
-  } catch (err: unknown) {
-    console.error(`[hooks] Failed to load config ${configPath}: ${err instanceof Error ? err.message : String(err)}`);
-    return null;
-  }
+  const config = loadConfig(configPath);
 
   const isolationMode = config.isolation?.mode ?? "none";
-  const activeChanges = scanActiveChanges(cwd, config);
-  const currentBranch = getCurrentBranch();
-  const worktreePath = resolveWorktreePath(cwd, config, currentBranch);
+  const resolvedChanges = await resolveHookChanges(cwd, config, options, dependencies);
+  const activeChanges = resolvedChanges.map(({ name, worktreePath, taskSummary }) => ({
+    name,
+    worktreePath,
+    currentGroup: formatCurrentGroup(taskSummary),
+  }));
+  const currentBranch = (dependencies.currentBranch ?? getCurrentBranch)(cwd);
+  const worktreePath = resolveCurrentWorktreePath(cwd, config);
 
   return {
     schema: config.schema,
@@ -138,33 +198,181 @@ export function formatHookOutput(
 // ─── Active Changes Scanning ────────────────────────────────────────────
 
 /**
- * Scan openspec/changes/ for active change directories.
+ * Resolve active changes exclusively through OpenSpec's JSON list/status
+ * contracts. In worktree mode every registered Corgi worktree is queried and
+ * duplicate ownership fails closed instead of selecting the first result.
  */
-export function scanActiveChanges(
+export async function scanActiveChanges(
   cwd: string,
-  config: OpenSpecConfig
-): ActiveChange[] {
-  const changesDir = resolve(cwd, "openspec/changes");
-  if (!existsSync(changesDir)) return [];
+  config: OpenSpecConfig,
+  options: HookPlanningOptions = {},
+  dependencies: HookPlanningDependencies = {},
+): Promise<ActiveChange[]> {
+  const changes = await resolveHookChanges(cwd, config, options, dependencies);
+  return changes.map(({ name, worktreePath, taskSummary }) => ({
+    name,
+    worktreePath,
+    currentGroup: formatCurrentGroup(taskSummary),
+  }));
+}
 
-  const entries = readdirSync(changesDir, { withFileTypes: true });
-  const changes: ActiveChange[] = [];
+export async function resolveHookChanges(
+  cwd: string,
+  config: OpenSpecConfig,
+  options: HookPlanningOptions = {},
+  dependencies: HookPlanningDependencies = {},
+): Promise<ResolvedHookChange[]> {
+  const createAdapter = dependencies.createAdapter ?? defaultAdapterFactory;
+  const createResolver =
+    dependencies.createResolver ?? ((adapter) => createArtifactResolver(adapter));
+  const listWorktrees = dependencies.listWorktrees ?? listGitWorktrees;
+  const isolationMode = config.isolation?.mode ?? "none";
 
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-
-    const changeName = entry.name;
-    const worktreePath = resolveChangeWorktree(cwd, config, changeName);
-    const currentGroup = resolveCurrentGroup(cwd, changeName);
-
-    changes.push({
-      name: changeName,
-      worktreePath,
-      currentGroup,
-    });
+  // A named Store is a single authoritative planning home. Querying it once
+  // avoids manufacturing duplicates by asking the same Store from each
+  // registered Git worktree.
+  const candidateRoots = isolationMode === "worktree" && !options.store
+    ? listWorktrees(cwd)
+    : [cwd];
+  const roots = [...new Set(candidateRoots.map((root) => resolve(root)))]
+    .filter((root) => root === resolve(cwd) || findConfigPath(root) !== null);
+  if (roots.length === 0) {
+    throw new HookPlanningError(
+      "No trusted Git worktree could be resolved for hook planning context",
+      "worktree_discovery_failed",
+    );
   }
 
-  return changes;
+  const listed = await Promise.all(roots.map(async (commandRoot) => {
+    const adapter = createAdapter(commandRoot);
+    const response = await adapter.listChanges(options);
+    const seen = new Set<string>();
+    for (const change of response.changes) {
+      if (seen.has(change.name)) {
+        throw new HookPlanningError(
+          `Change '${change.name}' appears more than once in the OpenSpec list response for ${commandRoot}`,
+          "ambiguous_change",
+          { changeName: change.name, worktreePaths: [commandRoot] },
+        );
+      }
+      seen.add(change.name);
+    }
+    const authoritativeRoot =
+      response.root && typeof response.root.path === "string"
+        ? resolve(commandRoot, response.root.path)
+        : commandRoot;
+    return {
+      commandRoot,
+      authoritativeRoot,
+      adapter,
+      resolver: createResolver(adapter),
+      changes: response.changes,
+    };
+  }));
+
+  const owners = new Map<string, Array<(typeof listed)[number]>>();
+  for (const source of listed) {
+    for (const change of source.changes) {
+      const entries = owners.get(change.name) ?? [];
+      if (!entries.some((entry) => entry.authoritativeRoot === source.authoritativeRoot)) {
+        entries.push(source);
+      }
+      owners.set(change.name, entries);
+    }
+  }
+
+  for (const [changeName, sources] of owners) {
+    if (sources.length > 1) {
+      const worktreePaths = sources.map((source) => source.commandRoot).sort();
+      throw new HookPlanningError(
+        `Change '${changeName}' is ambiguous across worktrees: ${worktreePaths.join(", ")}`,
+        "ambiguous_change",
+        { changeName, worktreePaths },
+      );
+    }
+  }
+
+  const resolvedChanges = await Promise.all(
+    [...owners.entries()].map(async ([name, [source]]) => {
+      if (!source) {
+        throw new HookPlanningError(
+          `OpenSpec did not provide an owner for change '${name}'`,
+          "openspec_contract_mismatch",
+          { changeName: name },
+        );
+      }
+      const resolvedChange = await source.resolver.resolve(name, options);
+      if (resolvedChange.changeName !== name) {
+        throw new HookPlanningError(
+          `OpenSpec status returned change '${resolvedChange.changeName}' for requested change '${name}'`,
+          "openspec_contract_mismatch",
+          { requested: name, received: resolvedChange.changeName },
+        );
+      }
+
+      const taskArtifactId = resolveOptionalTaskArtifactId(config, resolvedChange.artifactPaths);
+      if (
+        taskArtifactId &&
+        !Object.prototype.hasOwnProperty.call(resolvedChange.artifactPaths, taskArtifactId)
+      ) {
+        throw new HookPlanningError(
+          `Configured task artifact '${taskArtifactId}' is not present in the OpenSpec artifact set for '${name}'`,
+          "task_artifact_missing",
+          { changeName: name, taskArtifactId },
+        );
+      }
+      const taskSummary = taskArtifactId
+        ? summarizeTaskGroups(resolvedChange.artifactPaths, taskArtifactId)
+        : null;
+      return {
+        name,
+        commandRoot: source.commandRoot,
+        worktreePath:
+          isolationMode === "worktree"
+            ? relative(cwd, source.commandRoot) || "."
+            : null,
+        resolved: resolvedChange,
+        taskSummary,
+      } satisfies ResolvedHookChange;
+    }),
+  );
+
+  return resolvedChanges.sort((left, right) =>
+    left.name.localeCompare(right.name) || left.commandRoot.localeCompare(right.commandRoot)
+  );
+}
+
+/**
+ * Match a write to one authoritative OpenSpec change. A lexical match alone
+ * is insufficient: the resolver's symlink-aware write guard must also accept
+ * the target before PostToolUse is allowed to trigger validation.
+ */
+export async function resolveWrittenChange(
+  filePath: string,
+  cwd: string,
+  config: OpenSpecConfig,
+  options: HookPlanningOptions = {},
+  dependencies: HookPlanningDependencies = {},
+): Promise<ResolvedHookChange | null> {
+  const candidate = isPortableAbsolute(filePath) ? filePath : resolve(cwd, filePath);
+  const changes = await resolveHookChanges(cwd, config, options, dependencies);
+  const lexicalMatches = changes.filter((change) =>
+    isPathInside(change.resolved.changeRoot, candidate)
+  );
+  if (lexicalMatches.length === 0) return null;
+
+  const uniqueRoots = new Set(lexicalMatches.map((change) => change.resolved.changeRoot));
+  if (uniqueRoots.size > 1) {
+    throw new HookPlanningError(
+      `Written path '${filePath}' is ambiguous across OpenSpec change roots`,
+      "ambiguous_change",
+      { filePath, changeRoots: [...uniqueRoots].sort() },
+    );
+  }
+
+  const match = lexicalMatches[0]!;
+  await assertWritableArtifactPath(match.resolved, candidate);
+  return match;
 }
 
 // ─── Stdin Reading ──────────────────────────────────────────────────────
@@ -273,48 +481,15 @@ export function checkDangerousCommand(command: string): string | null {
  * Returns null if all pass, or a list of failure messages.
  */
 export function checkTaskGroupPostconditions(
-  cwd: string,
-  changeName: string
+  summary: TaskGroupSummary | null,
 ): string[] | null {
-  const tasksPath = resolve(cwd, "openspec/changes", changeName, "tasks.md");
-  if (!existsSync(tasksPath)) return null;
-
-  const content = readFileSync(tasksPath, "utf-8");
-  const lines = content.split("\n");
-
-  // Find the first group with incomplete tasks
-  let inCurrentGroup = false;
-  let currentGroupName = "";
-  const incompleteTasks: string[] = [];
-
-  for (const line of lines) {
-    const headingMatch = line.match(/^## (\d+)\.\s+(.+)/);
-    if (headingMatch) {
-      // If we were in a group and found a new heading, stop
-      if (inCurrentGroup && incompleteTasks.length === 0) {
-        break;
-      }
-      if (inCurrentGroup) {
-        break;
-      }
-      currentGroupName = headingMatch[2]!.trim();
-      inCurrentGroup = true;
-      incompleteTasks.length = 0;
-      continue;
-    }
-
-    if (inCurrentGroup) {
-      const taskMatch = line.match(/^\s*- \[ \]\s+(.*)/);
-      if (taskMatch) {
-        incompleteTasks.push(taskMatch[1]!.trim());
-      }
-    }
-  }
-
+  const current = summary?.currentGroup;
+  if (!current) return null;
+  const incompleteTasks = current.tasks.filter((task) => !task.done);
   if (incompleteTasks.length > 0) {
     return [
-      `Incomplete tasks in "${currentGroupName}":`,
-      ...incompleteTasks.map((t) => `  - ${t}`),
+      `Incomplete tasks in "${current.name}":`,
+      ...incompleteTasks.map((task) => `  - ${task.id} ${task.description}`),
     ];
   }
 
@@ -404,91 +579,69 @@ export function detectHookConfig(cwd: string): HookConfigStatus {
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 
-function getCurrentBranch(): string {
+function defaultAdapterFactory(cwd: string): OpenSpecAdapter {
+  return createOpenSpecAdapter(cwd, undefined, {
+    executable: process.env["CORGISPEC_OPENSPEC_BIN"] || "openspec",
+  });
+}
+
+function getCurrentBranch(cwd: string): string {
   try {
-    return execSync("git rev-parse --abbrev-ref HEAD", {
+    return execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
+      cwd,
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
     }).trim();
-  } catch (err: unknown) {
-    console.error(`[hooks] Failed to detect git branch: ${err instanceof Error ? err.message : String(err)}`);
+  } catch {
     return "(unknown)";
   }
 }
 
-function resolveWorktreePath(
-  cwd: string,
-  config: OpenSpecConfig,
-  branch: string
-): string {
+function resolveCurrentWorktreePath(cwd: string, config: OpenSpecConfig): string {
   if (!config.isolation || config.isolation.mode === "none") {
     return "N/A";
   }
-  const root = config.isolation.root ?? ".worktrees";
-  // Try to match branch to worktree
-  const prefix = config.isolation.branch_prefix ?? "feat/";
-  const changeName = branch.startsWith(prefix)
-    ? branch.slice(prefix.length)
-    : branch;
-  const wtPath = resolve(cwd, root, changeName);
-  if (existsSync(wtPath)) {
-    return relative(cwd, wtPath) || wtPath;
+  try {
+    const topLevel = execFileSync("git", ["rev-parse", "--show-toplevel"], {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    return relative(cwd, topLevel) || ".";
+  } catch {
+    return "N/A";
   }
-  return "N/A";
 }
 
-function resolveChangeWorktree(
-  cwd: string,
-  config: OpenSpecConfig,
-  changeName: string
-): string | null {
-  if (!config.isolation || config.isolation.mode === "none") {
-    return null;
+function listGitWorktrees(cwd: string): string[] {
+  try {
+    const output = execFileSync("git", ["worktree", "list", "--porcelain"], {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    const paths = output
+      .split("\n")
+      .filter((line) => line.startsWith("worktree "))
+      .map((line) => line.slice("worktree ".length).trim())
+      .filter(Boolean);
+    if (paths.length === 0) throw new Error("Git returned no registered worktrees");
+    return paths;
+  } catch (error) {
+    throw new HookPlanningError(
+      `Failed to discover Git worktrees: ${error instanceof Error ? error.message : String(error)}`,
+      "worktree_discovery_failed",
+      {},
+    );
   }
-  const root = config.isolation.root ?? ".worktrees";
-  const wtPath = resolve(cwd, root, changeName);
-  if (existsSync(wtPath)) {
-    return relative(cwd, wtPath) || wtPath;
-  }
-  return null;
 }
 
-function resolveCurrentGroup(cwd: string, changeName: string): string | null {
-  const tasksPath = resolve(cwd, "openspec/changes", changeName, "tasks.md");
-  if (!existsSync(tasksPath)) return null;
+function formatCurrentGroup(summary: TaskGroupSummary | null): string | null {
+  if (!summary) return null;
+  if (summary.currentGroup) return `Group ${summary.currentGroup.number} in-progress`;
+  return summary.groups.length > 0 ? "all groups done" : null;
+}
 
-  const content = readFileSync(tasksPath, "utf-8");
-  const lines = content.split("\n");
-
-  let inGroup = false;
-  let groupName = "";
-  let groupNum = "";
-
-  for (const line of lines) {
-    const headingMatch = line.match(/^## (\d+)\.\s+(.+)/);
-    if (headingMatch) {
-      groupNum = headingMatch[1]!;
-      groupName = headingMatch[2]!.trim();
-      inGroup = true;
-      continue;
-    }
-
-    if (inGroup) {
-      const taskMatch = line.match(/^\s*- \[ \]\s+/);
-      if (taskMatch) {
-        return `Group ${groupNum} in-progress`;
-      }
-      // If we hit a new heading without finding unchecked tasks, this group is done
-      if (line.match(/^## /)) {
-        inGroup = false;
-      }
-    }
-  }
-
-  // If all groups are done
-  if (groupName) {
-    return "all groups done";
-  }
-
-  return null;
+function isPortableAbsolute(value: string): boolean {
+  return resolve(value) === value || /^[A-Za-z]:[\\/]/.test(value) || /^\\\\[^\\]/.test(value);
 }

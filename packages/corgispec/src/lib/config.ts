@@ -3,9 +3,24 @@ import { resolve } from "node:path";
 import yaml from "js-yaml";
 
 /**
- * Supported schema types.
+ * OpenSpec schema name. OpenSpec 1.6 supports project-defined schemas, so
+ * Corgi must not narrow this to the two schemas it happens to bundle.
  */
-export type SchemaType = "gitlab-tracked" | "github-tracked";
+export type SchemaType = string;
+
+/** Schemas bundled by Corgi for fresh installations. */
+export type BundledSchemaType = "gitlab-tracked" | "github-tracked";
+
+export type TrackingProvider = "github" | "gitlab" | "none";
+
+export interface TrackingConfig {
+  provider: TrackingProvider;
+}
+
+export interface CorgiConfig {
+  tracking?: TrackingConfig;
+  taskArtifactId?: string;
+}
 
 /**
  * Isolation mode configuration.
@@ -28,6 +43,7 @@ export interface RulesConfig {
  */
 export interface OpenSpecConfig {
   schema: SchemaType;
+  corgi?: CorgiConfig;
   isolation?: IsolationConfig;
   context?: string;
   rules?: RulesConfig;
@@ -38,6 +54,7 @@ export interface OpenSpecConfig {
  */
 interface RawConfig {
   schema?: unknown;
+  corgi?: unknown;
   isolation?: unknown;
   context?: unknown;
   rules?: unknown;
@@ -50,8 +67,13 @@ export class ConfigError extends Error {
   }
 }
 
-const VALID_SCHEMAS: SchemaType[] = ["gitlab-tracked", "github-tracked"];
+const TRACKING_PROVIDERS: readonly TrackingProvider[] = ["github", "gitlab", "none"];
 const VALID_ISOLATION_MODES = ["worktree", "none"] as const;
+
+export interface TrackingProviderResolution {
+  provider: TrackingProvider;
+  source: "explicit" | "legacy-schema" | "default";
+}
 
 /**
  * Find and read the openspec/config.yaml file starting from a given directory.
@@ -115,22 +137,63 @@ function validateConfig(raw: RawConfig): OpenSpecConfig {
   if (typeof raw.schema !== "string") {
     throw new ConfigError(`Field 'schema' must be a string, got ${typeof raw.schema}`);
   }
-  if (!VALID_SCHEMAS.includes(raw.schema as SchemaType)) {
-    throw new ConfigError(
-      `Unsupported schema '${raw.schema}'. Supported: ${VALID_SCHEMAS.join(", ")}`
-    );
+  const schema = raw.schema.trim();
+  if (schema.length === 0) {
+    throw new ConfigError("Field 'schema' must be a non-empty string");
   }
 
   const config: OpenSpecConfig = {
-    schema: raw.schema as SchemaType,
+    schema,
   };
+
+  // corgi: optional Corgi-specific settings. OpenSpec owns the remaining
+  // config shape; unknown top-level fields are intentionally ignored.
+  if (raw.corgi !== undefined && raw.corgi !== null) {
+    if (!isMapping(raw.corgi)) {
+      throw new ConfigError("Field 'corgi' must be a mapping");
+    }
+
+    const corgiRaw = raw.corgi;
+    const corgi: CorgiConfig = {};
+
+    if (corgiRaw.tracking !== undefined && corgiRaw.tracking !== null) {
+      if (!isMapping(corgiRaw.tracking)) {
+        throw new ConfigError("Field 'corgi.tracking' must be a mapping");
+      }
+
+      const provider = corgiRaw.tracking.provider;
+      if (typeof provider !== "string") {
+        throw new ConfigError(
+          "Field 'corgi.tracking.provider' is required when tracking is specified"
+        );
+      }
+      if (!TRACKING_PROVIDERS.includes(provider as TrackingProvider)) {
+        throw new ConfigError(
+          `Invalid corgi.tracking.provider '${provider}'. Supported: ${TRACKING_PROVIDERS.join(", ")}`
+        );
+      }
+      corgi.tracking = { provider: provider as TrackingProvider };
+    }
+
+    if (corgiRaw.taskArtifactId !== undefined && corgiRaw.taskArtifactId !== null) {
+      if (
+        typeof corgiRaw.taskArtifactId !== "string" ||
+        corgiRaw.taskArtifactId.trim().length === 0
+      ) {
+        throw new ConfigError("Field 'corgi.taskArtifactId' must be a non-empty string");
+      }
+      corgi.taskArtifactId = corgiRaw.taskArtifactId.trim();
+    }
+
+    config.corgi = corgi;
+  }
 
   // isolation: optional
   if (raw.isolation !== undefined && raw.isolation !== null) {
-    if (typeof raw.isolation !== "object") {
+    if (!isMapping(raw.isolation)) {
       throw new ConfigError("Field 'isolation' must be a mapping");
     }
-    const iso = raw.isolation as Record<string, unknown>;
+    const iso = raw.isolation;
 
     if (!iso.mode || typeof iso.mode !== "string") {
       throw new ConfigError("Field 'isolation.mode' is required when isolation is specified");
@@ -158,10 +221,10 @@ function validateConfig(raw: RawConfig): OpenSpecConfig {
 
   // rules: optional mapping of string[]
   if (raw.rules !== undefined && raw.rules !== null) {
-    if (typeof raw.rules !== "object") {
+    if (!isMapping(raw.rules)) {
       throw new ConfigError("Field 'rules' must be a mapping");
     }
-    const rulesRaw = raw.rules as Record<string, unknown>;
+    const rulesRaw = raw.rules;
     const rules: RulesConfig = {};
     for (const [key, value] of Object.entries(rulesRaw)) {
       if (!Array.isArray(value)) {
@@ -173,4 +236,50 @@ function validateConfig(raw: RawConfig): OpenSpecConfig {
   }
 
   return config;
+}
+
+/**
+ * Resolve the issue tracker without overloading the OpenSpec schema name.
+ * Legacy tracked schemas remain readable, but callers can use `source` to
+ * surface an explicit migration warning in doctor output.
+ */
+export function resolveTrackingProvider(config: OpenSpecConfig): TrackingProviderResolution {
+  const explicit = config.corgi?.tracking?.provider;
+  if (explicit) {
+    return { provider: explicit, source: "explicit" };
+  }
+
+  if (config.schema === "github-tracked") {
+    return { provider: "github", source: "legacy-schema" };
+  }
+  if (config.schema === "gitlab-tracked") {
+    return { provider: "gitlab", source: "legacy-schema" };
+  }
+
+  return { provider: "none", source: "default" };
+}
+
+/**
+ * Resolve the artifact that carries executable tasks. The conventional
+ * `tasks` id is only selected when the active schema actually exposes it.
+ */
+export function resolveTaskArtifactId(
+  config: OpenSpecConfig,
+  artifactIds: Iterable<string>
+): string | null {
+  const explicit = config.corgi?.taskArtifactId;
+  if (explicit) {
+    return explicit;
+  }
+
+  for (const artifactId of artifactIds) {
+    if (artifactId === "tasks") {
+      return "tasks";
+    }
+  }
+  return null;
+}
+
+function isMapping(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import type { InstallManifest } from "./install-assets.js";
 import { sha256File } from "./install-assets.js";
@@ -12,7 +12,7 @@ export interface BootstrapCheck {
 export interface WriteInstallManifestInput {
   targetDir: string;
   sourceRepo: string;
-  schema: "gitlab-tracked" | "github-tracked";
+  schema: string;
   isolation: { mode: "none" | "worktree"; root?: string; branch_prefix?: string };
   installedAt?: string;
   updatedAt: string;
@@ -93,6 +93,10 @@ function normalizeRelativePath(path: string): string {
 }
 
 function readInstalledAtIfPresent(manifestPath: string): string | undefined {
+  if (!existsSync(manifestPath)) {
+    return undefined;
+  }
+
   try {
     const parsed = JSON.parse(readFileSync(manifestPath, "utf-8")) as InstallManifest;
     return parsed.installedAt;

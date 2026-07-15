@@ -1,11 +1,14 @@
 import {
   cpSync,
   existsSync,
+  mkdtempSync,
   mkdirSync,
   readFileSync,
   readdirSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
+import { tmpdir } from "node:os";
 import { basename, dirname, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -27,6 +30,12 @@ import {
 } from "./install-assets.js";
 import { initializeMemoryStructure } from "./memory-init.js";
 import { type BootstrapCheck, writeInstallManifest, writeInstallReport } from "./bootstrap-report.js";
+import {
+  inspectOpenSpecRuntime,
+  NodeCommandRunner,
+} from "./openspec-runtime.js";
+import { resolveTrackingProvider } from "./config.js";
+import { createOpenSpecAdapter } from "./openspec-adapter.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -65,6 +74,8 @@ interface BootstrapContext {
   managedFiles: string[];
   reportPath?: string;
   manifestPath?: string;
+  prerequisitesPassed: boolean;
+  quiet: boolean;
 }
 
 const REQUIRED_PROJECT_ASSET_DIRS = ["commands", "schemas", "skills", "memory-init"] as const;
@@ -95,10 +106,25 @@ export async function runBootstrap(opts: BootstrapOptions): Promise<BootstrapRes
     resultMode: mode,
     timestamp,
     managedFiles: [],
+    prerequisitesPassed: false,
+    quiet: opts.json,
   };
 
   try {
-    runPrerequisiteChecks(context, target, schema);
+    if (mode === "verify") {
+      const verificationError = verifyManagedBootstrapState(target, state);
+      if (verificationError) {
+        context.checks.push({
+          name: "Managed files",
+          status: "FAIL",
+          detail: verificationError,
+        });
+        return finalize(context, target, "stopped", verificationError);
+      }
+    }
+
+    await runPrerequisiteChecks(context, target, schema);
+    context.prerequisitesPassed = true;
 
     const explicitModeMismatch = getExplicitModeMismatch(opts.mode, state.kind);
     if (explicitModeMismatch) {
@@ -224,20 +250,50 @@ function resolveAssetsRoot(assetsRoot?: string): string {
   return root;
 }
 
-function runPrerequisiteChecks(context: BootstrapContext, target: string, schema: SchemaType): void {
+async function runPrerequisiteChecks(
+  context: BootstrapContext,
+  target: string,
+  schema: SchemaType,
+): Promise<void> {
   ensureProjectAssets(context.assetsRoot, context);
 
   if (!existsSync(target)) {
     throw new Error(`Target directory does not exist: ${target}`);
   }
 
+  const executable = process.env["CORGISPEC_OPENSPEC_BIN"] || "openspec";
+  const runtime = await inspectOpenSpecRuntime({
+    cwd: target,
+    executable,
+  });
+  const capability = await createOpenSpecAdapter(target, undefined, {
+    executable,
+    verifyRuntime: false,
+  }).listChanges();
   context.checks.push({
     name: "openspec CLI",
     status: "PASS",
-    detail: `runBootstrap available for ${basename(target) || target}`,
+    detail: `OpenSpec ${runtime.version.raw} native JSON contract (${capability.changes.length} active change(s)) for ${basename(target) || target}`,
   });
 
-  const cliRequirement = schema === "gitlab-tracked" ? "glab" : "gh";
+  await validateOpenSpecSchema(context, target, schema, executable);
+
+  let provider = schema === "gitlab-tracked" ? "gitlab" : schema === "github-tracked" ? "github" : "none";
+  try {
+    provider = resolveTrackingProvider(loadConfigFromDir(target)).provider;
+  } catch {
+    // Fresh projects do not have a config yet; infer only bundled legacy schemas.
+  }
+  if (provider === "none") {
+    context.checks.push({
+      name: "gh/glab CLI",
+      status: "PASS",
+      detail: "No issue tracker configured.",
+    });
+    return;
+  }
+
+  const cliRequirement = provider === "gitlab" ? "glab" : "gh";
   const cliStatus = checkCliAvailability(cliRequirement);
   if (!cliStatus.ok) {
     context.checks.push({
@@ -253,6 +309,99 @@ function runPrerequisiteChecks(context: BootstrapContext, target: string, schema
     status: "PASS",
     detail: cliStatus.detail,
   });
+}
+
+async function validateOpenSpecSchema(
+  context: BootstrapContext,
+  target: string,
+  schema: SchemaType,
+  executable: string,
+): Promise<void> {
+  const projectSchema = resolve(target, "openspec/schemas", schema);
+  const bundledSchema = resolve(context.assetsRoot, "schemas", schema);
+  let cwd = target;
+  let stagingRoot: string | undefined;
+
+  try {
+    if (!existsSync(projectSchema) && existsSync(bundledSchema)) {
+      stagingRoot = mkdtempSync(resolve(tmpdir(), "corgispec-schema-validate-"));
+      const stagingOpenSpec = resolve(stagingRoot, "openspec");
+      mkdirSync(resolve(stagingOpenSpec, "schemas"), { recursive: true });
+      cpSync(bundledSchema, resolve(stagingOpenSpec, "schemas", schema), {
+        recursive: true,
+      });
+      writeFileSync(resolve(stagingOpenSpec, "config.yaml"), `schema: ${schema}\n`);
+      cwd = stagingRoot;
+    }
+
+    const result = await new NodeCommandRunner().run({
+      command: executable,
+      args: ["schema", "validate", schema, "--json"],
+      cwd,
+      timeoutMs: 15_000,
+      env: { OPENSPEC_TELEMETRY: "0" },
+    });
+
+    if (result.timedOut) {
+      throw new Error(`OpenSpec schema validation for '${schema}' timed out.`);
+    }
+
+    let parsed: { valid?: unknown; issues?: unknown } | null = null;
+    try {
+      const value = JSON.parse(result.stdout) as unknown;
+      parsed = value !== null && typeof value === "object"
+        ? (value as { valid?: unknown; issues?: unknown })
+        : null;
+    } catch {
+      // Reported below as a native JSON contract violation.
+    }
+
+    if (result.exitCode !== 0 || parsed?.valid !== true) {
+      const issues = formatSchemaIssues(parsed?.issues);
+      const detail = issues
+        || result.stderr.trim()
+        || (parsed === null
+          ? "OpenSpec schema validation returned malformed JSON."
+          : `OpenSpec rejected schema '${schema}'.`);
+      throw new Error(detail);
+    }
+
+    context.checks.push({
+      name: "OpenSpec schema",
+      status: "PASS",
+      detail: `${schema} validated through the native JSON contract`,
+    });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    context.checks.push({
+      name: "OpenSpec schema",
+      status: "FAIL",
+      detail,
+    });
+    throw new Error(`Schema '${schema}' failed OpenSpec validation: ${detail}`, {
+      cause: error,
+    });
+  } finally {
+    if (stagingRoot) {
+      rmSync(stagingRoot, { recursive: true, force: true });
+    }
+  }
+}
+
+function formatSchemaIssues(issues: unknown): string {
+  if (!Array.isArray(issues)) {
+    return "";
+  }
+
+  return issues
+    .map((issue) => {
+      if (issue !== null && typeof issue === "object" && "message" in issue) {
+        return String((issue as { message: unknown }).message);
+      }
+      return String(issue);
+    })
+    .filter(Boolean)
+    .join("; ");
 }
 
 function ensureProjectAssets(assetsRoot: string, context: BootstrapContext): void {
@@ -341,7 +490,9 @@ function installUserSkills(
 
   for (const platform of targetPlatforms) {
     const targetDir = userSkillDirs?.[platform] ?? getSkillDir(platform);
-    installedCount += installSkillsTo(sourceDir, targetDir, false).length;
+    installedCount += installSkillsTo(sourceDir, targetDir, false, {
+      quiet: context.quiet,
+    }).length;
   }
 
   context.actions.push(`installed ${installedCount} user-level skills`);
@@ -435,6 +586,55 @@ function detectManagedFileModifications(
   return modified;
 }
 
+function verifyManagedBootstrapState(
+  target: string,
+  state: ReturnType<typeof classifyTargetState>,
+): string | null {
+  if (state.kind !== "managed-update" || !state.hasConfig || !state.manifestPath) {
+    return "Verify mode requires a managed bootstrap state with config, manifest, and managed file hashes.";
+  }
+
+  let manifest: InstallManifest;
+  try {
+    manifest = JSON.parse(readFileSync(state.manifestPath, "utf-8")) as InstallManifest;
+  } catch (error) {
+    return `Managed bootstrap manifest is unreadable: ${error instanceof Error ? error.message : String(error)}`;
+  }
+
+  const entries = Object.entries(manifest.files ?? {});
+  if (entries.length === 0) {
+    return "Verify mode requires at least one managed file hash in the bootstrap manifest.";
+  }
+
+  const schema = detectSchema(target);
+  if (!schema || manifest.schema !== schema) {
+    return "Managed bootstrap config and manifest do not identify the same schema.";
+  }
+
+  const invalidHashes: string[] = [];
+  for (const [relativePath, entry] of entries) {
+    if (
+      entry === null
+      || typeof entry !== "object"
+      || typeof entry.sha256 !== "string"
+      || !/^[a-f0-9]{64}$/.test(entry.sha256)
+    ) {
+      invalidHashes.push(relativePath);
+      continue;
+    }
+    const filePath = resolve(target, relativePath);
+    if (!existsSync(filePath) || sha256File(filePath) !== entry.sha256) {
+      invalidHashes.push(relativePath);
+    }
+  }
+
+  if (invalidHashes.length > 0) {
+    return `Managed file hashes do not match: ${invalidHashes.join(", ")}`;
+  }
+
+  return null;
+}
+
 function createLegacyBackup(target: string, managedFiles: string[], context: BootstrapContext): void {
   const backupRoot = resolve(target, "openspec/.corgi-backups", context.timestamp.replace(/[:.]/g, "-"));
   for (const source of managedFiles) {
@@ -478,8 +678,8 @@ function detectSchema(target: string): SchemaType | undefined {
     return undefined;
   }
   const parsed = yaml.load(readFileSync(configPath, "utf-8")) as { schema?: unknown } | null;
-  return parsed?.schema === "gitlab-tracked" || parsed?.schema === "github-tracked"
-    ? parsed.schema
+  return typeof parsed?.schema === "string" && parsed.schema.trim().length > 0
+    ? parsed.schema.trim()
     : undefined;
 }
 
@@ -526,7 +726,10 @@ function finalize(
   status: BootstrapResult["status"],
   message: string
 ): BootstrapResult {
-  const shouldWriteReport = existsSync(target);
+  const shouldWriteReport =
+    context.resultMode !== "verify"
+    && context.prerequisitesPassed
+    && existsSync(target);
   const reportPath = shouldWriteReport
     ? writeInstallReport({
         targetDir: target,

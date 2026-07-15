@@ -1,123 +1,116 @@
 import { Command } from "commander";
 import { resolve } from "node:path";
-import { discoverChanges, getChangeInfo, loadWorkflowSchema } from "../lib/changes.js";
+import {
+  createArtifactResolver,
+  type ArtifactResolver,
+} from "../lib/artifact-resolver.js";
+import { loadConfigFromDir, resolveTrackingProvider } from "../lib/config.js";
 import { detectHookConfig } from "../lib/hooks.js";
+import {
+  compatibleArtifacts,
+  compatibilityState,
+  flattenArtifactFiles,
+  lifecycleError,
+  selectChangeName,
+  summarizeOptionalTaskGroups,
+} from "../lib/lifecycle.js";
+import {
+  createOpenSpecAdapter,
+  type OpenSpecAdapter,
+} from "../lib/openspec-adapter.js";
 
-export function createStatusCommand(): Command {
+export interface StatusCommandDependencies {
+  createAdapter?: (cwd: string) => OpenSpecAdapter;
+  createResolver?: (adapter: OpenSpecAdapter) => ArtifactResolver;
+}
+
+export function createStatusCommand(
+  dependencies: StatusCommandDependencies = {},
+): Command {
   const cmd = new Command("status");
+  const adapterFactory = dependencies.createAdapter ?? ((cwd) => createOpenSpecAdapter(cwd));
+  const resolverFactory = dependencies.createResolver ?? ((adapter) => createArtifactResolver(adapter));
 
   cmd
-    .description("Show artifact completion state for a Corgi change")
+    .description("Show artifact and implementation completion for a Corgi change")
     .argument("[name]", "Change name (auto-selects if only one exists)")
     .option("--json", "Output as JSON")
+    .option("--store <id>", "OpenSpec Store id")
     .option("--path <dir>", "Working directory", ".")
-    .action(async (name: string | undefined, opts) => {
+    .action(async (name: string | undefined, opts: {
+      json?: boolean;
+      store?: string;
+      path: string;
+    }) => {
       const cwd = resolve(opts.path);
-
       try {
-        let changeName = name;
-
-        if (!changeName) {
-          const changes = discoverChanges(cwd);
-          if (changes.length === 0) {
-            console.error("Error: No changes found.");
-            process.exitCode = 1; return;
-          }
-          if (changes.length > 1) {
-            console.error(
-              "Error: Multiple changes found. Specify one:\n" +
-                changes.map((c) => `  - ${c}`).join("\n")
-            );
-            process.exitCode = 1; return;
-          }
-          changeName = changes[0];
-        }
-
-        const info = getChangeInfo(cwd, changeName);
+        const adapter = adapterFactory(cwd);
+        const changeName = await selectChangeName(adapter, name, { store: opts.store });
+        const resolved = await resolverFactory(adapter).resolve(changeName, { store: opts.store });
+        const config = loadConfigFromDir(cwd);
+        const tracking = resolveTrackingProvider(config);
+        const tasks = summarizeOptionalTaskGroups(config, resolved.artifactPaths);
         const hookStatus = detectHookConfig(cwd);
-        const schema = loadWorkflowSchema(cwd);
+        const artifacts = compatibleArtifacts(resolved.status.artifacts);
+        const implementationComplete = tasks.implementationComplete;
+        const isComplete = resolved.planningComplete && implementationComplete;
+        const output = {
+          ...resolved.status,
+          changeName: resolved.changeName,
+          schemaName: resolved.schemaName,
+          state: compatibilityState(resolved, tasks),
+          planningComplete: resolved.planningComplete,
+          implementationComplete,
+          isComplete,
+          changeRoot: resolved.changeRoot,
+          artifactPaths: resolved.artifactPaths,
+          planningRevision: resolved.planningRevision,
+          trackingProvider: tracking.provider,
+          trackingProviderSource: tracking.source,
+          artifacts,
+          taskGroups: tasks.groups,
+          taskArtifactId: tasks.taskArtifactId || null,
+          contextFiles: flattenArtifactFiles(resolved.artifactPaths),
+          completedTasks: tasks.completedTasks,
+          totalTasks: tasks.totalTasks,
+          hooks: {
+            configured: hookStatus.configured,
+            platform: hookStatus.platform,
+            events: hookStatus.events,
+          },
+        };
 
         if (opts.json) {
-          const output = {
-            changeName: info.name,
-            schemaName: info.schemaName,
-            state: info.state,
-            isComplete: info.isComplete,
-            applyRequires: schema.apply?.requires || [],
-            artifacts: info.artifacts,
-            taskGroups: info.taskGroups,
-            hooks: {
-              configured: hookStatus.configured,
-              platform: hookStatus.platform,
-              events: hookStatus.events,
-            },
-          };
           console.log(JSON.stringify(output, null, 2));
           return;
         }
 
-        // Human-readable output
-        console.log(`Change: ${info.name} (state: ${info.state})`);
-        console.log(`Schema: ${info.schemaName}`);
-        if (hookStatus.configured) {
-          console.log(
-            `Hooks: ✅ configured (${hookStatus.events.join(", ")})`
-          );
-        } else {
-          console.log(
-            "Hooks: ❌ not configured → run corgispec hooks generate"
-          );
+        console.log(`Change: ${output.changeName} (state: ${output.state})`);
+        console.log(`Schema: ${output.schemaName}`);
+        console.log(`Planning revision: ${output.planningRevision}`);
+        console.log(`Planning: ${output.planningComplete ? "complete" : "in progress"}`);
+        console.log(`Implementation: ${implementationComplete ? "complete" : "in progress"}`);
+        console.log(`Hooks: ${hookStatus.configured ? `configured (${hookStatus.events.join(", ")})` : "not configured"}`);
+        console.log("\nArtifacts:");
+        for (const artifact of artifacts) {
+          const icon = artifact.exists ? "✓" : artifact.blocked ? "✗" : "○";
+          const suffix = artifact.blockedBy.length
+            ? ` (blocked by: ${artifact.blockedBy.join(", ")})`
+            : "";
+          console.log(`  ${icon} ${artifact.id}${suffix}`);
         }
-        console.log();
-
-        // Artifacts
-        console.log("Artifacts:");
-        for (const a of info.artifacts) {
-          let icon: string;
-          if (a.exists) {
-            icon = "✓";
-          } else if (a.blocked) {
-            icon = "✗";
-          } else if (a.ready) {
-            icon = "○";
-          } else {
-            icon = "○";
+        if (tasks.groups.length > 0) {
+          console.log("\nTask Groups:");
+          for (const group of tasks.groups) {
+            console.log(`  ${group.number}. ${group.name} ${group.completedTasks}/${group.totalTasks} [${group.status}]`);
           }
-          let suffix = "";
-          if (a.blocked && a.blockedBy.length > 0) {
-            suffix = ` (blocked by: ${a.blockedBy.join(", ")})`;
-          }
-          console.log(`  ${icon} ${a.id} — ${a.description}${suffix}`);
         }
-        console.log();
-
-        // Task groups
-        if (info.taskGroups.length > 0) {
-          console.log("Task Groups:");
-          for (const tg of info.taskGroups) {
-            const pct =
-              tg.totalTasks > 0
-                ? Math.round((tg.completedTasks / tg.totalTasks) * 100)
-                : 0;
-            console.log(
-              `  ${tg.number}. ${tg.name}  ${tg.completedTasks}/${tg.totalTasks} (${pct}%)  [${tg.status}]`
-            );
-          }
-          console.log();
-        }
-
-        // Overall
-        const overallPct =
-          info.totalTasks > 0
-            ? Math.round((info.completedTasks / info.totalTasks) * 100)
-            : 0;
-        console.log(
-          `Overall: ${info.completedTasks}/${info.totalTasks} tasks (${overallPct}%) — ${info.isComplete ? "complete" : "in progress"}`
-        );
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error(`Error: ${msg}`);
-        process.exitCode = 1; return;
+        console.log(`\nOverall: ${tasks.completedTasks}/${tasks.totalTasks} tasks — ${isComplete ? "complete" : "in progress"}`);
+      } catch (error) {
+        const failure = lifecycleError(error);
+        if (opts.json) console.log(JSON.stringify({ status: "contract_error", error: failure }, null, 2));
+        else console.error(`Error: ${failure.message}`);
+        process.exitCode = 1;
       }
     });
 

@@ -1,135 +1,49 @@
 ---
 name: corgispec-apply-change
-description: Implement tasks from a Corgi change. Use when the user wants to start implementing, continue implementation, or work through tasks.
-license: MIT
-compatibility: Requires corgispec CLI.
-metadata:
-  author: corgispec
-  version: "2.0"
-  generatedBy: "1.3.0"
+description: Implement exactly one pending Task Group from a CorgiSpec change and optionally synchronize GitLab progress. Use when applying a change whose normalized tracking provider is GitLab or none.
 ---
 
-Implement tasks from a Corgi change — one Task Group at a time, with subagent delegation.
+# Apply one Task Group
 
-## Preconditions (VERIFY BEFORE STARTING)
+Execute one group, checkpoint it, and stop. Use CLI-returned paths for every planning read or write.
 
-- [ ] `openspec/config.yaml` is readable
-- [ ] Change name resolved (from input, context, or user prompt)
-- [ ] If `isolation.mode` is `worktree` → worktree MUST exist (created by propose). If missing, STOP.
-- [ ] `corgispec status "<name>" --json` does NOT return `state: "blocked"`
+## Resolve context
 
-## Forbidden Actions
+**Context Gate**: If session context already contains ALL of: `isolation.mode`, active changes with worktree paths, current branch, reuse it; otherwise read configuration and discover worktrees.
 
-- NEVER auto-continue to the next Task Group after completing one — STOP and report
-- NEVER skip worktree resolution when `isolation.mode` is `worktree`
-- NEVER fabricate file lists or summaries — only report actual implementation artifacts
-- NEVER work in the main checkout when a worktree should be used
+1. Resolve the change and worktree. When isolation is enabled, read [references/worktree-discovery.md](references/worktree-discovery.md) and run all subsequent commands from the selected worktree.
+2. Run:
 
----
+   ```bash
+   corgispec status "<change>" --json
+   corgispec ready "<change>" --strict --json
+   corgispec apply "<change>" --json
+   ```
 
-## Steps
+3. Require the status and apply responses to agree on `changeRoot`, and require `artifactPaths`, `contextFiles`, `taskArtifactId`, `trackingProvider`, and `trackingProviderSource`. Stop and request a CLI upgrade if any field is absent.
+4. Accept `trackingProvider: "gitlab"` or `"none"`. Route `"github"` to `corgispec-gh-apply`; never infer provider from `schemaName`.
+5. Treat `changeRoot` and returned paths as authoritative even outside the current working directory. Do not reconstruct a planning path.
+6. Stop on failed readiness, blocked apply state, missing `taskArtifactId`, ambiguous task-artifact paths, or all groups complete.
 
-### 1. Discover: Select change and resolve worktree
+## Execute
 
-**Context Gate**: If session context already contains ALL of: `isolation.mode`, active changes with worktree paths, current branch
-→ Gate passed — SKIP config reading below and proceed to the next step.
-Otherwise: read `openspec/config.yaml` and proceed with discovery.
+1. Use the apply response's `currentGroup`, task records, instruction, and `contextFiles`. Read planning context only from returned concrete paths.
+2. Read [references/checkpoint-flow.md](references/checkpoint-flow.md) and [references/delegation-strategy.md](references/delegation-strategy.md).
+3. If GitLab tracking is enabled, read tracker state at `<changeRoot>/.gitlab.yaml` and follow [references/issue-sync.md](references/issue-sync.md). Verify the child issue is in the expected state before changing labels.
+4. Announce the selected group. Implement only its pending tasks in dependency order; delegate independent tasks when useful.
+5. Test each task proportionally. Mark its checkbox complete only in the concrete task-artifact path returned for that task and only after its verification passes.
+6. Record actual modified implementation files and evidence. Stop immediately on a blocker; post a tracker note when configured.
 
-**If `isolation.mode: worktree`**: Changes live inside worktrees, not the main checkout. Read `references/worktree-discovery.md` for the full discovery procedure. Quick summary:
-1. `corgispec list --json` — if it returns changes, use them
-2. If empty (new session from main checkout): scan `<isolation.root>/` directories, verify each with `git worktree list` and check `openspec/changes/<name>/` exists inside
-3. Auto-select if one found, prompt if multiple
-4. ALL subsequent work uses the worktree as workdir
+## Close out
 
-**If no isolation**: `corgispec list --json` directly. Auto-select if one, prompt if multiple.
-
-If name provided by user, use it directly. Announce: `Using change: <name>` (and worktree path if applicable).
-
-### 2. Discover: Get status and apply instructions
-
-```bash
-corgispec status "<name>" --json
-corgispec apply <name> --json
-```
-
-Handle states: `blocked` → stop. `all_done` → suggest review/archive. Otherwise → proceed.
-
-Read all files listed in `contextFiles`.
-
-### 3. Discover: Parse Task Groups, find current group, and plan delegation
-
-Read `references/checkpoint-flow.md` for: Task Group parsing from `tasks.md`, identifying the current group (first group with pending tasks), and building the group progress table.
-
-Read `references/delegation-strategy.md` for: how to analyze tasks within the current group, decide which to delegate to subagents, and how to structure delegation prompts.
-
-**Quick summary**: Analyze task dependencies within the group. Independent tasks SHOULD be delegated to subagents for cleaner context and potential parallelism. Each subagent gets only the relevant context files and task description — not the full conversation history.
-
-**If tracked**: move the child issue to in-progress before starting Step 4 (read `references/issue-sync.md`).
-
-### 4. Develop: Execute current Task Group
-
-a. Announce: `Group N: <name>` (with issue number if tracked)
-b. Execute the group's implementation tasks — either directly or via subagents per Step 3's plan:
-   - Show which task is being worked on
-   - Make minimal, focused code changes
-   - Mark each task complete in `tasks.md`: `- [ ]` → `- [x]`
-   - Record the files actually created or modified for closeout
-   - Continue until the group is done or a blocker is hit
-c. On blocker: report and wait for guidance.
-
-### 5. Closeout: Generate summary, sync, and prepare review handoff
-
-After all tasks in the group are complete, close out the group without doing new implementation work:
-
-1. Generate rich summary (read `references/issue-sync.md` for format)
-2. Sync to issue tracker if tracked (child issue description + completion note + labels)
-3. Update parent issue progress if tracked
-4. Prepare the group for review handoff
-5. **Memory writes (if memory/ and wiki/ exist)**:
-   - Update `memory/session-bridge.md`: set Active corgi Change to current change/phase/branch, update Done with completed tasks, update Waiting with next group info
-   - If any pitfalls were discovered during this group: append to `memory/pitfalls.md` Active section with source link `(source: [[openspec/changes/<name>/tasks]])`
-   - If any implicit rules or architectural insights emerged: append to `wiki/architecture/implicit-contracts.md`
-   - Update `wiki/hot.md` Recent Decisions if significant decisions were made
-   - If memory/ or wiki/ don't exist, skip memory writes silently
-
-**Issue sync SHOULD be delegated to a subagent** — it is mechanical work that doesn't need main agent context.
-
-If implementation work is complete but closeout fails, retry closeout and sync rather than re-running the group implementation.
-
-### 6. Closeout: Report checkpoint and STOP
-
-```
-## Checkpoint: Group N Complete
-
-**Change:** <name>
-**Progress:** A/B tasks complete
-**Worktree:** <path> or "none"
-
-Run `/corgi-review` to review this group, or `/corgi-apply` to continue.
-```
-
-**STOP. Do not auto-continue to the next group.**
-
----
-
-## Postconditions (VERIFY BEFORE REPORTING DONE)
-
-- [ ] All tasks in the current group are marked `[x]` in `tasks.md`
-- [ ] `corgispec apply <name> --json` reflects updated progress
-- [ ] If tracked: child issue moved to review label, description updated with rich summary
-- [ ] If tracked: parent issue progress updated
-- [ ] The skill STOPPED after reporting one completed group
-- [ ] If `isolation.mode` is `worktree`: all changes are in the worktree, not main checkout
-- [ ] No fabricated file lists — only actually created/modified files reported
-
-**If ANY postcondition fails, STOP and report which one failed. Do not claim completion.**
-
----
+- Re-run `corgispec apply "<change>" --json` and verify the completed group has no pending tasks.
+- When GitLab tracking is enabled, update the child summary, move it from in-progress to review, and update parent progress. When provider is none, perform no tracker operation.
+- Report group/task progress, modified files, evidence, tracker status, `changeRoot`, and worktree.
+- Stop after one group. Do not continue automatically.
 
 ## Guardrails
 
-- Execute ONE Task Group per invocation
-- Pause on errors, blockers, or unclear requirements — don't guess
-- If implementation reveals design issues, suggest artifact updates
-- Rich summaries come from actual implementation, never fabricated
-- If `proposal.md` or `specs/` is missing, derive objectives from task descriptions
+- Never hardcode the planning home, artifact layout, or task filename.
+- Never edit a planning artifact other than CLI-authorized task checkboxes.
+- Never work in the main checkout when an isolated worktree is required.
+- Never commit, push, review, archive, or publish during apply.

@@ -1,48 +1,19 @@
-# Artifact Creation Procedure
+# Artifact creation procedure
 
-## Build Order
+## Resolve the graph
 
-Get the artifact pipeline status:
-```bash
-corgispec status "<name>" --json
-```
+Run `corgispec status "<change>" --json`. Preserve `changeRoot`, `artifactPaths`, `contextFiles`, and `taskArtifactId` for the entire operation.
 
-Parse the JSON:
-- `applyRequires`: artifact IDs needed before implementation (e.g., `["tasks"]`)
-- `artifacts`: list with `id`, `status`, `missingDeps`
+Use the CLI-reported artifact status, dependencies, and implementation prerequisites as the graph. Do not assign roles from filenames or assume a fixed number of artifacts.
 
-## Creating Each Artifact
+## Create one artifact
 
-For each artifact in dependency order (no pending dependencies first):
+1. Select a CLI-reported ready artifact.
+2. Run `corgispec instructions "<artifact-id>" --change "<change>" --json`.
+3. Verify that its `changeRoot` matches status and that every returned concrete output remains inside that root. An external store root is valid.
+4. Read only returned dependency paths and `contextFiles`.
+5. Apply `context` and `rules` as constraints. Follow `template` and `instruction` without copying constraint blocks into the output.
+6. Write only the concrete target authorized by the response. Never construct a target from an artifact ID or write a path pattern as a filename.
+7. Re-run status and verify that the artifact is complete.
 
-1. Get instructions:
-   ```bash
-   corgispec instructions <artifact-id> --change <name> --json
-   ```
-
-2. The JSON includes:
-   - `context`: Project background — constraints for YOU, do NOT include in output
-   - `rules`: Artifact-specific rules — constraints for YOU, do NOT include in output
-   - `template`: Structure to follow for the output file
-   - `instruction`: Schema-specific guidance
-   - `outputPath`: Where to write the artifact
-   - `dependencies`: Completed artifacts to read first
-
-3. Read dependency artifacts for context before creating the new one.
-
-4. Write the artifact using `template` as structure, following `instruction` guidance.
-
-5. After writing, re-check status:
-   ```bash
-   corgispec status "<name>" --json
-   ```
-
-6. Continue until all `applyRequires` artifacts have `status: "done"`.
-
-## Guidelines
-
-- Follow the `instruction` field from `corgispec instructions` for each artifact type
-- Use `template` as the structure — fill in its sections
-- `context` and `rules` guide what you write but NEVER appear in the output
-- If context is unclear, ask the user — but prefer reasonable decisions to keep momentum
-- Verify each artifact file exists after writing before moving to the next
+Continue until every CLI-reported implementation prerequisite is complete. Stop on an ambiguous target, root mismatch, unreadable context file, or blocked graph.

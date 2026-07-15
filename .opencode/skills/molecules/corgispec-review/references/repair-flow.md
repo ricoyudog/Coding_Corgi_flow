@@ -22,7 +22,7 @@ Present a concrete plan: "I plan to change: ..."
 
 ## 4. Append precise fix tasks
 
-Convert the confirmed plan into `tasks.md` format. Append under the current group as `N.x` fix tasks:
+Convert the confirmed plan into the task artifact's existing checkbox format. Append under the current group at the concrete path resolved from `taskArtifactId` and `artifactPaths`:
 ```
 - [ ] 1.4 Fix input validation in cli.py
 - [ ] 1.5 Add edge case handling for empty input
@@ -63,6 +63,6 @@ Update the parent issue, set the group Status back to `in-progress`.
 
 ## 6. Guide next steps
 
-Tell the user: "Fix tasks added to tasks.md. Run `/corgi-apply` to start fixing."
+Tell the user: "Fix tasks were added to the authorized task artifact. Run `/corgi-apply` to start fixing."
 
 Stop after task generation and state reset. Do not implement the fixes during review.

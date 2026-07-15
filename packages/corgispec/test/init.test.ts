@@ -28,6 +28,8 @@ describe("init command", () => {
     expect(existsSync(resolve(targetDir, "openspec/config.yaml"))).toBe(true);
     const config = readFileSync(resolve(targetDir, "openspec/config.yaml"), "utf-8");
     expect(config).toContain("schema: github-tracked");
+    expect(config).toContain("provider: github");
+    expect(config).toContain("taskArtifactId: tasks");
     expect(existsSync(resolve(targetDir, "openspec/changes"))).toBe(true);
     expect(existsSync(resolve(targetDir, "openspec/schemas"))).toBe(true);
     expect(existsSync(resolve(targetDir, "openspec/specs"))).toBe(true);
@@ -38,6 +40,19 @@ describe("init command", () => {
 
     const config = readFileSync(resolve(targetDir, "openspec/config.yaml"), "utf-8");
     expect(config).toContain("schema: gitlab-tracked");
+    expect(config).toContain("provider: gitlab");
+  });
+
+  it("accepts a custom OpenSpec schema with explicit Corgi routing", () => {
+    execSync(
+      `node ${CLI} init ${targetDir} --schema team-flow --tracking-provider none --task-artifact execution-plan`,
+      { encoding: "utf-8" },
+    );
+
+    const config = readFileSync(resolve(targetDir, "openspec/config.yaml"), "utf-8");
+    expect(config).toContain("schema: team-flow");
+    expect(config).toContain("provider: none");
+    expect(config).toContain("taskArtifactId: execution-plan");
   });
 
   it("does not overwrite existing config", () => {
@@ -83,7 +98,7 @@ describe("init command", () => {
 
   it("exits with error for invalid --schema value", () => {
     try {
-      execSync(`node ${CLI} init ${targetDir} --schema nonexistent`, {
+      execSync(`node ${CLI} init ${targetDir} --schema 'Invalid Schema!'`, {
         encoding: "utf-8",
       });
       expect.fail("Should have thrown");

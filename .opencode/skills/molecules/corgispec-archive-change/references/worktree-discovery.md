@@ -24,7 +24,7 @@ ls <isolation.root>/
 
 Each subdirectory name is a potential change name. For each:
 - Verify the worktree is registered: check `git worktree list` includes this path
-- Verify change exists inside: check `<isolation.root>/<name>/openspec/changes/<name>/` is a directory
+- Verify the candidate through `corgispec status "<name>" --path "<worktree>" --json`; require the expected change name plus authoritative `changeRoot` and `artifactPaths`
 
 ### 3. Build discovered change list
 
@@ -63,9 +63,9 @@ $ git worktree list
 /home/user/myproject/.worktrees/add-user-auth def5678 [feat/add-user-auth]
 /home/user/myproject/.worktrees/fix-login-bug ghi9012 [feat/fix-login-bug]
 
-# Check changes exist:
-$ ls .worktrees/add-user-auth/openspec/changes/
-add-user-auth/
+# Check the change through the CLI (the returned store root may be external):
+$ corgispec status "add-user-auth" --path .worktrees/add-user-auth --json
+{ "changeName": "add-user-auth", "changeRoot": "<authoritative-root>" }
 
 # → Valid change: "add-user-auth" at .worktrees/add-user-auth
 ```

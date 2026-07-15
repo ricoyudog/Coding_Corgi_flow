@@ -1,49 +1,17 @@
 ---
 name: corgispec-explore
-description: Enter explore mode - a thinking partner for exploring ideas, investigating problems, and clarifying requirements. Use when the user wants to think through something before or during a change.
-license: MIT
-compatibility: Requires corgispec CLI.
-metadata:
-  author: corgispec
-  version: "1.0"
-  generatedBy: "1.3.0"
+description: Investigate a CorgiSpec change, its planning context, implementation state, and optional GitLab tracking without modifying anything. Use for read-only exploration when the normalized tracking provider is GitLab or none.
 ---
 
-Enter explore mode. Think deeply. Visualize freely. Follow the conversation wherever it goes.
+# Explore a change
 
-**IMPORTANT: Explore mode is for thinking, not implementing.**
+**Context Gate**: If session context already contains ALL of: `isolation.mode`, active changes with worktree paths, current branch, reuse it; otherwise read configuration and discover worktrees.
 
-## Corgi Awareness
-
-At the start, check active changes with:
-```bash
-corgispec list --json
-```
-
-### Worktree Awareness
-
-**Context Gate**: If session context already contains ALL of: `isolation.mode`, active changes with worktree paths, current branch
-→ Gate passed — SKIP config reading below and proceed to the next step.
-Otherwise: read `openspec/config.yaml` and proceed with discovery.
-
-**If `isolation.mode: worktree`**: Changes live inside worktrees, not the main checkout. Read `references/worktree-discovery.md` for the full discovery procedure. Quick summary:
-1. `corgispec list --json` — if it returns changes, use them
-2. If empty (new session from main checkout): scan `<isolation.root>/` directories, verify each with `git worktree list`
-3. Enter the relevant worktree for context: use workdir parameter for commands
-
-**If no specific change or `isolation.mode` is `none`/missing:** work in the current directory.
-
-When a change exists:
-1. Read the relevant artifacts for context.
-2. Reference them naturally in conversation.
-3. If the change has `.gitlab.yaml`:
-   - Mention: `This change is tracked on GitLab: parent #<parent_iid>, N group issues`
-   - Read each tracked issue's current labels or state from GitLab when you need a status summary
-   - Offer: `Check a specific group's GitLab issue for latest review feedback?`
-4. Offer to capture insights in proposal, specs, design, or tasks when the user wants.
-
-## Guardrails
-
-- Do not implement code in explore mode
-- Do not assume `.gitlab.yaml` contains live status; read GitLab when status matters
-- Ground exploration in the real codebase and real change artifacts
+1. Resolve the change and isolated worktree with [references/worktree-discovery.md](references/worktree-discovery.md) when required.
+2. Run `corgispec status "<change>" --json` and `corgispec apply "<change>" --json` from the selected worktree.
+3. Require matching `changeRoot` plus `artifactPaths`, `contextFiles`, `taskArtifactId`, `trackingProvider`, and `trackingProviderSource`. Stop and request a CLI upgrade when absent.
+4. Accept `trackingProvider: "gitlab"` or `"none"`. Route `"github"` to `corgispec-gh-explore`; never infer provider from `schemaName`.
+5. Read planning material only from returned concrete artifact paths and context files. Accept an external store root; never prepend the working directory or infer an artifact filename.
+6. Inspect relevant implementation, tests, Git history, and worktree state without editing them.
+7. When GitLab tracking is enabled, read tracker state at `<changeRoot>/.gitlab.yaml`, then query live issues for current labels and discussion. Treat remote state as current and local tracker state as identifiers.
+8. Present findings, evidence paths, uncertainties, and possible next steps. Make no file, issue, label, branch, or worktree changes.

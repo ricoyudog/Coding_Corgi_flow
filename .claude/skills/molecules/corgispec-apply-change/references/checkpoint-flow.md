@@ -1,104 +1,20 @@
-# Task Group Checkpoint Flow
+# Task Group checkpoint flow
 
-## Parsing Task Groups from tasks.md
+Use `corgispec apply "<change>" --json` as the Task Group parser. Do not parse a guessed planning file.
 
-Task Groups are identified by `## N.` headings in `tasks.md`. Each heading plus its child checkbox items forms one group.
+## Select and execute
 
-Example:
-```markdown
-## 1. Setup database schema
-- [x] 1.1 Create user table migration
-- [x] 1.2 Add index on email column
+1. Accept `currentGroup` and task records from the apply response.
+2. Use `taskArtifactId` plus `artifactPaths` to locate each task's concrete source path.
+3. Move the tracked child issue to in-progress when tracking is enabled.
+4. Implement each pending task in dependency order.
+5. Verify the task, update its checkbox at the returned concrete path, and record modified files.
+6. Stop on a blocker; never skip silently.
+7. Re-run apply JSON after the group and require no pending task in that group.
+8. Synchronize tracker closeout when enabled, report the checkpoint, and stop.
 
-## 2. Implement API endpoints
-- [ ] 2.1 Create REST controller
-- [ ] 2.2 Add input validation
-- [ ] 2.3 Write integration tests
+## Checkpoint report
 
-## 3. Frontend integration
-- [ ] 3.1 Create form component
-- [ ] 3.2 Add API client calls
-```
+Include the change, group, completed/total tasks, completed/total groups, child and parent issue state when tracked, authoritative `changeRoot`, worktree, completed task IDs, modified files, and verification evidence.
 
-## Building the Progress Table
-
-For each group, track:
-
-| Group | Name | Total | Done | Status | Issue |
-|-------|------|-------|------|--------|-------|
-| 1 | Setup database schema | 2 | 2 | done | #43 |
-| 2 | Implement API endpoints | 3 | 0 | pending | #44 |
-| 3 | Frontend integration | 2 | 0 | pending | #45 |
-
-Issue numbers come from `.gitlab.yaml` if it exists.
-
-## Finding the Current Group
-
-The current group is the **first group with pending tasks** (has at least one `- [ ]` item).
-
-If all groups are done → state is `all_done`, suggest review or archive.
-
-## Discover, Develop, and Closeout Loop (One Group Only)
-
-```
-1. Discover: identify current group (first with pending tasks)
-2. Discover: if tracked, move child issue to in-progress before code changes begin
-3. Develop: announce "Group N: <name>"
-4. Develop: for each pending task in this group:
-   a. Announce task
-   b. Implement (directly or via subagent)
-   c. Mark [x] in tasks.md
-   d. Record actual modified files for closeout
-   e. If blocker → stop and report
-5. Closeout: generate rich summary
-6. Closeout: sync issues (if tracked)
-7. Closeout: report checkpoint
-8. STOP
-```
-
-## Checkpoint Report Format
-
-```
-## Checkpoint: Group N Complete
-
-**Change:** <name>
-**Progress:** A/B tasks complete (X/Y groups done)
-**Child Issue:** #<iid> moved to review
-**Parent Issue:** #<iid> updated
-**Worktree:** <path> or "none"
-
-### Completed This Session
-- [x] N.1 task description
-- [x] N.2 task description
-
-### Files Modified
-- path/to/file.py — description
-- path/to/other.ts — description
-
-Run `/corgi-verify` to verify this group, then `/corgi-review` to review. Or `/corgi-apply` to continue.
-```
-
-## Closeout Retry Rule
-
-If implementation work finished successfully but summary generation or issue sync fails, retry the closeout steps rather than re-running the completed group implementation.
-
-## Blocker Handling
-
-If a blocker occurs mid-group:
-
-1. Stop execution immediately
-2. Post note to child issue (if tracked)
-3. Report to user with options:
-   - Resolve the blocker and continue
-   - Skip to next group
-   - Update artifacts to address the design issue
-4. Wait for guidance — do NOT guess or work around blockers
-
-## Resume Behavior
-
-When `/corgi-apply` is invoked again after a checkpoint or pause:
-
-- Re-parse `tasks.md` to find current state
-- Find first group with pending tasks
-- If the previously-paused group still has pending tasks, resume there
-- If it was completed, move to the next group
+If implementation succeeds but reporting or tracker sync fails, retry only closeout. On resume, re-run apply JSON instead of trusting session memory.

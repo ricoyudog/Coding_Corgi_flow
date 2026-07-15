@@ -1,0 +1,4 @@
+interface:
+  display_name: "CorgiSpec Ready"
+  short_description: "Check whether a Corgi change is implementation-ready"
+  default_prompt: "Use $corgispec-ready to check this change for planning blockers and cross-artifact inconsistencies."

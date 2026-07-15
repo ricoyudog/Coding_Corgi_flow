@@ -1,20 +1,59 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { existsSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { chmodSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execSync } from "node:child_process";
 
 const CLI = resolve(__dirname, "../dist/corgispec.js");
+const ORIGINAL_OPENSPEC_BIN = process.env["CORGISPEC_OPENSPEC_BIN"];
 
 describe("doctor command", () => {
   let tempDir: string;
 
+  function commandEnv(): NodeJS.ProcessEnv {
+    const home = resolve(tempDir, "home");
+    mkdirSync(home, { recursive: true });
+    return {
+      ...process.env,
+      HOME: home,
+      USERPROFILE: home,
+      XDG_CONFIG_HOME: resolve(home, ".config"),
+    };
+  }
+
+  function runDoctor(extra = ""): string {
+    return execSync(`node ${CLI} doctor --path ${tempDir} ${extra}`, {
+      encoding: "utf-8",
+      env: commandEnv(),
+    });
+  }
+
   beforeEach(() => {
     tempDir = resolve(tmpdir(), `corgispec-doctor-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     mkdirSync(tempDir, { recursive: true });
+    const openspec = resolve(tempDir, "fake-openspec");
+    writeFileSync(
+      openspec,
+      [
+        "#!/usr/bin/env bash",
+        "if [ \"$1\" = \"--version\" ]; then printf '1.6.0\\n'; exit 0; fi",
+        "if [ \"$1\" = \"schema\" ] && [ \"$2\" = \"validate\" ]; then",
+        "  if [ \"$3\" = \"bad-schema\" ]; then printf '{\"valid\":false,\"issues\":[{\"message\":\"schema is invalid\"}]}\\n'; exit 1; fi",
+        "  printf '{\"valid\":true,\"issues\":[]}\\n'; exit 0",
+        "fi",
+        "printf '{\"error\":\"unsupported fake invocation\"}\\n'; exit 1",
+      ].join("\n"),
+    );
+    chmodSync(openspec, 0o755);
+    process.env["CORGISPEC_OPENSPEC_BIN"] = openspec;
   });
 
   afterEach(() => {
+    if (ORIGINAL_OPENSPEC_BIN === undefined) {
+      delete process.env["CORGISPEC_OPENSPEC_BIN"];
+    } else {
+      process.env["CORGISPEC_OPENSPEC_BIN"] = ORIGINAL_OPENSPEC_BIN;
+    }
     rmSync(tempDir, { recursive: true, force: true });
   });
 
@@ -26,7 +65,7 @@ describe("doctor command", () => {
       "name: github-tracked\nversion: 1\ndescription: Test\nartifacts: []\n"
     );
 
-    const output = execSync(`node ${CLI} doctor --path ${tempDir}`, { encoding: "utf-8" });
+    const output = runDoctor();
     expect(output).toContain("Node.js");
     expect(output.toLowerCase()).toContain("pass");
     expect(output).toContain("Config: valid");
@@ -34,10 +73,13 @@ describe("doctor command", () => {
 
   it("fails with invalid config", () => {
     mkdirSync(resolve(tempDir, "openspec"), { recursive: true });
-    writeFileSync(resolve(tempDir, "openspec/config.yaml"), "schema: invalid-stuff\n");
+    writeFileSync(
+      resolve(tempDir, "openspec/config.yaml"),
+      "schema: custom\ncorgi:\n  tracking:\n    provider: jira\n",
+    );
 
     try {
-      execSync(`node ${CLI} doctor --path ${tempDir}`, { encoding: "utf-8" });
+      runDoctor();
       expect.fail("Should have thrown");
     } catch (err: any) {
       expect(err.status).toBe(1);
@@ -46,7 +88,7 @@ describe("doctor command", () => {
   });
 
   it("handles missing config gracefully", () => {
-    const output = execSync(`node ${CLI} doctor --path ${tempDir}`, { encoding: "utf-8" });
+    const output = runDoctor();
     expect(output).toContain("not found (not in a Corgi project)");
   });
 
@@ -58,7 +100,7 @@ describe("doctor command", () => {
       "name: github-tracked\nversion: 1\ndescription: Test\nartifacts: []\n"
     );
 
-    const output = execSync(`node ${CLI} doctor --path ${tempDir} --json`, { encoding: "utf-8" });
+    const output = runDoctor("--json");
     const parsed = JSON.parse(output);
     expect(Array.isArray(parsed)).toBe(true);
     expect(parsed.length).toBeGreaterThan(0);
@@ -70,13 +112,13 @@ describe("doctor command", () => {
   });
 
   it("includes the current Node version in output", () => {
-    const output = execSync(`node ${CLI} doctor --path ${tempDir}`, { encoding: "utf-8" });
+    const output = runDoctor();
     expect(output).toContain(process.version);
   });
 
   it("detects corrupted schema files", () => {
     mkdirSync(resolve(tempDir, "openspec/schemas/bad-schema"), { recursive: true });
-    writeFileSync(resolve(tempDir, "openspec/config.yaml"), "schema: github-tracked\n");
+    writeFileSync(resolve(tempDir, "openspec/config.yaml"), "schema: bad-schema\n");
     // Write invalid YAML that has no 'name' or 'artifacts' fields
     writeFileSync(
       resolve(tempDir, "openspec/schemas/bad-schema/schema.yaml"),
@@ -84,13 +126,74 @@ describe("doctor command", () => {
     );
 
     try {
-      execSync(`node ${CLI} doctor --path ${tempDir}`, { encoding: "utf-8" });
+      runDoctor();
       expect.fail("Should have thrown");
     } catch (err: any) {
       expect(err.status).toBe(1);
       const output = err.stdout + err.stderr;
       expect(output).toContain("FAIL");
-      expect(output).toContain("missing required");
+      expect(output).toContain("schema is invalid");
+    }
+  });
+
+  it("validates a Codex-only managed skill installation", () => {
+    const env = commandEnv();
+    mkdirSync(resolve(env.HOME!, ".codex"), { recursive: true });
+    execSync(`node ${CLI} install --platform codex`, { encoding: "utf-8", env });
+
+    const parsed = JSON.parse(runDoctor("--json")) as Array<{
+      name: string;
+      passed: boolean;
+      message: string;
+    }>;
+    const skillChecks = parsed.filter((item) => item.name.endsWith(" skills"));
+    expect(skillChecks).toEqual([
+      expect.objectContaining({ name: "codex skills", passed: true }),
+    ]);
+  });
+
+  it("rejects an empty detected platform skill directory", () => {
+    const env = commandEnv();
+    mkdirSync(resolve(env.HOME!, ".codex/skills"), { recursive: true });
+
+    try {
+      runDoctor("--json");
+      expect.fail("doctor should reject an empty managed skill directory");
+    } catch (err: any) {
+      expect(err.status).toBe(1);
+      const parsed = JSON.parse(String(err.stdout)) as Array<{
+        name: string;
+        passed: boolean;
+        message: string;
+      }>;
+      expect(parsed).toContainEqual(
+        expect.objectContaining({ name: "codex skills", passed: false }),
+      );
+      expect(parsed.find((item) => item.name === "codex skills")?.message).toContain("missing");
+    }
+  });
+
+  it("rejects a modified managed skill checksum", () => {
+    const env = commandEnv();
+    mkdirSync(resolve(env.HOME!, ".codex"), { recursive: true });
+    execSync(`node ${CLI} install --platform codex`, { encoding: "utf-8", env });
+    writeFileSync(
+      resolve(env.HOME!, ".codex/skills/corgispec-ready/SKILL.md"),
+      "# modified\n",
+    );
+
+    try {
+      runDoctor("--json");
+      expect.fail("doctor should reject a modified managed skill");
+    } catch (err: any) {
+      const parsed = JSON.parse(String(err.stdout)) as Array<{
+        name: string;
+        passed: boolean;
+        message: string;
+      }>;
+      expect(parsed.find((item) => item.name === "codex skills")?.message).toContain(
+        "differs from bundled checksum",
+      );
     }
   });
 });

@@ -1,22 +1,36 @@
 import { Command } from "commander";
 import { resolve } from "node:path";
-import { existsSync, statSync, readFileSync } from "node:fs";
 import {
   discoverSkills,
   filterSkills,
   type SkillTier,
   type SkillPlatform,
+  type DiscoveredSkill,
 } from "../lib/skills.js";
-import { discoverAllChanges } from "../lib/changes.js";
+import {
+  createOpenSpecAdapter,
+  type OpenSpecAdapter,
+} from "../lib/openspec-adapter.js";
+import {
+  createArtifactResolver,
+  type ArtifactResolver,
+} from "../lib/artifact-resolver.js";
+import { loadConfigFromDir } from "../lib/config.js";
+import { lifecycleError, summarizeOptionalTaskGroups } from "../lib/lifecycle.js";
 
 /**
- * List active changes in openspec/changes/.
- * When worktree isolation is configured, discovers changes across all worktrees.
+ * List active changes from the native OpenSpec JSON contract and enrich each
+ * entry with the same normalized lifecycle fields exposed by status.
  */
-function listChanges(cwd: string, json: boolean): void {
-  const discovered = discoverAllChanges(cwd);
-
-  if (discovered.length === 0) {
+async function listChanges(
+  cwd: string,
+  json: boolean,
+  store: string | undefined,
+  adapter: OpenSpecAdapter,
+  resolver: ArtifactResolver,
+): Promise<void> {
+  const response = await adapter.listChanges({ store });
+  if (response.changes.length === 0) {
     if (json) {
       console.log(JSON.stringify([]));
     } else {
@@ -25,44 +39,25 @@ function listChanges(cwd: string, json: boolean): void {
     return;
   }
 
-  const changes: Array<{
-    name: string;
-    path: string;
-    lastModified: string;
-    completedTasks: number;
-    totalTasks: number;
-  }> = [];
-
-  for (const dc of discovered) {
-    const changeDir = resolve(dc.path, "openspec/changes", dc.name);
-    const tasksPath = resolve(changeDir, "tasks.md");
-
-    let completedTasks = 0;
-    let totalTasks = 0;
-
-    if (existsSync(tasksPath)) {
-      const content = readFileSync(tasksPath, "utf-8");
-      const lines = content.split("\n");
-      for (const line of lines) {
-        if (/^\s*- \[[ x]\]/.test(line)) {
-          totalTasks++;
-          if (/^\s*- \[x\]/.test(line)) {
-            completedTasks++;
-          }
-        }
-      }
-    }
-
-    const stat = statSync(changeDir);
-
-    changes.push({
-      name: dc.name,
-      path: dc.path,
-      lastModified: stat.mtime.toISOString(),
-      completedTasks,
-      totalTasks,
-    });
-  }
+  const config = loadConfigFromDir(cwd);
+  const changes = await Promise.all(response.changes.map(async (change) => {
+    const resolved = await resolver.resolve(change.name, { store });
+    const tasks = summarizeOptionalTaskGroups(config, resolved.artifactPaths);
+    const implementationComplete = tasks.implementationComplete;
+    return {
+      ...change,
+      path: response.root?.path ?? cwd,
+      schemaName: resolved.schemaName,
+      planningComplete: resolved.planningComplete,
+      implementationComplete,
+      /** @deprecated Use planningComplete and implementationComplete. */
+      isComplete: resolved.planningComplete && implementationComplete,
+      changeRoot: resolved.changeRoot,
+      artifactPaths: resolved.artifactPaths,
+      planningRevision: resolved.planningRevision,
+      taskArtifactId: tasks.taskArtifactId || null,
+    };
+  }));
 
   if (json) {
     console.log(JSON.stringify(changes, null, 2));
@@ -99,7 +94,7 @@ function listSkills(
     resolve(cwd, "assets/skills"), // bundled
   ];
 
-  let skills = [];
+  let skills: DiscoveredSkill[] = [];
   for (const p of searchPaths) {
     const found = discoverSkills(p);
     if (found.length > 0) {
@@ -143,8 +138,17 @@ function listSkills(
   }
 }
 
-export function createListCommand(): Command {
+export interface ListCommandDependencies {
+  createAdapter?: (cwd: string) => OpenSpecAdapter;
+  createResolver?: (adapter: OpenSpecAdapter) => ArtifactResolver;
+}
+
+export function createListCommand(
+  dependencies: ListCommandDependencies = {},
+): Command {
   const cmd = new Command("list");
+  const adapterFactory = dependencies.createAdapter ?? ((cwd) => createOpenSpecAdapter(cwd));
+  const resolverFactory = dependencies.createResolver ?? ((adapter) => createArtifactResolver(adapter));
 
   cmd
     .description("List changes (default) or skills (--skills)")
@@ -155,8 +159,9 @@ export function createListCommand(): Command {
       "Filter skills by platform (universal, github, gitlab)"
     )
     .option("--json", "Output as JSON")
+    .option("--store <id>", "OpenSpec Store id")
     .option("--path <dir>", "Working directory", ".")
-    .action((opts) => {
+    .action(async (opts) => {
       const cwd = resolve(opts.path);
 
       if (opts.skills) {
@@ -166,7 +171,21 @@ export function createListCommand(): Command {
           json: opts.json ?? false,
         });
       } else {
-        listChanges(cwd, opts.json ?? false);
+        try {
+          const adapter = adapterFactory(cwd);
+          await listChanges(
+            cwd,
+            opts.json ?? false,
+            opts.store,
+            adapter,
+            resolverFactory(adapter),
+          );
+        } catch (error) {
+          const failure = lifecycleError(error);
+          if (opts.json) console.log(JSON.stringify({ status: "contract_error", error: failure }, null, 2));
+          else console.error(`Error: ${failure.message}`);
+          process.exitCode = 1;
+        }
       }
     });
 

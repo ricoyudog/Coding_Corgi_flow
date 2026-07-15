@@ -1,124 +1,57 @@
 ---
 name: corgispec-propose
-description: Propose a new change with all artifacts generated in one step. Use when the user wants to quickly describe what they want to build and get a complete proposal with design, specs, and tasks ready for implementation.
-license: MIT
-compatibility: Requires corgispec CLI.
-metadata:
-  author: corgispec
-  version: "2.0"
-  generatedBy: "1.3.0"
+description: Create or complete a CorgiSpec planning package and optionally synchronize GitLab issues. Use when proposing a new change or finishing an existing change whose normalized tracking provider is GitLab or none.
 ---
 
-Propose a new change — create the change and generate all artifacts in one step.
+# Propose a change
 
-## Preconditions (VERIFY BEFORE STARTING)
+Create every artifact required for implementation through the OpenSpec-backed CLI. Never infer a planning path or artifact role from a conventional filename.
 
-- [ ] `openspec/config.yaml` is readable
-- [ ] Change name derived (kebab-case) from user input
-- [ ] If `isolation.mode` is `worktree` → worktree MUST be created in Step 2 before ANY other work
+## Preconditions
 
-## Forbidden Actions
+**Context Gate**: If session context already contains ALL of: `isolation.mode`, active changes with worktree paths, current branch, reuse it; otherwise read configuration and discover worktrees.
 
-- NEVER skip worktree creation when `isolation.mode` is `worktree`
-- NEVER work in the main checkout when a worktree should exist
-- NEVER copy `context`, `rules`, or `project_context` blocks into artifact files
+1. Resolve a kebab-case change name and the user's intent.
+2. Read only isolation settings from project configuration. If worktree isolation is enabled, create or reuse the configured worktree before creating the change, then run every command from that worktree.
+3. Run:
 
----
+   ```bash
+   corgispec propose "<change>" --json
+   corgispec status "<change>" --json
+   ```
 
-## Steps
+4. Require status JSON to expose `changeRoot`, `artifactPaths`, `contextFiles`, `taskArtifactId`, `trackingProvider`, and `trackingProviderSource`. If a field is absent, stop and request a CorgiSpec CLI upgrade.
+5. Accept `trackingProvider: "gitlab"` or `"none"`. Route `"github"` to `corgispec-gh-propose`; never derive the provider from `schemaName`.
+6. Treat `changeRoot` as authoritative even when it is outside the current working directory. Never prepend the repository path.
 
-### 1. Discover: Get change name
+## Create the artifact graph
 
-If user provided a clear name or description, derive a kebab-case name (e.g., "add user auth" → `add-user-auth`). If unclear, ask the user what they want to build.
+Read [references/artifact-creation.md](references/artifact-creation.md), then repeat:
 
-### 2. Discover: Resolve isolation and create worktree
+1. Read `status.artifacts` and the implementation prerequisites reported by the CLI.
+2. For each ready artifact, run:
 
-**Context Gate**: If session context already contains ALL of: `isolation.mode`, active changes with worktree paths, current branch
-→ Gate passed — SKIP config reading below and proceed to the next step.
-Otherwise: read `openspec/config.yaml` and proceed with discovery.
+   ```bash
+   corgispec instructions "<artifact-id>" --change "<change>" --json
+   ```
 
-If NOT available, read `openspec/config.yaml` and check `isolation.mode`:
+3. Require the instructions response to retain the same `changeRoot` and expose its authorized `artifactPaths` and `contextFiles`.
+4. Read only returned dependency paths and context files. Use `template`, `instruction`, `context`, and `rules` as guidance; never copy constraint blocks into output.
+5. Write only the concrete target authorized by the instructions response. Do not expand a path pattern or invent an artifact filename.
+6. Re-run status after every artifact. Stop when every CLI-reported implementation prerequisite is complete.
 
-**If `isolation.mode` is `worktree`:**
-```bash
-git worktree add <isolation.root>/<name> -b <isolation.branch_prefix><name>
-```
-- Default root: `.worktrees`, default prefix: `feat/`
-- If worktree already exists, reuse it
-- Announce: `Worktree created at <path> (branch: <branch>)`
-- **ALL subsequent steps use this worktree as workdir**
+## Close out
 
-**If `isolation.mode` is `none` or `isolation` section is missing:**
-- Work in the current directory. Skip worktree steps.
+- When `trackingProvider` is `gitlab`, read [references/gitlab-issues.md](references/gitlab-issues.md). Locate tracker state relative to `changeRoot`, use `taskArtifactId` for Task Groups, and use returned planning paths for issue context.
+- When `trackingProvider` is `none`, skip all tracker commands and tracker-state writes.
+- If isolation is active, write `.worktree.yaml` directly under the authoritative `changeRoot` and verify the worktree with `git worktree list`.
+- Run `corgispec ready "<change>" --strict --json`. Do not claim handoff readiness unless it returns ready.
 
-### 3. Develop: Create change directory and build artifacts in dependency order
+## Guardrails
 
-```bash
-corgispec propose <name>
-```
-If `openspec/changes/<name>/` already exists, reuse it.
+- Do not hardcode the planning home, change directory, artifact names, or artifact layout.
+- Do not create duplicate tracker issues when tracker state already exists under `changeRoot`.
+- Do not write outside `changeRoot` except for the configured worktree and remote issue operations.
+- Do not start implementation, review, archive, commit, push, or publish actions.
 
-```bash
-corgispec status "<name>" --json
-```
-Loop through artifacts until all `applyRequires` are `done`. For each `ready` artifact:
-```bash
-corgispec instructions <artifact-id> --change <name> --json
-```
-Use the `template` as structure, `instruction` as guidance. `context` and `rules` are constraints for YOU — never include them in output files.
-
-Read `references/artifact-creation.md` for detailed artifact creation procedure.
-
-The primary output of propose is the completed planning artifact package: `proposal -> {spec, design} -> tasks`.
-
-### 4. Closeout: Show final status and prepare handoff state
-
-```bash
-corgispec status "<name>"
-```
-
-After the artifacts are complete, prepare the local handoff state that later phases consume. The planning artifact package remains the primary output; tracker setup and worktree metadata are closeout work layered on top of it.
-
-### 5. Closeout: Create issue tracking
-
-Read `references/gitlab-issues.md` for the full GitLab issue creation procedure.
-
-Skip if `.gitlab.yaml` already exists or `glab` is unavailable.
-
-If created, `.gitlab.yaml` is the canonical local tracking state for GitLab-tracked handoff. Later phases should consume that local state and mirror it to the platform tracker rather than treating issue creation as part of the artifact package itself.
-
-### 6. Closeout: Save worktree metadata (if isolation active)
-
-If worktree was created in Step 2, write `.worktree.yaml` in the change directory:
-```yaml
-path: <isolation.root>/<name>
-branch: <isolation.branch_prefix><name>
-created: <ISO-8601-timestamp>
-```
-
----
-
-## Output
-
-Summarize:
-- Change name and location
-- Artifacts created
-- Handoff status: local artifact package complete
-- GitLab tracking status (created or skipped)
-- Worktree status: path and branch, or "none"
-- Next step: "Review the proposal/spec/design/tasks package, then run `/corgi-apply` to start implementation."
-
----
-
-## Postconditions (VERIFY BEFORE REPORTING DONE)
-
-- [ ] All `applyRequires` artifacts exist and have content
-- [ ] `corgispec status "<name>" --json` shows all required artifacts as `done`
-- [ ] If `isolation.mode` is `worktree`: run `git worktree list` — the change worktree MUST appear
-- [ ] If `isolation.mode` is `worktree`: `openspec/changes/<name>/.worktree.yaml` exists
-- [ ] If glab available: `openspec/changes/<name>/.gitlab.yaml` exists
-- [ ] No `<context>`, `<rules>`, or `<project_context>` blocks appear in any artifact file
-
-Meeting these postconditions means artifact generation and closeout are complete. It does not replace explicit human review of the proposal/spec/design/tasks package before implementation begins.
-
-**If ANY postcondition fails, STOP and report which one failed. Do not claim completion.**
+Report the change name, `changeRoot`, created artifact IDs and concrete paths, readiness, tracking result, and worktree result.

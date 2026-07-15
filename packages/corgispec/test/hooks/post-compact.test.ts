@@ -3,11 +3,17 @@ import { mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execSync } from "node:child_process";
+import {
+  installFakeOpenSpec,
+  setupFakeChange,
+  type FakeOpenSpecFixture,
+} from "./fake-openspec.js";
 
 const CLI = resolve(__dirname, "../../dist/corgispec.js");
 
 describe("hook post-compact", () => {
   let tempDir: string;
+  let openspec: FakeOpenSpecFixture;
 
   beforeEach(() => {
     tempDir = resolve(
@@ -15,6 +21,10 @@ describe("hook post-compact", () => {
       `corgispec-hook-post-compact-${Date.now()}-${Math.random().toString(36).slice(2)}`
     );
     mkdirSync(tempDir, { recursive: true });
+    openspec = installFakeOpenSpec(tempDir, {
+      listRoot: resolve(tempDir, "openspec"),
+      statuses: {},
+    });
   });
 
   afterEach(() => {
@@ -40,7 +50,7 @@ describe("hook post-compact", () => {
     try {
       execSync(`node ${CLI} hook post-compact --path ${tempDir}`, {
         encoding: "utf-8",
-        env: { ...process.env, CORGISPEC_HOOKS_DISABLE: undefined },
+        env: openspec.env,
       });
       expect.fail("Should have thrown");
     } catch (err: any) {
@@ -55,7 +65,7 @@ describe("hook post-compact", () => {
 
     const output = execSync(`node ${CLI} hook post-compact --path ${tempDir}`, {
       encoding: "utf-8",
-      env: { ...process.env, CORGISPEC_HOOKS_DISABLE: undefined },
+      env: openspec.env,
     });
 
     const parsed = JSON.parse(output);
@@ -66,22 +76,27 @@ describe("hook post-compact", () => {
   });
 
   it("produces same context structure as session-start", () => {
-    mkdirSync(resolve(tempDir, "openspec/changes/test-change"), { recursive: true });
+    mkdirSync(resolve(tempDir, "openspec"), { recursive: true });
     writeFileSync(resolve(tempDir, "openspec/config.yaml"), "schema: github-tracked\n");
-    writeFileSync(
-      resolve(tempDir, "openspec/changes/test-change/tasks.md"),
-      "## 1. Init\n\n- [x] 1.1 Done\n"
-    );
+    const change = setupFakeChange({
+      projectRoot: tempDir,
+      changeName: "test-change",
+      taskContent: "## 1. Init\n\n- [x] 1.1 Done\n",
+    });
+    openspec.writeData({
+      listRoot: change.planningRoot,
+      statuses: { "test-change": change.status },
+    });
     execSync("git init", { cwd: tempDir, stdio: "ignore" });
 
     const sessionOutput = execSync(`node ${CLI} hook session-start --path ${tempDir}`, {
       encoding: "utf-8",
-      env: { ...process.env, CORGISPEC_HOOKS_DISABLE: undefined },
+      env: openspec.env,
     });
 
     const compactOutput = execSync(`node ${CLI} hook post-compact --path ${tempDir}`, {
       encoding: "utf-8",
-      env: { ...process.env, CORGISPEC_HOOKS_DISABLE: undefined },
+      env: openspec.env,
     });
 
     const sessionParsed = JSON.parse(sessionOutput);

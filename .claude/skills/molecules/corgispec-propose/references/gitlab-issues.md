@@ -1,85 +1,26 @@
-# GitLab Issue Creation Procedure
+# GitLab issue creation
 
-## Prerequisites
+Run this closeout only when `status.trackingProvider` is `gitlab`.
 
-Check glab availability:
-```bash
-glab auth status 2>&1
-```
+1. Resolve tracker state as `<changeRoot>/.gitlab.yaml`. Reuse it when present; never create duplicate issues.
+2. Run `glab auth status`. Warn and skip tracker closeout when unavailable without blocking local planning.
+3. Read the artifact identified by `taskArtifactId` for Task Groups. Read returned `contextFiles` and concrete `artifactPaths` for objectives, acceptance behavior, and design context; never select planning files by name.
+4. Create one parent issue labeled `workflow::backlog` containing objectives, acceptance behavior, Task Group table, progress, authoritative `changeRoot`, and worktree reference when applicable.
+5. Create one child issue per Task Group labeled `workflow::todo`, with the group's objectives and checkbox items.
+6. Update the parent with child IIDs and URLs.
+7. Write this tracker contract under `changeRoot`:
 
-If the change already has `.gitlab.yaml`, skip all issue creation.
-
-## Parent Issue
-
-Read `proposal.md` and `tasks.md`. Build the parent issue body with:
-
-- `**Objectives**` — from proposal's Why section
-- `**Background**` — from proposal's What Changes section
-- `**Acceptance Criteria**` — for each spec file in `specs/**/*.md`, extract each `### Requirement:` name and its first `#### Scenario:` as a one-line bullet. Format: `- **Requirement name**: WHEN condition -> THEN outcome`
-- `**Key Design Decisions**` — from `design.md`, extract each `### N. Decision Title` heading and its `**Decision:**` line. If no `design.md`, omit this section.
-- `**Task Groups**` table:
-  ```
-  | Group | Name | Issue | Status |
-  |-------|------|-------|--------|
-  | 1 | Setup | #<child_iid> | backlog |
-  ```
-  All groups start with Status `backlog`.
-- `**Progress:**` 0/N groups completed
-- `**Conclusion**`
-- `**References**` including the change path
-
-Create the parent issue:
-```bash
-glab issue create --title "feat(<scope>): <change-name>" --description "$PARENT_BODY" --label "workflow::backlog"
-```
-
-## Child Issues
-
-For each `## N. Group Name` heading in `tasks.md`, build a child issue body:
-
-- `**Objectives**`
-- `**Todo**` — the group's checkbox items
-- `**Estimated Completion Date:** Set when the issue is created`
-- `**Conclusion**`
-- `**References**` — parent issue link and change path
-
-```bash
-glab issue create --title "Group N: <group-name> [<change-name>]" --description "$CHILD_BODY" --label "workflow::todo"
-```
-
-## Post-Creation
-
-1. Update parent issue to include each group issue IID in the Task Groups table:
-   ```bash
-   glab issue update <parent_issue_iid> --description "$UPDATED_PARENT_BODY"
-   ```
-
-2. Save `.gitlab.yaml` in the change directory with the canonical nested tracking contract:
    ```yaml
    parent:
-     iid: <parent_issue_iid>
-     url: <parent_issue_url>
+     iid: <parent-iid>
+     url: <parent-url>
    groups:
-     - number: 1
-       name: "Setup"
-       iid: <group_1_issue_iid>
-       url: <group_1_issue_url>
+     - number: <group-number>
+       name: <group-name>
+       iid: <child-iid>
+       url: <child-url>
    ```
 
-   Later phases should read `parent.iid` for the parent issue and match `groups[].number` to the Task Group number to find each group's `iid` and `url`.
+8. Post a planning-complete note on the parent.
 
-3. Post initial note:
-   ```bash
-   glab issue note <parent_issue_iid> --message "Planning complete. Run /corgi-apply to begin implementation."
-   ```
-
-4. Update `proposal.md` with the parent issue link in the `## GitLab Issue` section.
-
-5. If worktree isolation is active, add worktree info to parent issue References:
-   ```markdown
-   - Worktree: `.worktrees/<name>` (branch: `feat/<name>`)
-   ```
-
-## If glab Unavailable
-
-Print a warning. Do not block artifact creation.
+Treat tracker state as operational metadata, not a planning artifact. Do not inject issue links into an arbitrary artifact.

@@ -43,8 +43,8 @@ When in doubt between two levels, choose the HIGHER severity.
 
 ## 2. Spec Verification
 
-- Read `specs/<capability>/spec.md` from the change directory
-- If no specs exist: note "No spec found for this group", skip
+- Read requirement-bearing planning files only from `status.contextFiles` and concrete `status.artifactPaths`
+- If no requirement-bearing artifact exists: note "No normative planning requirements returned for this group", skip
 - Check each Requirement against the actual implementation
 - Produce: coverage status per requirement with severity tag for gaps
 
