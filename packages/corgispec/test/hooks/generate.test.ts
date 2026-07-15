@@ -256,7 +256,7 @@ process.stdin.on("end", () => {
 
     it("re-enters OpenCode from a fire-and-forget idle event while preserving hook output", () => {
       const fakeBin = resolve(tempDir, "opencode-bin");
-      const fakeCorgispec = resolve(fakeBin, "corgispec");
+      const fakeCorgispec = resolve(fakeBin, "fake-corgispec.cjs");
       const pluginPath = resolve(tempDir, "corgispec-deep.mjs");
       const harnessPath = resolve(tempDir, "run-opencode-hook.mjs");
       mkdirSync(fakeBin, { recursive: true });
@@ -337,7 +337,7 @@ process.stdout.write("\\nPROMPTS:" + JSON.stringify(prompts));
         encoding: "utf8",
         env,
       });
-      expect(result.status).toBe(0);
+      expect(result.status, result.stderr || result.stdout).toBe(0);
       const proceeded = parseHarness(result.stdout);
       expect(JSON.parse(proceeded.hookOutput)).toMatchObject({
         decision: "proceed",
@@ -488,7 +488,7 @@ process.stdout.write("\\nPROMPTS:" + JSON.stringify(prompts));
 
       const source = readFileSync(wrapper, "utf8");
       expect(source).toContain("spawnSync(process.execPath");
-      expect(source).toContain(resolve(CLI));
+      expect(source).toContain(JSON.stringify(resolve(CLI)));
       expect(source).not.toContain("shell:");
     });
 
