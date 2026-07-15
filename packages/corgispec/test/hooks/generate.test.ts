@@ -3,6 +3,7 @@ import { chmodSync, existsSync, mkdirSync, writeFileSync, readFileSync, rmSync }
 import { delimiter, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execSync, spawnSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 import { ModuleKind, ScriptTarget, transpileModule } from "typescript";
 
 const CLI = resolve(__dirname, "../../dist/corgispec.js");
@@ -307,7 +308,7 @@ process.stdin.on("end", () => {
       writeFileSync(pluginPath, transpileModule(source, {
         compilerOptions: { module: ModuleKind.ESNext, target: ScriptTarget.ES2022 },
       }).outputText);
-      writeFileSync(harnessPath, `import { CorgiSpecDeep } from ${JSON.stringify(pluginPath)};
+      writeFileSync(harnessPath, `import { CorgiSpecDeep } from ${JSON.stringify(pathToFileURL(pluginPath).href)};
 const prompts = [];
 const hooks = await CorgiSpecDeep({
   directory: "/workspace",
@@ -487,8 +488,9 @@ process.stdout.write("\\nPROMPTS:" + JSON.stringify(prompts));
       expect(allowed.stderr).toBe("");
 
       const source = readFileSync(wrapper, "utf8");
-      expect(source).toContain("spawnSync(process.execPath");
-      expect(source).toContain(JSON.stringify(resolve(CLI)));
+      expect(source).toContain(
+        `spawnSync(process.execPath, [${JSON.stringify(resolve(CLI))}, "hook", "pre-bash"]`,
+      );
       expect(source).not.toContain("shell:");
     });
 
