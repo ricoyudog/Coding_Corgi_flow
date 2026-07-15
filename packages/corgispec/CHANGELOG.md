@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `corgispec update <change> [--store <id>] --json` and the `/corgi:update` skill expose a planning-only reconciliation contract. The CLI itself is read-only; the skill shows and confirms each artifact-scoped diff before editing.
 - `corgispec ready <change> [--strict] [--store <id>] --json` and the `/corgi:ready` skill provide a deterministic planning-integrity gate covering OpenSpec strict validation, artifact completeness, task structure, placeholders, open questions, and capability/spec parity.
+- `corgispec loop init|inspect|submit|ack-commit|finalize|invalidate|resume` is the only writer for Run Contract v2 state. Runs use locked, CAS-protected snapshots and replayable event logs under `.corgi/loop/<change>/`.
+- Evidence v2 binds every verification and review bundle to its run, Task Group, attempt, planning revision, Git revisions, and workspace fingerprint. Human-only review triage uses stable CLI-generated finding fingerprints.
+- `corgispec converge <change> --json` and the `/corgi:converge` skill distinguish `converged`, `needs_work`, and `blocked`. Confirmed implementation-only gaps append one Task Group and create a successor run without rewriting prior groups; a durable intent makes interrupted confirmations idempotently resumable with the same confirmation token.
 - Custom OpenSpec schemas are first-class. `corgi.tracking.provider` selects `github`, `gitlab`, or `none`, while `corgi.taskArtifactId` identifies the single artifact containing executable Task Groups.
 - OpenSpec Stores are supported through authoritative paths returned by OpenSpec and the `--store <id>` selector.
 - Planning revisions and canonical path checks protect lifecycle operations from stale artifacts, symlink escapes, and writes outside the resolved change root.
@@ -24,12 +27,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Legacy `github-tracked` and `gitlab-tracked` schemas still infer their matching tracker, but `corgispec doctor` now recommends writing the explicit `corgi.tracking.provider` setting.
 - Lifecycle JSON preserves compatibility fields while exposing `planningComplete`, `implementationComplete`, `changeRoot`, and `artifactPaths`. The legacy `isComplete` field means both planning and implementation are complete.
+- Loop skills no longer write state, verification, or review files directly. Attempt bundles are committed atomically, durable events precede snapshots, and canonical finalize rejects stale, missing, or tampered evidence.
+- Hook integrations for Claude Code, OpenCode, and Codex now pass session identity, stdin, stdout, stderr, and exit codes through the v2 CLI contract.
 - `doctor` and bootstrap now probe the real OpenSpec runtime and schema contract before managed writes instead of reporting a fixed prerequisite pass.
 - Clean-checkout tests rebuild bundled assets first. The release check now includes build, typecheck, coverage thresholds, and an installable npm tarball smoke test.
 
 ### Migration
 
-- Upgrade Node and OpenSpec before installing this RC, add an explicit `corgi` block to `openspec/config.yaml`, then run `corgispec doctor` and `corgispec ready <change> --strict` for each active change. See the repository README and `INSTALL.md` for examples.
+- Upgrade Node and OpenSpec before installing this RC, add an explicit `corgi` block to `openspec/config.yaml`, then run `corgispec doctor` and `corgispec ready <change> --strict` for each active change. A single legacy v1 loop is migrated automatically; ambiguous, corrupt, or future-version state fails closed, and its current verification/review evidence must be rerun. See the repository README and `INSTALL.md` for examples.
 
 ## [2.4.3] - 2026-06-16
 

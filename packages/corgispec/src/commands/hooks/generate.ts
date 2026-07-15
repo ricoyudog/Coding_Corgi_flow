@@ -1,12 +1,11 @@
 import { Command } from "commander";
-import { resolve, dirname } from "node:path";
+import { delimiter, resolve, dirname } from "node:path";
 import {
   existsSync,
   mkdirSync,
   readFileSync,
   writeFileSync,
 } from "node:fs";
-import { execSync } from "node:child_process";
 
 const SUPPORTED_PLATFORMS = ["claude", "opencode", "codex"] as const;
 type Platform = (typeof SUPPORTED_PLATFORMS)[number];
@@ -67,14 +66,14 @@ export function createHooksGenerateCommand(): Command {
 // ─── Binary Path Resolution ─────────────────────────────────────────────
 
 function resolveBinaryPath(): string {
-  try {
-    const path = execSync("which corgispec", {
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-    if (path && existsSync(path)) return path;
-  } catch (err: unknown) {
-    console.error(`[generate] corgispec not found in PATH: ${err instanceof Error ? err.message : String(err)}`);
+  const names = process.platform === "win32"
+    ? ["corgispec.cmd", "corgispec.exe", "corgispec.bat", "corgispec"]
+    : ["corgispec"];
+  for (const directory of (process.env["PATH"] ?? "").split(delimiter).filter(Boolean)) {
+    for (const name of names) {
+      const candidate = resolve(directory, name);
+      if (existsSync(candidate)) return candidate;
+    }
   }
   return "npx corgispec";
 }
@@ -102,6 +101,9 @@ function showPlatformListing(): void {
 function buildClaudeConfig(
   binaryPath: string
 ): Record<string, unknown> {
+  const binaryCommand = binaryPath === "npx corgispec"
+    ? binaryPath
+    : `"${binaryPath.replaceAll('"', '\\"')}"`;
   return {
     hooks: {
       SessionStart: [
@@ -110,7 +112,7 @@ function buildClaudeConfig(
           hooks: [
             {
               type: "command",
-              command: `${binaryPath} hook session-start`,
+              command: `${binaryCommand} hook session-start`,
               timeout: 10,
             },
           ],
@@ -122,7 +124,7 @@ function buildClaudeConfig(
           hooks: [
             {
               type: "command",
-              command: `${binaryPath} hook pre-write`,
+              command: `${binaryCommand} hook pre-write`,
               timeout: 15,
             },
           ],
@@ -132,7 +134,7 @@ function buildClaudeConfig(
           hooks: [
             {
               type: "command",
-              command: `${binaryPath} hook pre-bash`,
+              command: `${binaryCommand} hook pre-bash`,
               timeout: 10,
             },
           ],
@@ -144,7 +146,7 @@ function buildClaudeConfig(
           hooks: [
             {
               type: "command",
-              command: `${binaryPath} hook post-write`,
+              command: `${binaryCommand} hook post-write`,
               timeout: 30,
               runInBackground: true,
             },
@@ -156,7 +158,7 @@ function buildClaudeConfig(
           hooks: [
             {
               type: "command",
-              command: `${binaryPath} hook stop-check`,
+              command: `${binaryCommand} hook stop-check`,
               timeout: 15,
             },
           ],
@@ -165,7 +167,7 @@ function buildClaudeConfig(
           hooks: [
             {
               type: "command",
-              command: `${binaryPath} hook loop-check`,
+              command: `${binaryCommand} hook loop-check`,
               timeout: 30,
             },
           ],
@@ -176,7 +178,7 @@ function buildClaudeConfig(
           hooks: [
             {
               type: "command",
-              command: `${binaryPath} hook post-compact`,
+              command: `${binaryCommand} hook post-compact`,
               timeout: 10,
             },
           ],
@@ -277,10 +279,38 @@ function generateOpenCodeOutput(
 }
 
 function buildOpenCodeDeepPlugin(binaryPath: string): string {
+  const binaryCommand = binaryPath === "npx corgispec" ? "npx" : binaryPath;
+  const binaryPrefix = binaryPath === "npx corgispec" ? ["corgispec"] : [];
   return `import type { Plugin } from "@opencode-ai/plugin";
-import { execSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 
-const BINARY = "${binaryPath}";
+const BINARY_COMMAND = ${JSON.stringify(binaryCommand)};
+const BINARY_PREFIX = ${JSON.stringify(binaryPrefix)};
+
+function runHook(
+  subcommand: string,
+  options: { input?: string; timeout: number; passthrough?: boolean },
+): string {
+  const result = spawnSync(
+    BINARY_COMMAND,
+    [...BINARY_PREFIX, "hook", subcommand],
+    {
+      input: options.input,
+      encoding: "utf-8",
+      timeout: options.timeout,
+      windowsHide: true,
+    },
+  );
+  if (options.passthrough && result.stdout) process.stdout.write(result.stdout);
+  if (options.passthrough && result.stderr) process.stderr.write(result.stderr);
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    const error = new Error(\`corgispec hook \${subcommand} exited with \${String(result.status)}\`);
+    Object.assign(error, { exitCode: result.status, stdout: result.stdout, stderr: result.stderr });
+    throw error;
+  }
+  return result.stdout ?? "";
+}
 
 function buildStdinPayload(tool: string, args: Record<string, unknown>): string {
   return JSON.stringify({
@@ -292,14 +322,25 @@ function buildStdinPayload(tool: string, args: Record<string, unknown>): string 
   });
 }
 
+function buildStopPayload(event: unknown): string {
+  const record = event && typeof event === "object" ? event as Record<string, any> : {};
+  const properties = record.properties && typeof record.properties === "object"
+    ? record.properties as Record<string, any>
+    : {};
+  const sessionId = properties.sessionID ?? properties.sessionId ?? properties.info?.id
+    ?? record.sessionID ?? record.sessionId ?? "";
+  return JSON.stringify({
+    hook_event_name: "Stop",
+    stop_hook_active: false,
+    session_id: sessionId,
+  });
+}
+
 export const CorgiSpecDeep: Plugin = async () => {
   return {
     "experimental.chat.system.transform": async (_input, output) => {
       try {
-        const ctx = execSync(BINARY + " hook session-start", {
-          encoding: "utf-8",
-          timeout: 10_000,
-        });
+        const ctx = runHook("session-start", { timeout: 10_000 });
         const parsed = JSON.parse(ctx);
         if (parsed.hookSpecificOutput?.additionalContext) {
           output.system.push(parsed.hookSpecificOutput.additionalContext);
@@ -311,17 +352,17 @@ export const CorgiSpecDeep: Plugin = async () => {
     "tool.execute.before": async (input, output) => {
       const payload = buildStdinPayload(input.tool, output.args);
       if (input.tool === "write" || input.tool === "edit") {
-        execSync(BINARY + " hook pre-write", { input: payload, encoding: "utf-8", timeout: 5000 });
+        runHook("pre-write", { input: payload, timeout: 5_000, passthrough: true });
       }
       if (input.tool === "bash") {
-        execSync(BINARY + " hook pre-bash", { input: payload, encoding: "utf-8", timeout: 5000 });
+        runHook("pre-bash", { input: payload, timeout: 5_000, passthrough: true });
       }
     },
     "tool.execute.after": async (input, _output) => {
       if (input.tool !== "write" && input.tool !== "edit") return;
       try {
         const payload = buildStdinPayload(input.tool, input.args);
-        execSync(BINARY + " hook post-write", { input: payload, encoding: "utf-8", timeout: 10000 });
+        runHook("post-write", { input: payload, timeout: 10_000 });
       } catch {
         // Post-write validation is non-blocking
       }
@@ -329,20 +370,34 @@ export const CorgiSpecDeep: Plugin = async () => {
     // session.idle (agent finished responding) — not session.deleted (explicit teardown, too late for loop-check).
     event: async ({ event }) => {
       if (event.type === "session.idle") {
+        const payload = buildStopPayload(event);
         try {
-          execSync(BINARY + " hook stop-check", { encoding: "utf-8", timeout: 10000 });
+          runHook("stop-check", { input: payload, timeout: 10_000, passthrough: true });
         } catch {
           // Stop validation is non-blocking
         }
-        try {
-          execSync(BINARY + " hook loop-check", { encoding: "utf-8", timeout: 15000 });
-        } catch {
-          // Loop check is non-blocking
+        // Run Contract v2 lifecycle failures are blocking. Preserve the hook's
+        // stdin session identity, stdout/stderr, and non-zero result.
+        const loopResult = runHook("loop-check", {
+          input: payload,
+          timeout: 15_000,
+          passthrough: true,
+        });
+        const loopDecision = JSON.parse(loopResult) as {
+          decision?: string;
+          reason?: string;
+          changeName?: string;
+          runId?: string;
+        };
+        if (loopDecision.decision === "block") {
+          const error = new Error(loopDecision.reason ?? "CorgiSpec loop is still active");
+          Object.assign(error, { exitCode: 1, loopDecision });
+          throw error;
         }
       }
       if (event.type === "session.compacted") {
         try {
-          execSync(BINARY + " hook post-compact", { encoding: "utf-8", timeout: 10000 });
+          runHook("post-compact", { timeout: 10_000 });
         } catch {
           // Post-compact recovery is non-blocking
         }
@@ -351,14 +406,6 @@ export const CorgiSpecDeep: Plugin = async () => {
   };
 };
 `;
-}
-
-function buildExecHookBlock(cmd: string, timeout: number): string {
-  return `      try {
-        execSync("${cmd}", { encoding: "utf-8", timeout: ${timeout}_000 });
-      } catch {
-        // Hook execution is best-effort
-      }`;
 }
 
 // ─── Codex Config ────────────────────────────────────────────────────────
@@ -397,6 +444,13 @@ const HOOK_EVENTS = [
     subcommand: "stop-check",
     matcher: null,
     timeout: 15,
+    async: false,
+  },
+  {
+    event: "Stop",
+    subcommand: "loop-check",
+    matcher: null,
+    timeout: 30,
     async: false,
   },
   {
@@ -441,8 +495,10 @@ function buildPythonWrapper(
   subcommand: string,
   binaryPath: string
 ): string {
-  const binaryParts = binaryPath.split(/\s+/);
-  const binaryArgs = binaryParts.map((p) => `"${p}"`).join(", ");
+  const binaryParts = binaryPath === "npx corgispec"
+    ? ["npx", "corgispec"]
+    : [binaryPath];
+  const binaryArgs = JSON.stringify(binaryParts);
   return `#!/usr/bin/env python3
 """CorgiSpec hook: ${subcommand}"""
 import subprocess, sys
@@ -450,7 +506,7 @@ import subprocess, sys
 def main():
     input_data = sys.stdin.read()
     result = subprocess.run(
-        [${binaryArgs}, "hook", "${subcommand}"],
+        [*${binaryArgs}, "hook", "${subcommand}"],
         input=input_data,
         capture_output=True,
         text=True,

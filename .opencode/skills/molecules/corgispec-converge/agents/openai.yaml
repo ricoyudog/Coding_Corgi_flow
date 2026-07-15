@@ -1,0 +1,4 @@
+interface:
+  display_name: "CorgiSpec Converge"
+  short_description: "Evaluate implementation gaps with fresh Corgi evidence"
+  default_prompt: "Use $corgispec-converge to evaluate this change and confirm only evidence-backed implementation gaps."

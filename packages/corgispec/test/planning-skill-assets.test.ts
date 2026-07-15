@@ -26,6 +26,7 @@ const CLAUDE_SKILLS = resolve(REPO_ROOT, ".claude/skills");
 const SKILLS = [
   { slug: "corgispec-ready", tier: "atoms" },
   { slug: "corgispec-update", tier: "molecules" },
+  { slug: "corgispec-converge", tier: "molecules" },
 ] as const;
 
 function listFiles(root: string, current = root): string[] {
@@ -64,16 +65,20 @@ describe("planning skill metadata", () => {
     });
   }
 
-  it("models ready as an atom and update as its dependent molecule", () => {
+  it("models ready as the planning atom for update and converge", () => {
     const ready = discovered.find((skill) => skill.slug === "corgispec-ready")!;
     const update = discovered.find((skill) => skill.slug === "corgispec-update")!;
+    const converge = discovered.find((skill) => skill.slug === "corgispec-converge")!;
 
     expect(ready.meta.tier).toBe("atom");
     expect(ready.meta.depends_on).toEqual([]);
     expect(update.meta.tier).toBe("molecule");
     expect(update.meta.depends_on).toEqual(["corgispec-ready"]);
+    expect(converge.meta.tier).toBe("molecule");
+    expect(converge.meta.depends_on).toEqual(["corgispec-ready"]);
     expect(ready.meta.installation.targets).toEqual(["opencode", "claude", "codex"]);
     expect(update.meta.installation.targets).toEqual(["opencode", "claude", "codex"]);
+    expect(converge.meta.installation.targets).toEqual(["opencode", "claude", "codex"]);
   });
 });
 
@@ -99,6 +104,9 @@ describe("planning workflow guardrails", () => {
   const update = read(
     resolve(OPENCODE_SKILLS, "molecules/corgispec-update/SKILL.md")
   );
+  const converge = read(
+    resolve(OPENCODE_SKILLS, "molecules/corgispec-converge/SKILL.md")
+  );
 
   it("keeps ready read-only and separates deterministic from semantic findings", () => {
     expect(ready).toContain("Keep this workflow read-only");
@@ -108,6 +116,8 @@ describe("planning workflow guardrails", () => {
   });
 
   it("blocks active v1 runs and constrains update writes to authoritative artifacts", () => {
+    expect(update).toContain("PENDING_CONVERGENCE");
+    expect(update).toContain("ACTIVE_V2_RUN");
     expect(update).toContain("ACTIVE_V1_RUN");
     expect(update).toContain("existingArtifactIds");
     expect(update).toContain("missingArtifactIds");
@@ -116,6 +126,30 @@ describe("planning workflow guardrails", () => {
     expect(update).toContain("explicit approval for that artifact only");
     expect(update).toContain("openspec validate \"<change>\" --strict --no-interactive");
     expect(update).toContain("corgispec ready \"<change>\" --strict --json");
+  });
+
+  it("keeps converge evidence-driven, read-only first, and append-only after approval", () => {
+    expect(converge).toContain("The initial evaluation is read-only");
+    expect(converge).toContain("planningRevision");
+    expect(converge).toContain("confirmationToken");
+    expect(converge).toContain("append exactly one new Task Group");
+    expect(converge).toContain("preserve every old group byte-for-byte");
+    expect(converge).toContain("rerun the exact same command with the same `confirmationToken`");
+    expect(converge).toContain("durable convergence intent to resume idempotently");
+    expect(converge).toContain("If the CLI returns a contract error, stop");
+    expect(converge).toContain("Never edit the task artifact or any other planning file yourself");
+    expect(converge).toContain("Only the CLI may persist or recover");
+  });
+
+  it("ships converge as a Codex-discoverable universal skill", () => {
+    const openAiMetadata = read(
+      resolve(OPENCODE_SKILLS, "molecules/corgispec-converge/agents/openai.yaml")
+    );
+    expect(openAiMetadata).toContain('display_name: "CorgiSpec Converge"');
+    expect(openAiMetadata).toContain("$corgispec-converge");
+    expect(
+      read(resolve(CLAUDE_SKILLS, "molecules/corgispec-converge/agents/openai.yaml"))
+    ).toBe(openAiMetadata);
   });
 
   it("routes both platform wrappers to the matching skill", () => {
@@ -130,6 +164,18 @@ describe("planning workflow guardrails", () => {
     );
     expect(read(resolve(REPO_ROOT, ".claude/commands/corgi/update.md"))).toContain(
       "/corgi:update"
+    );
+    expect(read(resolve(REPO_ROOT, ".opencode/commands/corgi-converge.md"))).toContain(
+      "**corgispec-converge**"
+    );
+    expect(read(resolve(REPO_ROOT, ".opencode/commands/corgi-converge.md"))).toContain(
+      "rerun with that same token"
+    );
+    expect(read(resolve(REPO_ROOT, ".claude/commands/corgi/converge.md"))).toContain(
+      "/corgi:converge"
+    );
+    expect(read(resolve(REPO_ROOT, ".claude/commands/corgi/converge.md"))).toContain(
+      "stop on contract errors"
     );
   });
 });
@@ -170,6 +216,8 @@ describe("bundled planning assets", () => {
       ["commands/opencode/corgi-update.md", ".opencode/commands/corgi-update.md"],
       ["commands/claude/corgi/ready.md", ".claude/commands/corgi/ready.md"],
       ["commands/claude/corgi/update.md", ".claude/commands/corgi/update.md"],
+      ["commands/opencode/corgi-converge.md", ".opencode/commands/corgi-converge.md"],
+      ["commands/claude/corgi/converge.md", ".claude/commands/corgi/converge.md"],
     ] as const;
 
     for (const [bundled, source] of pairs) {

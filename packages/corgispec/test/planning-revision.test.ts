@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   PlanningRevisionError,
   computePlanningRevision,
@@ -92,6 +92,26 @@ describe("computePlanningRevision", () => {
 
     expect(first).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(first).toBe(second);
+  });
+
+  it("orders mixed-case, numeric, and Unicode artifact paths without localeCompare", async () => {
+    const paths = ["A.md", "a10.md", "a2.md", "é.md", "中.md"]
+      .map((name) => `/store/change/specs/${name}`);
+    const contents = new Map(paths.map((filePath) => [filePath, Buffer.from(filePath)]));
+    const input = {
+      changeRoot: "/store/change",
+      schemaName: "portable-order",
+      artifactPaths: { specs: artifact("specs/*.md", [...paths].reverse()) },
+    };
+    const reader = { async read(filePath: string) { return contents.get(filePath)!; } };
+    const expected = await computePlanningRevision(input, reader);
+    const localeCompare = vi.spyOn(String.prototype, "localeCompare")
+      .mockImplementation(() => { throw new Error("localeCompare must not define a revision"); });
+    try {
+      await expect(computePlanningRevision(input, reader)).resolves.toBe(expected);
+    } finally {
+      localeCompare.mockRestore();
+    }
   });
 
   it("binds schema, manifest path, relative file name, and bytes", async () => {

@@ -21,6 +21,8 @@ Update planning artifacts only. Coordinate the user's revised intent across the 
    - Ignore unknown fields.
    - On exit 2, stop and report the environment or OpenSpec contract error.
    - On exit 1 or `status: "blocked"`, report every blocker and make no edits.
+   - On blocker code `PENDING_CONVERGENCE`, make no edits and require retrying `corgispec converge` with the original confirmation token until its durable intent completes or reports a contract error.
+   - On blocker code `ACTIVE_V2_RUN`, require the user to finalize or explicitly invalidate that canonical run first. Never modify planning behind its recorded revision.
    - On blocker code `ACTIVE_V1_RUN`, require the user to finish or migrate the v1 run. Never bypass, stop, or mutate that run from this workflow.
 5. Establish the write allowlist:
    - Allow only artifact IDs in `existingArtifactIds`.

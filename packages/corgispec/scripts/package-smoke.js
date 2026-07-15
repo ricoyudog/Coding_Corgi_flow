@@ -44,6 +44,22 @@ function run(command, args, options = {}) {
   return result.stdout.trim();
 }
 
+function runExpectStatus(command, args, expectedStatus, options = {}) {
+  const result = spawnSync(command, args, {
+    cwd: packageRoot,
+    encoding: "utf8",
+    env: process.env,
+    ...options,
+  });
+  if (result.error) fail(`${command} could not start: ${result.error.message}`);
+  if (result.status !== expectedStatus) {
+    process.stderr.write(result.stdout ?? "");
+    process.stderr.write(result.stderr ?? "");
+    fail(`${command} ${args.join(" ")} exited with ${result.status}; expected ${expectedStatus}`);
+  }
+  return result.stdout.trim();
+}
+
 function collectRelativeFiles(directory, prefix = "") {
   const files = [];
   const entries = readdirSync(directory, { withFileTypes: true }).sort((left, right) =>
@@ -103,10 +119,16 @@ function verifyAssetManifest(assetsDirectory) {
   for (const required of [
     "skills/atoms/corgispec-ready/SKILL.md",
     "skills/molecules/corgispec-update/SKILL.md",
+    "skills/molecules/corgispec-converge/SKILL.md",
+    "skills/compounds/corgispec-loop/SKILL.md",
     "commands/opencode/corgi-ready.md",
     "commands/opencode/corgi-update.md",
+    "commands/opencode/corgi-converge.md",
+    "commands/opencode/corgi-loop.md",
     "commands/claude/corgi/ready.md",
     "commands/claude/corgi/update.md",
+    "commands/claude/corgi/converge.md",
+    "commands/claude/corgi/loop.md",
   ]) {
     if (!declaredFiles.includes(required)) fail(`required asset ${required} is missing`);
   }
@@ -216,6 +238,7 @@ try {
   const help = run(process.execPath, [binPath, "--help"], { cwd: consumerDirectory });
   for (const command of [
     "list",
+    "graph",
     "status",
     "instructions",
     "propose",
@@ -225,6 +248,8 @@ try {
     "doctor",
     "update",
     "ready",
+    "loop",
+    "converge",
   ]) {
     if (!new RegExp(`(?:^|\\s)${command}(?:\\s|$)`, "m").test(help)) {
       fail(`top-level command ${command} is missing from --help`);
@@ -237,8 +262,9 @@ try {
       cwd: consumerDirectory,
     }),
   );
-  if (!Array.isArray(skills) || !skills.some((skill) => skill.slug === "corgispec-ready")) {
-    fail("packaged skill inventory is missing corgispec-ready");
+  if (!Array.isArray(skills) || !["corgispec-ready", "corgispec-update", "corgispec-converge", "corgispec-loop"]
+    .every((slug) => skills.some((skill) => skill.slug === slug))) {
+    fail("packaged skill inventory is missing a 3.0 lifecycle skill");
   }
   run(process.execPath, [binPath, "validate", "--path", resolve(installedRoot, "assets/skills")], {
     cwd: consumerDirectory,
@@ -254,7 +280,7 @@ try {
     resolve(smoke.env.HOME, ".config/opencode/skill"),
     resolve(smoke.env.HOME, ".codex/skills"),
   ]) {
-    for (const slug of ["corgispec-ready", "corgispec-update"]) {
+    for (const slug of ["corgispec-ready", "corgispec-update", "corgispec-converge", "corgispec-loop"]) {
       if (!existsSync(resolve(skillRoot, slug, "SKILL.md"))) {
         fail(`${slug} was not installed for ${skillRoot}`);
       }
@@ -283,6 +309,69 @@ try {
     }),
   );
   if (ready.status !== "ready") fail(`packaged ready returned ${String(ready.status)}`);
+
+  writeFileSync(resolve(smoke.projectDirectory, ".gitignore"), ".corgi/loop/\n");
+  run("git", ["init", "-b", "main"], { cwd: smoke.projectDirectory, env: smoke.env });
+  run("git", ["config", "user.email", "package-smoke@corgispec.test"], {
+    cwd: smoke.projectDirectory,
+    env: smoke.env,
+  });
+  run("git", ["config", "user.name", "CorgiSpec Package Smoke"], {
+    cwd: smoke.projectDirectory,
+    env: smoke.env,
+  });
+  run("git", ["add", "-A"], { cwd: smoke.projectDirectory, env: smoke.env });
+  run("git", ["commit", "-m", "package smoke baseline"], {
+    cwd: smoke.projectDirectory,
+    env: smoke.env,
+  });
+  const initialized = JSON.parse(
+    run(process.execPath, [
+      binPath,
+      "loop",
+      "init",
+      "smoke-change",
+      "--session",
+      "package-smoke-session",
+      "--owner",
+      "package-smoke",
+      "--mode",
+      "hook-driven",
+      "--path",
+      smoke.projectDirectory,
+      "--json",
+    ], { cwd: smoke.projectDirectory, env: smoke.env }),
+  );
+  if (initialized.status !== "ok" || initialized.state?.schemaVersion !== 2) {
+    fail("packaged loop init did not create a Run Contract v2 state");
+  }
+  const inspected = JSON.parse(
+    run(process.execPath, [
+      binPath,
+      "loop",
+      "inspect",
+      "smoke-change",
+      "--path",
+      smoke.projectDirectory,
+      "--json",
+    ], { cwd: smoke.projectDirectory, env: smoke.env }),
+  );
+  if (inspected.state?.runId !== initialized.state.runId) {
+    fail("packaged loop inspect did not return the initialized run");
+  }
+  const convergence = JSON.parse(
+    runExpectStatus(process.execPath, [
+      binPath,
+      "converge",
+      "smoke-change",
+      "--path",
+      smoke.projectDirectory,
+      "--json",
+    ], 1, { cwd: smoke.projectDirectory, env: smoke.env }),
+  );
+  if (convergence.status !== "blocked") {
+    fail(`packaged converge expected an evidence blocker, got ${String(convergence.status)}`);
+  }
 
   const assetCount = verifyAssetManifest(resolve(installedRoot, "assets"));
   console.log(

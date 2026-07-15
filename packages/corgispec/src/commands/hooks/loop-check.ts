@@ -1,113 +1,261 @@
-import { Command } from "commander";
-import { existsSync, readdirSync, readFileSync, writeFileSync, renameSync } from "node:fs";
+import { readdir } from "node:fs/promises";
 import { resolve } from "node:path";
-import { isHooksDisabled, findProjectRoot, readStdinJson } from "../../lib/hooks.js";
-import { processLoopState } from "../../lib/loop-state.js";
-import type { LoopState, VerifyArtifact, ReviewArtifact } from "../../lib/loop-types.js";
+import { Command } from "commander";
+import {
+  executeLoopV2,
+  type LoopExecutionResultV2,
+} from "../loop-v2.js";
+import { LoopStoreV2 } from "../../lib/loop-store-v2.js";
+import {
+  findProjectRoot,
+  isHooksDisabled,
+  readStdinJson,
+} from "../../lib/hooks.js";
+import { isActiveLoopPhaseV2, type LoopStateV2 } from "../../lib/run-contract-v2.js";
 
-export function createHookLoopCheckCommand(): Command {
-  const cmd = new Command("loop-check");
+export interface HookLoopCheckDependenciesV2 {
+  listChanges?: (projectRoot: string) => Promise<string[]>;
+  inspect?: (projectRoot: string, changeName: string) => Promise<LoopExecutionResultV2>;
+}
 
-  cmd
-    .description("Corgi Loop stop hook — orchestrates group-by-group execution")
+interface HookLoopActionV2 {
+  type:
+    | "dispatch_group"
+    | "evaluate"
+    | "fix_group"
+    | "commit_group"
+    | "finalize"
+    | "terminal";
+  groupId?: string;
+  attempt?: number;
+}
+
+interface HookLoopOutputV2 {
+  schemaVersion: 2;
+  decision: "proceed" | "block";
+  status: "idle" | "active" | "terminal" | "contract_error";
+  changeName?: string;
+  runId?: string;
+  phase?: LoopStateV2["phase"];
+  terminal?: boolean;
+  action?: HookLoopActionV2;
+  reason?: string;
+  error?: { code: string; message: string };
+}
+
+export function createHookLoopCheckCommand(
+  dependencies: HookLoopCheckDependenciesV2 = {},
+): Command {
+  const command = new Command("loop-check");
+
+  command
+    .description("Inspect canonical Run Contract v2 state for a Stop hook")
     .option("--path <dir>", "Working directory", ".")
-    .action(async (opts) => {
-      // 1. Inert guard: hooks disabled
+    .action(async (options: { path: string }) => {
       if (isHooksDisabled()) {
-        process.exit(0);
+        emit({ schemaVersion: 2, decision: "proceed", status: "idle" }, 0);
+        return;
       }
 
-      // 2. Project root detection
-      const cwd = resolve(opts.path);
-      const projectRoot = findProjectRoot(cwd);
-      if (!projectRoot) {
-        process.exit(0);
-      }
+      try {
+        const input = await readStdinJson();
+        if (input.stop_hook_active === true) {
+          emit({
+            schemaVersion: 2,
+            decision: "proceed",
+            status: "idle",
+            reason: "Stop hook re-entry is already active",
+          }, 0);
+          return;
+        }
 
-      // 3. Read stdin (Stop hook input from Claude Code)
-      const stdinData = await readStdinJson();
-      const input = {
-        hook_event_name: "Stop",
-        stop_hook_active: stdinData?.stop_hook_active ?? false,
-        session_id: stdinData?.session_id ?? "",
-      };
+        const cwd = resolve(options.path);
+        const projectRoot = findProjectRoot(cwd);
+        if (!projectRoot) {
+          emit({ schemaVersion: 2, decision: "proceed", status: "idle" }, 0);
+          return;
+        }
 
-      // 4. Discover active loop state (glob-based: .claude/corgi-loop/*/state.json or .opencode/corgi-loop/*/state.json)
-      const stateRoots = [".claude/corgi-loop", ".opencode/corgi-loop"];
-      let state: LoopState | null = null;
-      let statePath = "";
+        const listChanges = dependencies.listChanges ?? listCanonicalChanges;
+        const inspect = dependencies.inspect ?? inspectCanonicalChange;
+        const inspected = await Promise.all(
+          (await listChanges(projectRoot)).map(async (changeName) => ({
+            changeName,
+            result: await inspect(projectRoot, changeName),
+          })),
+        );
+        const failures = inspected.filter(({ result }) => result.exitCode === 2);
+        if (failures.length > 0) {
+          const failure = failures[0]!;
+          emit(contractFailure(
+            failure.changeName,
+            failure.result.output.error?.code ?? "loop_inspect_failed",
+            failure.result.output.error?.message ?? "Canonical loop inspection failed",
+          ), 2);
+          return;
+        }
 
-      for (const root of stateRoots) {
-        const loopDir = resolve(projectRoot, root);
-        if (!existsSync(loopDir)) continue;
-        try {
-          const entries = readdirSync(loopDir, { withFileTypes: true });
-          for (const entry of entries) {
-            if (!entry.isDirectory()) continue;
-            const candidate = resolve(loopDir, entry.name, "state.json");
-            if (!existsSync(candidate)) continue;
-            const raw = readFileSync(candidate, "utf-8");
-            const parsed = JSON.parse(raw);
-            if (parsed.active === true) {
-              state = parsed as LoopState;
-              statePath = candidate;
-              break;
-            }
+        const active = inspected.filter(({ result }) => {
+          const state = result.output.state;
+          return state !== undefined && isActiveLoopPhaseV2(state.phase);
+        });
+        if (active.length > 1) {
+          emit(contractFailure(
+            undefined,
+            "multiple_active_changes",
+            `Multiple active loop changes match this Stop hook: ${active.map(({ changeName }) => changeName).join(", ")}`,
+          ), 2);
+          return;
+        }
+        if (active.length === 0) {
+          const terminal = inspected
+            .map(({ changeName, result }) => ({ changeName, state: result.output.state }))
+            .find((entry) => entry.state !== undefined);
+          if (!terminal?.state) {
+            emit({ schemaVersion: 2, decision: "proceed", status: "idle" }, 0);
+            return;
           }
-        } catch { /* corrupted state, skip */ }
-        if (state) break;
+          emit(stateOutput(terminal.changeName, terminal.state), 0);
+          return;
+        }
+
+        const selected = active[0]!;
+        const state = selected.result.output.state!;
+        const sessionId = input.session_id?.trim() ?? "";
+        if (!sessionId || sessionId !== state.sessionId) {
+          emit(contractFailure(
+            selected.changeName,
+            "session_conflict",
+            `Stop hook session '${sessionId || "<missing>"}' does not own run '${state.runId}'`,
+          ), 2);
+          return;
+        }
+        emit(stateOutput(selected.changeName, state), 0);
+      } catch (error) {
+        emit(contractFailure(
+          undefined,
+          error && typeof error === "object" && "code" in error && typeof error.code === "string"
+            ? error.code
+            : "hook_contract_error",
+          error instanceof Error ? error.message : String(error),
+        ), 2);
       }
-
-      // 5. No active loop → proceed normally
-      if (!state) {
-        console.log(JSON.stringify({ decision: "proceed" }));
-        process.exit(0);
-      }
-
-      // 6. Load verify.json and review.json for current group
-      const groupDir = resolve(statePath, "..", "groups", String(state.currentGroup));
-      let verify: VerifyArtifact | undefined;
-      let review: ReviewArtifact | undefined;
-
-      const verifyPath = resolve(groupDir, "verify.json");
-      if (existsSync(verifyPath)) {
-        try {
-          verify = JSON.parse(readFileSync(verifyPath, "utf-8")) as VerifyArtifact;
-        } catch { /* malformed, let state machine catch it */ }
-      }
-
-      const reviewPath = resolve(groupDir, "review.json");
-      if (existsSync(reviewPath)) {
-        try {
-          review = JSON.parse(readFileSync(reviewPath, "utf-8")) as ReviewArtifact;
-        } catch { /* malformed, let state machine catch it */ }
-      }
-
-      // 7. Call the state machine
-      const wasActive = state.active;
-      const result = processLoopState(state, verify!, review!, input);
-
-      // 8. Atomically write state mutations (tmp + rename)
-      const stateDir = resolve(statePath, "..");
-      const tmpPath = resolve(stateDir, "state.json.tmp");
-      writeFileSync(tmpPath, JSON.stringify(state, null, 2), "utf-8");
-      renameSync(tmpPath, statePath);
-
-      // 9. Output decision as JSON
-      // Include phase/terminal/reason — consumers (loop orchestration, integration
-      // tests, stop-check composition) depend on these fields to distinguish
-      // terminal stops from non-terminal blocks and to route on phase.
-      const output: Record<string, unknown> = {
-        decision: result.decision,
-        phase: state.phase,
-        terminal: wasActive && !state.active,
-      };
-      if (result.reason) {
-        output.reason = result.reason;
-      }
-      console.log(JSON.stringify(output));
-      process.exit(0);
     });
 
-  return cmd;
+  return command;
+}
+
+async function listCanonicalChanges(projectRoot: string): Promise<string[]> {
+  const names = new Set<string>();
+  for (const root of [
+    resolve(projectRoot, ".corgi", "loop"),
+    resolve(projectRoot, ".claude", "corgi-loop"),
+    resolve(projectRoot, ".opencode", "corgi-loop"),
+  ]) {
+    try {
+      const entries = await readdir(root, { withFileTypes: true });
+      const unsafe = entries.find((entry) => entry.isSymbolicLink());
+      if (unsafe) {
+        throw Object.assign(
+          new Error(`Symbolic links are not allowed in loop storage: ${resolve(root, unsafe.name)}`),
+          { code: "loop_path_unsafe" },
+        );
+      }
+      for (const entry of entries) {
+        if (entry.isDirectory()) names.add(entry.name);
+      }
+    } catch (error) {
+      if (error && typeof error === "object" && "code" in error
+        && (error as NodeJS.ErrnoException).code === "ENOENT") {
+        continue;
+      }
+      throw error;
+    }
+  }
+  return [...names].sort();
+}
+
+async function inspectCanonicalChange(
+  projectRoot: string,
+  changeName: string,
+): Promise<LoopExecutionResultV2> {
+  // A Stop hook must not repair canonical files before it has verified the
+  // owning session. Read a healthy (or merely stale-pointer) v2 run through
+  // strict peek; reserve the mutating inspect path for one-time v1 migration.
+  const inspection = await new LoopStoreV2({ projectRoot }).peek(changeName);
+  if (inspection.state) {
+    return {
+      exitCode: 0,
+      output: {
+        schemaVersion: 2,
+        operation: "inspect",
+        status: "ok",
+        changeName,
+        state: inspection.state,
+        current: inspection.current,
+        recoveryRequired: inspection.recoveryRequired,
+        token: {
+          stateRevision: inspection.state.stateRevision,
+          nonce: inspection.state.nonce,
+        },
+      },
+    };
+  }
+  return await executeLoopV2({
+    operation: "inspect",
+    projectRoot,
+    changeName,
+  });
+}
+
+function stateOutput(changeName: string, state: LoopStateV2): HookLoopOutputV2 {
+  const terminal = !isActiveLoopPhaseV2(state.phase);
+  return {
+    schemaVersion: 2,
+    decision: terminal ? "proceed" : "block",
+    status: terminal ? "terminal" : "active",
+    changeName,
+    runId: state.runId,
+    phase: state.phase,
+    terminal,
+    action: actionForState(state),
+    ...(state.blockedReason ? { reason: state.blockedReason.message } : {}),
+  };
+}
+
+function actionForState(state: LoopStateV2): HookLoopActionV2 {
+  switch (state.phase) {
+    case "awaiting_group_result":
+      return { type: "dispatch_group", groupId: state.currentGroupId ?? undefined, attempt: state.currentAttempt };
+    case "awaiting_evaluation":
+      return { type: "evaluate", groupId: state.currentGroupId ?? undefined, attempt: state.currentAttempt };
+    case "fixing":
+      return { type: "fix_group", groupId: state.currentGroupId ?? undefined, attempt: state.currentAttempt };
+    case "awaiting_group_commit":
+      return { type: "commit_group", groupId: state.currentGroupId ?? undefined, attempt: state.currentAttempt };
+    case "awaiting_finalize":
+      return { type: "finalize" };
+    default:
+      return { type: "terminal" };
+  }
+}
+
+function contractFailure(
+  changeName: string | undefined,
+  code: string,
+  message: string,
+): HookLoopOutputV2 {
+  return {
+    schemaVersion: 2,
+    decision: "proceed",
+    status: "contract_error",
+    terminal: false,
+    ...(changeName ? { changeName } : {}),
+    error: { code, message },
+  };
+}
+
+function emit(output: HookLoopOutputV2, exitCode: 0 | 2): void {
+  process.stdout.write(`${JSON.stringify(output)}\n`);
+  process.exitCode = exitCode;
 }

@@ -35,6 +35,27 @@ class FakeRunner implements CommandRunner {
 }
 
 describe("NodeCommandRunner", () => {
+  it("passes exact optional stdin bytes and closes stdin", async () => {
+    const runner = new NodeCommandRunner();
+    const execution = await runner.run({
+      command: process.execPath,
+      args: ["-e", "process.stdin.pipe(process.stdout)"],
+      cwd: process.cwd(),
+      stdin: Buffer.from("exact-input\\0bytes", "utf8"),
+    });
+
+    expect(execution).toMatchObject({ exitCode: 0, stdout: "exact-input\\0bytes" });
+  });
+
+  it("treats an early child stdin close as a normal process result", async () => {
+    const runner = new NodeCommandRunner();
+    await expect(runner.run({
+      command: process.execPath,
+      args: ["-e", "process.exit(0)"],
+      cwd: process.cwd(),
+      stdin: Buffer.alloc(8 * 1024 * 1024, 0x61),
+    })).resolves.toMatchObject({ exitCode: 0, timedOut: false });
+  });
   it("captures stdout, stderr and the exact exit code", async () => {
     const runner = new NodeCommandRunner();
     const execution = await runner.run({

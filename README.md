@@ -153,7 +153,8 @@ Then: `apply` → `verify` → `review` → `human-qa` → `archive`. One Task G
 | `/corgi-apply`       | Execute one Task Group, sync closeout, pause for review                                                            |
 | `/corgi-verify`      | Automated quality gate — lint, build, tests, spec coverage                                                         |
 | `/corgi-review`      | 5-axis review with evidence gathering, approve/reject/discuss                                                      |
-| `/corgi-loop`        | Automated pipeline — runs apply, verify, and review per Task Group with severity-based auto-approval and fix loops |
+| `/corgi-loop`        | Run Contract v2 pipeline — CAS-safe apply, evidence, review, commit, recovery, and finalization                    |
+| `/corgi-converge`    | Compare fresh planning/Git/evidence and append one confirmed successor Task Group when implementation has a gap    |
 | `/corgi-human-qa`    | Human QA gate — route to specialized QA atoms (smoke, UI, API, CLI, backend, exploratory)                          |
 | `/corgi-archive`     | Close issues, sync delta specs, extract knowledge, cleanup                                                         |
 | `/corgi-explore`     | Thinking partner — explore ideas, clarify requirements                                                             |
@@ -178,9 +179,14 @@ corgispec ready add-auth --strict --json
 
 # Select an OpenSpec Store explicitly when needed.
 corgispec ready add-auth --store shared-product --strict --json
+
+# Read-only convergence evaluation. Confirmation is a separate, token-bound call.
+corgispec converge add-auth --json
 ```
 
-For `ready`, exit code `0` means ready, `1` means a planning blocker, and `2` means an environment or contract error. `update` uses `0` when coordination may proceed, `1` when an active legacy loop blocks planning edits, and `2` for contract errors. In agent sessions, use `/corgi:update <change>` and `/corgi:ready <change>` (Claude Code), `/corgi-update <change>` and `/corgi-ready <change>` (OpenCode), or the installed `$corgispec-update` and `$corgispec-ready` skills (Codex).
+Confirmed converge operations are crash-resumable. If the confirmed call is interrupted, rerun it with the same `confirmationToken`; the CLI resumes the durable intent idempotently and remains the only writer of planning and loop state.
+
+For `ready`, exit code `0` means ready, `1` means a planning blocker, and `2` means an environment or contract error. `update` uses `0` when coordination may proceed, `1` when an active or recovery-pending loop blocks planning edits, and `2` for contract errors. In agent sessions, use `/corgi:update`, `/corgi:ready`, and `/corgi:converge` (Claude Code), the dash-named OpenCode commands, or the installed matching Codex skills.
 
 ---
 
@@ -310,13 +316,13 @@ Manually running `/corgi:apply` → `/corgi:verify` → `/corgi:review` for ever
 /corgi:loop <change-name>
 ```
 
-**What it does:** Executes one full **Task Group bundle** (apply → verify → review-evidence) per invocation, writes machine-readable artifacts (`verify.json`, `review.json`), and delegates lifecycle decisions to a deterministic **stop hook** — a 13-gate TypeScript state machine.
+**What it does:** Executes one bounded **Task Group attempt** (apply → verify → review evidence), then submits it to the deterministic Run Contract v2 CLI. Skills never write lifecycle files. The CLI owns locking, CAS, event replay, evidence validation, commit acknowledgement, and finalization.
 
 | Mode | Behavior |
 |---|---|
-| **Auto-approve** | Zero critical AND zero important findings → group approved, committed, pushed, advances to next group |
-| **Auto-fix loop** | Any critical/important findings → implements fixes, re-verifies, re-reviews (up to 3 retries) |
-| **Circuit breaker** | `blockCount` exceeds `maxBlocks` (7) → stops to prevent infinite loops |
+| **Approve and commit** | Clean evidence/review → `awaiting_group_commit`; the CLI verifies a clean, matching commit tree before advancing |
+| **Auto-fix loop** | Self-driven failure with retry budget → `fixing`; hook-driven or exhausted retries stop deterministically |
+| **Crash recovery** | Fsynced events replay into atomic snapshots; only a truncated final JSONL record can be repaired automatically |
 
 **Platform differences:**
 
@@ -326,7 +332,9 @@ Manually running `/corgi:apply` → `/corgi:verify` → `/corgi:review` for ever
 | On failure | Stops immediately | Auto-retry up to 3 times |
 | Command | `/corgi:loop <name>` | `/corgi-loop <name>` |
 
-**Design principle:** *Hard Logic Orchestrates, LLM Executes.* The hook (TypeScript) owns all lifecycle decisions — state-machine transitions, JSON schema validation, severity derivation, circuit breakers. The LLM skill only executes bounded work and writes structured artifacts.
+Canonical state is stored under `.corgi/loop/<change>/`, with atomic per-run snapshots and append-only event/triage logs. Every mutation carries `stateRevision + nonce`; stale tokens and conflicting sessions leave the filesystem unchanged.
+
+**Design principle:** *Hard Logic Orchestrates, LLM Executes.* The CLI owns state-machine transitions, validation, evidence identity, locks, recovery, and circuit breakers. The LLM skill executes bounded work and submits truthful evidence through the CLI.
 
 → **[Full Loop Guide](wiki/guides/loop-guide.md)**
 
