@@ -3,6 +3,7 @@ import { chmodSync, existsSync, mkdirSync, writeFileSync, readFileSync, rmSync }
 import { delimiter, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execSync, spawnSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 import { ModuleKind, ScriptTarget, transpileModule } from "typescript";
 
 const CLI = resolve(__dirname, "../../dist/corgispec.js");
@@ -77,9 +78,13 @@ describe("hooks generate", () => {
 
     it("passes Stop hook stdin, stdout, stderr, session, and exit code through Claude command config", () => {
       const fakeBin = resolve(tempDir, "claude-bin");
-      const fakeCorgispec = resolve(fakeBin, "corgispec");
+      const fakeEntry = resolve(fakeBin, "fake-corgispec.cjs");
+      const fakeCorgispec = resolve(
+        fakeBin,
+        process.platform === "win32" ? "corgispec.cmd" : "corgispec",
+      );
       mkdirSync(fakeBin, { recursive: true });
-      writeFileSync(fakeCorgispec, `#!/usr/bin/env node
+      const source = `#!/usr/bin/env node
 let input = "";
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (chunk) => { input += chunk; });
@@ -88,8 +93,17 @@ process.stdin.on("end", () => {
   process.stderr.write("CLAUDE-ERR:" + process.argv.slice(2).join(" "));
   process.exitCode = 7;
 });
-`);
-      chmodSync(fakeCorgispec, 0o755);
+`;
+      if (process.platform === "win32") {
+        writeFileSync(fakeEntry, source);
+        writeFileSync(
+          fakeCorgispec,
+          `@echo off\r\n"${process.execPath}" "${fakeEntry}" %*\r\n`,
+        );
+      } else {
+        writeFileSync(fakeCorgispec, source);
+        chmodSync(fakeCorgispec, 0o755);
+      }
       const env = { ...process.env, PATH: `${fakeBin}${delimiter}${process.env.PATH ?? ""}` };
       const generated = execSync(`node ${CLI} hooks generate --platform claude`, {
         encoding: "utf8",
@@ -223,7 +237,7 @@ process.stdin.on("end", () => {
       expect(output).toContain('runHook("pre-bash"');
     });
 
-    it("passes session stdin through loop-check and surfaces its process result", () => {
+    it("passes session stdin through loop-check and routes idle failures through promptAsync", () => {
       const output = execSync(`node ${CLI} hooks generate --platform opencode`, {
         encoding: "utf-8",
       });
@@ -235,11 +249,15 @@ process.stdin.on("end", () => {
       expect(output).toContain("result.stdout");
       expect(output).toContain("result.stderr");
       expect(output).toContain("result.status !== 0");
+      expect(output).toContain("client.session.promptAsync");
+      expect(output).toContain("spawnSync(\n    process.execPath");
+      expect(output).not.toMatch(/BINARY_COMMAND|\.cmd[^\n]*hook/iu);
+      expect(output).not.toContain("shell: true");
     });
 
-    it("executes the generated OpenCode idle hook with exact session and process passthrough", () => {
+    it("re-enters OpenCode from a fire-and-forget idle event while preserving hook output", () => {
       const fakeBin = resolve(tempDir, "opencode-bin");
-      const fakeCorgispec = resolve(fakeBin, "corgispec");
+      const fakeCorgispec = resolve(fakeBin, "fake-corgispec.cjs");
       const pluginPath = resolve(tempDir, "corgispec-deep.mjs");
       const harnessPath = resolve(tempDir, "run-opencode-hook.mjs");
       mkdirSync(fakeBin, { recursive: true });
@@ -248,6 +266,14 @@ let input = "";
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (chunk) => { input += chunk; });
 process.stdin.on("end", () => {
+  if (process.argv.at(-1) === "stop-check") {
+    if (process.env.FAKE_STOP_BLOCK === "1") {
+      process.stdout.write("OPENCODE-STOP-OUT:" + input);
+      process.stderr.write("OPENCODE-STOP-ERR:" + process.argv.slice(2).join(" "));
+      process.exitCode = 2;
+    }
+    return;
+  }
   if (process.argv.at(-1) === "loop-check") {
     if (process.env.FAKE_LOOP_BLOCK === "1") {
       process.stdout.write(JSON.stringify({
@@ -258,51 +284,125 @@ process.stdin.on("end", () => {
       process.stderr.write("OPENCODE-ERR:" + process.argv.slice(2).join(" "));
       return;
     }
-    process.stdout.write("OPENCODE-OUT:" + input);
-    process.stderr.write("OPENCODE-ERR:" + process.argv.slice(2).join(" "));
-    process.exitCode = 7;
+    if (process.env.FAKE_LOOP_ERROR === "1") {
+      process.stdout.write("OPENCODE-OUT:" + input);
+      process.stderr.write("OPENCODE-ERR:" + process.argv.slice(2).join(" "));
+      process.exitCode = 7;
+      return;
+    }
+    process.stdout.write(JSON.stringify({ decision: "proceed", received: JSON.parse(input) }));
   }
 });
 `);
       chmodSync(fakeCorgispec, 0o755);
-      const env = { ...process.env, PATH: `${fakeBin}${delimiter}${process.env.PATH ?? ""}` };
-      const source = execSync(`node ${CLI} hooks generate --platform opencode`, {
+      const env = { ...process.env };
+      const generatedSource = execSync(`node ${CLI} hooks generate --platform opencode`, {
         encoding: "utf8",
         env,
       });
+      const source = generatedSource.replace(
+        /^const CLI_ENTRY = .*;$/mu,
+        `const CLI_ENTRY = ${JSON.stringify(fakeCorgispec)};`,
+      );
+      expect(source).not.toBe(generatedSource);
       writeFileSync(pluginPath, transpileModule(source, {
         compilerOptions: { module: ModuleKind.ESNext, target: ScriptTarget.ES2022 },
       }).outputText);
-      writeFileSync(harnessPath, `import { CorgiSpecDeep } from ${JSON.stringify(pluginPath)};
-const hooks = await CorgiSpecDeep({});
-try {
-  await hooks.event({ event: { type: "session.idle", properties: { sessionID: "opencode-session" } } });
-} catch (error) {
-  process.exitCode = Number(error?.exitCode ?? 1);
-}
+      writeFileSync(harnessPath, `import { CorgiSpecDeep } from ${JSON.stringify(pathToFileURL(pluginPath).href)};
+const prompts = [];
+const hooks = await CorgiSpecDeep({
+  directory: "/workspace",
+  client: {
+    session: {
+      promptAsync: async (options) => {
+        prompts.push(options);
+        return { data: undefined, error: undefined };
+      },
+    },
+  },
+});
+void hooks.event({ event: { type: "session.idle", properties: { sessionID: "opencode-session" } } });
+await new Promise((settle) => setTimeout(settle, 0));
+process.stdout.write("\\nPROMPTS:" + JSON.stringify(prompts));
 `);
+      const parseHarness = (stdout: string) => {
+        const marker = "\nPROMPTS:";
+        const index = stdout.lastIndexOf(marker);
+        expect(index).toBeGreaterThanOrEqual(0);
+        return {
+          hookOutput: stdout.slice(0, index),
+          prompts: JSON.parse(stdout.slice(index + marker.length)) as any[],
+        };
+      };
       const result = spawnSync(process.execPath, [harnessPath], {
         encoding: "utf8",
         env,
       });
-      expect(result.status).toBe(7);
-      expect(JSON.parse(result.stdout.replace(/^OPENCODE-OUT:/u, ""))).toMatchObject({
+      expect(result.status, result.stderr || result.stdout).toBe(0);
+      const proceeded = parseHarness(result.stdout);
+      expect(JSON.parse(proceeded.hookOutput)).toMatchObject({
+        decision: "proceed",
+        received: {
+          hook_event_name: "Stop",
+          stop_hook_active: false,
+          session_id: "opencode-session",
+        },
+      });
+      expect(proceeded.prompts).toEqual([]);
+      expect(result.stderr).toBe("");
+
+      const errored = spawnSync(process.execPath, [harnessPath], {
+        encoding: "utf8",
+        env: { ...env, FAKE_LOOP_ERROR: "1" },
+      });
+      expect(errored.status).toBe(0);
+      const loopError = parseHarness(errored.stdout);
+      expect(JSON.parse(loopError.hookOutput.replace(/^OPENCODE-OUT:/u, ""))).toMatchObject({
         hook_event_name: "Stop",
         stop_hook_active: false,
         session_id: "opencode-session",
       });
-      expect(result.stderr).toBe("OPENCODE-ERR:hook loop-check");
+      expect(loopError.prompts[0]).toMatchObject({
+        path: { id: "opencode-session" },
+        query: { directory: "/workspace" },
+        body: { parts: [{ type: "text", text: expect.stringContaining("Exit code: 7") }] },
+      });
+      expect(errored.stderr).toBe("OPENCODE-ERR:hook loop-check");
 
       const blocked = spawnSync(process.execPath, [harnessPath], {
         encoding: "utf8",
         env: { ...env, FAKE_LOOP_BLOCK: "1" },
       });
-      expect(blocked.status).toBe(1);
-      expect(JSON.parse(blocked.stdout)).toMatchObject({
+      expect(blocked.status).toBe(0);
+      const loopBlocked = parseHarness(blocked.stdout);
+      expect(JSON.parse(loopBlocked.hookOutput)).toMatchObject({
         decision: "block",
         received: { session_id: "opencode-session" },
       });
+      expect(loopBlocked.prompts[0]).toMatchObject({
+        path: { id: "opencode-session" },
+        body: { parts: [{ text: expect.stringContaining("Run Contract v2 is still active") }] },
+      });
       expect(blocked.stderr).toBe("OPENCODE-ERR:hook loop-check");
+
+      const stopBlocked = spawnSync(process.execPath, [harnessPath], {
+        encoding: "utf8",
+        env: { ...env, FAKE_STOP_BLOCK: "1" },
+      });
+      expect(stopBlocked.status).toBe(0);
+      const taskBlocked = parseHarness(stopBlocked.stdout);
+      expect(taskBlocked.hookOutput).toMatch(/^OPENCODE-STOP-OUT:/u);
+      expect(JSON.parse(taskBlocked.hookOutput.replace(/^OPENCODE-STOP-OUT:/u, ""))).toMatchObject({
+        hook_event_name: "Stop",
+        stop_hook_active: false,
+        session_id: "opencode-session",
+      });
+      expect(taskBlocked.prompts[0]).toMatchObject({
+        path: { id: "opencode-session" },
+        body: { parts: [{ text: expect.stringContaining("Hook: stop-check") }] },
+      });
+      expect(stopBlocked.stderr).toBe("OPENCODE-STOP-ERR:hook stop-check");
+      expect(taskBlocked.hookOutput).not.toContain("OPENCODE-OUT:");
     });
 
     it("--deep flag is no-op (produces same output as default)", () => {
@@ -318,7 +418,7 @@ try {
   });
 
   describe("Codex format", () => {
-    it("outputs TOML and Python wrappers to stdout", () => {
+    it("outputs TOML and Node wrappers to stdout without an undeclared Python dependency", () => {
       const output = execSync(`node ${CLI} hooks generate --platform codex`, {
         encoding: "utf-8",
       });
@@ -326,8 +426,13 @@ try {
       expect(output).toContain("[features]");
       expect(output).toContain("hooks = true");
       expect(output).toContain("[[hooks.");
-      expect(output).toContain("#!/usr/bin/env python3");
-      expect(output).toContain("corgispec_session_start.py");
+      expect(output).toContain("#!/usr/bin/env node");
+      expect(output).toContain("corgispec_session_start.cjs");
+      expect(output).toContain(`commandWindows = 'node `);
+      expect(output).toContain("spawnSync(process.execPath");
+      expect(output).not.toMatch(/spawnSync\([^\n]*\.cmd/iu);
+      expect(output).not.toContain("shell: true");
+      expect(output).not.toContain("python3");
     });
 
     it("writes config.toml and hook scripts to output directory", () => {
@@ -339,53 +444,54 @@ try {
       );
 
       expect(existsSync(resolve(outputDir, "config.toml"))).toBe(true);
-      expect(existsSync(resolve(outputDir, "hooks/corgispec_session_start.py"))).toBe(true);
-      expect(existsSync(resolve(outputDir, "hooks/corgispec_pre_write.py"))).toBe(true);
-      expect(existsSync(resolve(outputDir, "hooks/corgispec_pre_bash.py"))).toBe(true);
-      expect(existsSync(resolve(outputDir, "hooks/corgispec_post_write.py"))).toBe(true);
-      expect(existsSync(resolve(outputDir, "hooks/corgispec_stop_check.py"))).toBe(true);
-      expect(existsSync(resolve(outputDir, "hooks/corgispec_loop_check.py"))).toBe(true);
-      expect(existsSync(resolve(outputDir, "hooks/corgispec_post_compact.py"))).toBe(true);
+      expect(existsSync(resolve(outputDir, "hooks/corgispec_session_start.cjs"))).toBe(true);
+      expect(existsSync(resolve(outputDir, "hooks/corgispec_pre_write.cjs"))).toBe(true);
+      expect(existsSync(resolve(outputDir, "hooks/corgispec_pre_bash.cjs"))).toBe(true);
+      expect(existsSync(resolve(outputDir, "hooks/corgispec_post_write.cjs"))).toBe(true);
+      expect(existsSync(resolve(outputDir, "hooks/corgispec_stop_check.cjs"))).toBe(true);
+      expect(existsSync(resolve(outputDir, "hooks/corgispec_loop_check.cjs"))).toBe(true);
+      expect(existsSync(resolve(outputDir, "hooks/corgispec_post_compact.cjs"))).toBe(true);
 
       const toml = readFileSync(resolve(outputDir, "config.toml"), "utf-8");
       expect(toml).toContain("hooks = true");
 
-      const wrapper = readFileSync(resolve(outputDir, "hooks/corgispec_pre_bash.py"), "utf-8");
+      const wrapper = readFileSync(resolve(outputDir, "hooks/corgispec_pre_bash.cjs"), "utf-8");
       expect(wrapper).toContain("hook");
       expect(wrapper).toContain("pre-bash");
     });
 
-    it("passes hook stdin, stdout, stderr, and exit code through the Python wrapper", () => {
-      const fakeBin = resolve(tempDir, "bin");
-      const fakeCorgispec = resolve(fakeBin, "corgispec");
+    it("passes hook stdin, stderr, and exit code through a shell-free Node entry", () => {
       const outputDir = resolve(tempDir, ".codex-pass-through");
-      mkdirSync(fakeBin, { recursive: true });
-      writeFileSync(fakeCorgispec, `#!/usr/bin/env node
-let input = "";
-process.stdin.setEncoding("utf8");
-process.stdin.on("data", (chunk) => { input += chunk; });
-process.stdin.on("end", () => {
-  process.stdout.write("OUT:" + input);
-  process.stderr.write("ERR:" + process.argv.slice(2).join(" "));
-  process.exitCode = 7;
-});
-`);
-      chmodSync(fakeCorgispec, 0o755);
-      const env = { ...process.env, PATH: `${fakeBin}${delimiter}${process.env.PATH ?? ""}` };
       execSync(`node ${CLI} hooks generate --platform codex --output ${outputDir}`, {
         encoding: "utf8",
-        env,
       });
+      mkdirSync(resolve(tempDir, "openspec"), { recursive: true });
+      writeFileSync(resolve(tempDir, "openspec/config.yaml"), "schema: spec-driven\n");
 
-      const wrapper = resolve(outputDir, "hooks/corgispec_loop_check.py");
-      const result = spawnSync("python3", [wrapper], {
-        input: '{"session_id":"session-7"}',
+      const wrapper = resolve(outputDir, "hooks/corgispec_pre_bash.cjs");
+      const result = spawnSync(process.execPath, [wrapper], {
+        input: '{"tool_input":{"command":"rm -rf /"}}',
         encoding: "utf8",
-        env,
+        cwd: tempDir,
       });
-      expect(result.status).toBe(7);
-      expect(result.stdout).toBe('OUT:{"session_id":"session-7"}');
-      expect(result.stderr).toBe("ERR:hook loop-check");
+      expect(result.status).toBe(2);
+      expect(result.stdout).toBe("");
+      expect(result.stderr).toContain("Blocked: rm -rf / or equivalent destructive command detected.");
+
+      const allowed = spawnSync(process.execPath, [wrapper], {
+        input: '{"tool_input":{"command":"pwd"}}',
+        encoding: "utf8",
+        cwd: tempDir,
+      });
+      expect(allowed.status).toBe(0);
+      expect(JSON.parse(allowed.stdout)).toEqual({ continue: true });
+      expect(allowed.stderr).toBe("");
+
+      const source = readFileSync(wrapper, "utf8");
+      expect(source).toContain(
+        `spawnSync(process.execPath, [${JSON.stringify(resolve(CLI))}, "hook", "pre-bash"]`,
+      );
+      expect(source).not.toContain("shell:");
     });
 
     it("rejects existing config.toml unless --force", () => {

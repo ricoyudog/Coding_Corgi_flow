@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { constants as fsConstants, type Stats } from "node:fs";
 import {
   link,
@@ -11,7 +11,7 @@ import {
   unlink,
   type FileHandle,
 } from "node:fs/promises";
-import { hostname } from "node:os";
+import { hostname, tmpdir } from "node:os";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 
 const SAFE_CHANGE_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
@@ -51,6 +51,15 @@ export interface ConvergenceLockV2Options {
   /** Lease age after which an unknown or foreign owner may be reclaimed. */
   staleMs?: number;
   /** Clock used for persisted lease timestamps and stale-age decisions. */
+  now?: () => Date;
+}
+
+export interface ConvergenceTargetLockV2Options {
+  /** Authoritative OpenSpec change root whose planning bytes may be mutated. */
+  targetRoot: string;
+  timeoutMs?: number;
+  pollMs?: number;
+  staleMs?: number;
   now?: () => Date;
 }
 
@@ -118,6 +127,57 @@ export async function withConvergenceLockV2<T>(
     await owned.handle.close().catch(() => undefined);
     await releaseOwnedLock(owned);
   }
+}
+
+/**
+ * Serialize convergence mutations by canonical OpenSpec target across projects.
+ * The lock lives in a per-user temporary namespace so external Store contents
+ * are never polluted by Corgi lock files.
+ */
+export async function withConvergenceTargetLockV2<T>(
+  options: ConvergenceTargetLockV2Options,
+  callback: () => T | Promise<T>,
+): Promise<T> {
+  const { targetRoot, ...timing } = options;
+  const projectRoot = await prepareTargetLockNamespace();
+  const changeName = await convergenceTargetIdentityV2(targetRoot);
+  return await withConvergenceLockV2({ projectRoot, changeName, ...timing }, callback);
+}
+
+/** Stable identity shared by symlink aliases of the same authoritative root. */
+export async function convergenceTargetIdentityV2(targetRoot: string): Promise<string> {
+  if (typeof targetRoot !== "string" || targetRoot.length === 0 || targetRoot.includes("\0")) {
+    throw new ConvergenceLockPathError("targetRoot must be a non-empty filesystem path");
+  }
+  const lexicalRoot = resolve(targetRoot);
+  const canonicalRoot = await realpath(lexicalRoot).catch(() => {
+    throw new ConvergenceLockPathError(
+      `Authoritative convergence target is unavailable: ${lexicalRoot}`,
+    );
+  });
+  const stats = await safeLstat(canonicalRoot, "authoritative convergence target");
+  if (!stats.isDirectory()) {
+    throw new ConvergenceLockPathError(`Authoritative convergence target is not a directory: ${canonicalRoot}`);
+  }
+  const digest = createHash("sha256").update(canonicalRoot, "utf8").digest("hex");
+  return `target-${digest}`;
+}
+
+async function prepareTargetLockNamespace(): Promise<string> {
+  const getuid = (process as NodeJS.Process & { getuid?: () => number }).getuid;
+  const uid = getuid?.call(process);
+  const suffix = uid === undefined ? "user" : String(uid);
+  const lexicalRoot = resolve(tmpdir(), `corgispec-convergence-target-locks-${suffix}`);
+  try {
+    await mkdir(lexicalRoot, { mode: 0o700 });
+  } catch (error) {
+    if (!isAlreadyExists(error)) throw error;
+  }
+  const stats = await safeLstat(lexicalRoot, "convergence target lock namespace");
+  if (stats.isSymbolicLink() || !stats.isDirectory() || (uid !== undefined && stats.uid !== uid)) {
+    throw new ConvergenceLockPathError(`Unsafe convergence target lock namespace: ${lexicalRoot}`);
+  }
+  return await realpath(lexicalRoot);
 }
 
 async function acquire(

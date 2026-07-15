@@ -19,7 +19,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ConvergenceLockPathError,
   ConvergenceLockTimeoutError,
+  convergenceTargetIdentityV2,
   withConvergenceLockV2,
+  withConvergenceTargetLockV2,
 } from "../src/lib/convergence-lock-v2.js";
 
 const roots: string[] = [];
@@ -111,6 +113,117 @@ describe("withConvergenceLockV2", () => {
 
     expect(order).toEqual(["first-enter", "first-exit", "second-enter"]);
     expect(existsSync(lockPath(projectRoot))).toBe(false);
+  });
+
+  it("serializes contenders from different projects by authoritative target root", async () => {
+    const targetRoot = fixtureRoot("corgi-shared-converge-target-");
+    const order: string[] = [];
+    let entered!: () => void;
+    let release!: () => void;
+    const enteredPromise = new Promise<void>((settle) => { entered = settle; });
+    const releasePromise = new Promise<void>((settle) => { release = settle; });
+    const first = withConvergenceTargetLockV2(
+      { targetRoot, timeoutMs: 1_000, pollMs: 2 },
+      async () => {
+        order.push("first-enter");
+        entered();
+        await releasePromise;
+        order.push("first-exit");
+      },
+    );
+    await enteredPromise;
+    let secondEntered = false;
+    const second = withConvergenceTargetLockV2(
+      { targetRoot, timeoutMs: 1_000, pollMs: 2 },
+      () => {
+        secondEntered = true;
+        order.push("second-enter");
+      },
+    );
+    await new Promise((settle) => setTimeout(settle, 20));
+    expect(secondEntered).toBe(false);
+    release();
+    await Promise.all([first, second]);
+
+    expect(order).toEqual(["first-enter", "first-exit", "second-enter"]);
+    expect(await convergenceTargetIdentityV2(targetRoot)).toMatch(/^target-[a-f0-9]{64}$/u);
+  });
+
+  it("rejects malformed, missing, and non-directory authoritative targets", async () => {
+    const parent = fixtureRoot("corgi-invalid-converge-target-");
+    const missing = resolve(parent, "missing");
+    const file = resolve(parent, "planning.md");
+    writeFileSync(file, "not a directory\n", "utf8");
+
+    await expect(
+      convergenceTargetIdentityV2(undefined as unknown as string),
+    ).rejects.toBeInstanceOf(ConvergenceLockPathError);
+    await expect(convergenceTargetIdentityV2("")).rejects.toBeInstanceOf(
+      ConvergenceLockPathError,
+    );
+    await expect(convergenceTargetIdentityV2("bad\0target")).rejects.toBeInstanceOf(
+      ConvergenceLockPathError,
+    );
+    await expect(convergenceTargetIdentityV2(missing)).rejects.toMatchObject({
+      code: "CONVERGENCE_LOCK_PATH_UNSAFE",
+    });
+    await expect(convergenceTargetIdentityV2(file)).rejects.toThrow(
+      "Authoritative convergence target is not a directory",
+    );
+    await expect(withConvergenceTargetLockV2(
+      { targetRoot: missing },
+      () => undefined,
+    )).rejects.toBeInstanceOf(ConvergenceLockPathError);
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "uses one target identity for real and symlink aliases",
+    async () => {
+      const targetRoot = fixtureRoot("corgi-real-converge-target-");
+      const aliasParent = fixtureRoot("corgi-target-alias-");
+      const alias = resolve(aliasParent, "alias");
+      symlinkSync(targetRoot, alias, "dir");
+
+      await expect(convergenceTargetIdentityV2(alias)).resolves.toBe(
+        await convergenceTargetIdentityV2(targetRoot),
+      );
+    },
+  );
+
+  it("does not serialize distinct authoritative targets", async () => {
+    const firstRoot = fixtureRoot("corgi-converge-target-one-");
+    const secondRoot = fixtureRoot("corgi-converge-target-two-");
+    let release!: () => void;
+    const held = new Promise<void>((settle) => { release = settle; });
+    let firstEntered!: () => void;
+    const firstReady = new Promise<void>((settle) => { firstEntered = settle; });
+
+    const first = withConvergenceTargetLockV2({ targetRoot: firstRoot }, async () => {
+      firstEntered();
+      await held;
+    });
+    await firstReady;
+    await expect(withConvergenceTargetLockV2(
+      { targetRoot: secondRoot, timeoutMs: 100, pollMs: 1 },
+      () => "second-entered",
+    )).resolves.toBe("second-entered");
+    release();
+    await first;
+  });
+
+  it("uses the portable user namespace when getuid is unavailable", async () => {
+    const targetRoot = fixtureRoot("corgi-portable-converge-target-");
+    const mutableProcess = process as NodeJS.Process & { getuid?: () => number };
+    const originalGetuid = mutableProcess.getuid;
+    mutableProcess.getuid = undefined;
+    try {
+      await expect(withConvergenceTargetLockV2(
+        { targetRoot },
+        () => "portable",
+      )).resolves.toBe("portable");
+    } finally {
+      mutableProcess.getuid = originalGetuid;
+    }
   });
 
   it("persists its owner record before the callback and exposes an O_EXCL lock cross-process", async () => {

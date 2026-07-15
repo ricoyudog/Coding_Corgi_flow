@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import { Command } from "commander";
 import { createArtifactResolver } from "../lib/artifact-resolver.js";
 import {
@@ -400,7 +401,14 @@ async function executeLoopOperationV2(
   }
 
   const inspection = await peekForMutation(store, request.changeName, request.runId);
-  const state = requireRunSessionState(inspection, request);
+  const state = requireRunState(inspection, request);
+  if (
+    request.operation === "resume" &&
+    isExactCurrentResumeReplay(inspection, state, request)
+  ) {
+    return successOutput("resume", request.changeName, state, { idempotent: true });
+  }
+  requireRunSession(state, request);
   let reviewNormalizedRequestBundle: ReviewNormalizedLoopSubmissionBundleV2 | undefined;
   let normalizedRequestBundle: NormalizedLoopSubmissionBundleV2 | undefined;
   let resumePartialSubmit = false;
@@ -485,7 +493,15 @@ async function executeLoopOperationV2(
     }
   }
   const eventCost = request.operation === "submit" && state.phase !== "awaiting_evaluation" ? 2 : 1;
-  if (state.lastEventSeq + eventCost > state.limits.maxEvents) {
+  const operationTerminatesRun = request.operation === "finalize" || request.operation === "invalidate";
+  const operationEndSeq = state.lastEventSeq + eventCost;
+  // An active post-state must never consume the final event slot: doing so
+  // makes both normal finalization and a durable circuit-breaker impossible.
+  // Finalize/invalidate already produce a terminal event and may use that slot.
+  if (
+    operationEndSeq > state.limits.maxEvents ||
+    (!operationTerminatesRun && operationEndSeq === state.limits.maxEvents)
+  ) {
     if (
       state.lastEventSeq + 1 <= state.limits.maxEvents &&
       isEventAllowedInPhaseV2(state.phase, "run_blocked")
@@ -497,8 +513,8 @@ async function executeLoopOperationV2(
         "circuit_breaker",
         {
           code: "circuit_breaker",
-          message: "The next operation would exceed limits.maxEvents",
-          details: { maxEvents: state.limits.maxEvents },
+          message: "The next operation would exhaust limits.maxEvents without a terminal event",
+          details: { maxEvents: state.limits.maxEvents, eventCost },
         },
         now,
         newNonce,
@@ -1269,15 +1285,55 @@ function planningFreshnessFailure(
   return null;
 }
 
-function requireRunSessionState(
+function requireRunState(
   inspection: LoopStoreInspectionV2,
   request: LoopCasRequestV2,
 ): LoopStateV2 {
   const state = inspection.state;
   if (!state) throw commandError("run_not_found", `Run '${request.runId}' was not found`);
   if (state.runId !== request.runId) throw commandError("run_mismatch", "runId is not current");
-  if (state.sessionId !== request.sessionId) throw commandError("session_conflict", "sessionId does not match");
   return state;
+}
+
+function requireRunSession(state: LoopStateV2, request: LoopCasRequestV2): void {
+  if (state.sessionId !== request.sessionId) {
+    throw commandError("session_conflict", "sessionId does not match");
+  }
+}
+
+/**
+ * A lost resume response is the one mutation whose exact retry legitimately
+ * carries the superseded session id. Keep that exception narrow: the resume
+ * must be the latest durable event, bind to the original session/CAS token,
+ * and have the same normalized arguments as the committed event.
+ */
+function isExactCurrentResumeReplay(
+  inspection: LoopStoreInspectionV2,
+  state: LoopStateV2,
+  request: Extract<LoopRequestV2, { operation: "resume" }>,
+): boolean {
+  const record = inspection.events.find((candidate) =>
+    candidate.event.type === "run_resumed" &&
+    candidate.event.runId === request.runId &&
+    candidate.event.expectedStateRevision === request.stateRevision &&
+    candidate.event.expectedNonce === request.nonce
+  );
+  if (record?.event.type !== "run_resumed" || !isDeepStrictEqual(record.postState, state)) {
+    return false;
+  }
+  const source = inspection.events.find((candidate) =>
+    candidate.postState.runId === request.runId &&
+    candidate.postState.stateRevision === request.stateRevision &&
+    candidate.postState.nonce === request.nonce &&
+    candidate.event.seq === record.event.seq - 1
+  )?.postState;
+  if (!source || source.sessionId !== request.sessionId) return false;
+
+  const targetPhase = request.targetPhase ?? inferResumeTarget(source);
+  const maxAttemptsPerGroup = request.maxAttemptsPerGroup ?? source.limits.maxAttemptsPerGroup;
+  return record.event.sessionId === (request.newSessionId ?? request.sessionId) &&
+    record.event.targetPhase === targetPhase &&
+    record.event.maxAttemptsPerGroup === maxAttemptsPerGroup;
 }
 
 async function peekForMutation(

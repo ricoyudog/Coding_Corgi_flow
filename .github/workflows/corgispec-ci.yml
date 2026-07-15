@@ -68,7 +68,7 @@ jobs:
           cache: npm
           cache-dependency-path: packages/corgispec/package-lock.json
       - run: npm ci
-      - run: npm test -- test/config.test.ts test/install-assets.test.ts test/planning-revision.test.ts test/artifact-resolver.test.ts test/instructions.test.ts test/changes.test.ts test/loop-store-v2.test.ts test/loop-store-v2-concurrency.test.ts test/loop-store-v2-triage-recovery.test.ts test/loop-migration-v2.test.ts test/git-workspace-v2.test.ts test/canonical-convergence-evidence-v2.test.ts test/convergence-lock-v2.test.ts test/converge-recovery-v2.integration.test.ts test/run-contract-v2.e2e.test.ts
+      - run: npm test -- test/config.test.ts test/install-assets.test.ts test/planning-revision.test.ts test/artifact-resolver.test.ts test/instructions.test.ts test/changes.test.ts test/hooks/generate.test.ts test/loop-store-v2.test.ts test/loop-store-v2-concurrency.test.ts test/loop-store-v2-triage-recovery.test.ts test/loop-migration-v2.test.ts test/git-workspace-v2.test.ts test/canonical-convergence-evidence-v2.test.ts test/convergence-lock-v2.test.ts test/converge-recovery-v2.integration.test.ts test/run-contract-v2.e2e.test.ts
 
   openspec-1-6-e2e:
     name: OpenSpec 1.6 and package smoke

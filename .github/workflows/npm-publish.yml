@@ -1,0 +1,206 @@
+name: Publish npm prerelease
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Exact existing RC tag to publish (for example, v3.0.0-rc.1)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: npm-next-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  publish-next:
+    name: Publish ${{ inputs.tag }} to npm next
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+        working-directory: packages/corgispec
+    steps:
+      - name: Check out the exact release tag
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.tag }}
+
+      - name: Set up supported Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.20.0
+          cache: npm
+          cache-dependency-path: packages/corgispec/package-lock.json
+
+      - name: Verify release identity and policy
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$GITHUB_REPOSITORY" != "ricoyudog/Coding_Corgi_flow" ]]; then
+            echo "::error::This workflow may only publish from ricoyudog/Coding_Corgi_flow."
+            exit 1
+          fi
+          if [[ "$GITHUB_REF" != "refs/heads/master" ]]; then
+            echo "::error::Dispatch this workflow from the master branch."
+            exit 1
+          fi
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]; then
+            echo "::error::Release tag must match v<major>.<minor>.<patch>-rc.<number>."
+            exit 1
+          fi
+          if ! git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
+            echo "::error::Release tag does not exist: $RELEASE_TAG"
+            exit 1
+          fi
+
+          tag_sha="$(git rev-list -n 1 "$RELEASE_TAG")"
+          head_sha="$(git rev-parse HEAD)"
+          if [[ "$tag_sha" != "$head_sha" ]]; then
+            echo "::error::Checked-out revision does not match $RELEASE_TAG."
+            exit 1
+          fi
+
+          git fetch --quiet --no-tags origin master
+          if ! git merge-base --is-ancestor "$head_sha" origin/master; then
+            echo "::error::$RELEASE_TAG is not contained in origin/master."
+            exit 1
+          fi
+
+          package_version="$(node --print "require('./package.json').version")"
+          if [[ "$RELEASE_TAG" != "v$package_version" ]]; then
+            echo "::error::Tag $RELEASE_TAG does not match package version $package_version."
+            exit 1
+          fi
+
+          node <<'NODE'
+          const assert = require('node:assert/strict');
+          const pkg = require('./package.json');
+
+          assert.equal(pkg.name, 'corgispec');
+          assert.match(pkg.version, /^\d+\.\d+\.\d+-rc\.\d+$/);
+          assert.deepEqual(pkg.repository, {
+            type: 'git',
+            url: 'git+https://github.com/ricoyudog/Coding_Corgi_flow.git',
+            directory: 'packages/corgispec',
+          });
+          assert.deepEqual(pkg.publishConfig, {
+            access: 'public',
+            registry: 'https://registry.npmjs.org/',
+            tag: 'next',
+          });
+          NODE
+
+          npm_version="$(npm --version)"
+          node -e '
+            const [major, minor] = process.argv[1].split(".").map(Number);
+            if (major < 9 || (major === 9 && minor < 5)) {
+              throw new Error(`npm >=9.5.0 is required for provenance; found ${process.argv[1]}`);
+            }
+          ' "$npm_version"
+
+          printf 'PACKAGE_VERSION=%s\n' "$package_version" >> "$GITHUB_ENV"
+          printf 'Publishing corgispec@%s from %s with Node %s and npm %s.\n' \
+            "$package_version" "$head_sha" "$(node --version)" "$npm_version"
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Run full release gate
+        run: npm run release:check
+
+      - name: Verify registry preconditions
+        run: |
+          set -euo pipefail
+          registry="https://registry.npmjs.org/"
+
+          if npm view "corgispec@$PACKAGE_VERSION" version --registry="$registry" --silent >/dev/null 2>&1; then
+            echo "::error::corgispec@$PACKAGE_VERSION is already published and cannot be replaced."
+            exit 1
+          fi
+
+          latest_before="$(npm view corgispec dist-tags.latest --registry="$registry" --silent)"
+          if [[ -z "$latest_before" ]]; then
+            echo "::error::Could not resolve the existing npm latest dist-tag."
+            exit 1
+          fi
+          printf 'LATEST_BEFORE=%s\n' "$latest_before" >> "$GITHUB_ENV"
+          printf 'npm latest is %s and must remain unchanged.\n' "$latest_before"
+
+      - name: Build immutable publish tarball
+        id: package
+        env:
+          PACK_DIR: ${{ runner.temp }}/corgispec-pack
+        run: |
+          set -euo pipefail
+          mkdir -p "$PACK_DIR"
+          npm pack --ignore-scripts --json --pack-destination "$PACK_DIR" > "$PACK_DIR/pack.json"
+
+          tarball_name="$(node -e '
+            const fs = require("node:fs");
+            const [result] = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+            if (result.name !== "corgispec" || result.version !== process.env.PACKAGE_VERSION) {
+              throw new Error(`unexpected packed artifact: ${result.name}@${result.version}`);
+            }
+            process.stdout.write(result.filename);
+          ' "$PACK_DIR/pack.json")"
+          tarball="$PACK_DIR/$tarball_name"
+          test -f "$tarball"
+          printf 'tarball=%s\n' "$tarball" >> "$GITHUB_OUTPUT"
+          sha256sum "$tarball"
+
+      - name: Publish prerelease to npm next
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/corgispec-publish.npmrc
+          TARBALL: ${{ steps.package.outputs.tarball }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$NODE_AUTH_TOKEN" ]]; then
+            echo "::error::The NPM_TOKEN repository secret is not configured."
+            exit 1
+          fi
+
+          umask 077
+          trap 'rm -f "$NPM_CONFIG_USERCONFIG"' EXIT
+          printf '%s\n' \
+            'registry=https://registry.npmjs.org/' \
+            '//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}' \
+            > "$NPM_CONFIG_USERCONFIG"
+
+          npm publish "$TARBALL" \
+            --ignore-scripts \
+            --tag next \
+            --access public \
+            --provenance \
+            --registry=https://registry.npmjs.org/
+
+      - name: Verify npm dist-tags
+        run: |
+          set -euo pipefail
+          registry="https://registry.npmjs.org/"
+
+          for attempt in {1..10}; do
+            next_version="$(npm view corgispec dist-tags.next --registry="$registry" --silent 2>/dev/null || true)"
+            latest_after="$(npm view corgispec dist-tags.latest --registry="$registry" --silent 2>/dev/null || true)"
+            published_version="$(npm view "corgispec@$PACKAGE_VERSION" version --registry="$registry" --silent 2>/dev/null || true)"
+
+            if [[ "$next_version" == "$PACKAGE_VERSION" && \
+                  "$published_version" == "$PACKAGE_VERSION" && \
+                  "$latest_after" == "$LATEST_BEFORE" ]]; then
+              printf 'Verified next=%s and unchanged latest=%s.\n' "$next_version" "$latest_after"
+              exit 0
+            fi
+            sleep 3
+          done
+
+          echo "::error::npm verification failed: expected next=$PACKAGE_VERSION and latest=$LATEST_BEFORE."
+          exit 1

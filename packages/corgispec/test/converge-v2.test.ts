@@ -6,17 +6,21 @@ import {
   readdirSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  appendConvergenceTaskGroupAtomicallyV2,
   applyConfirmedConvergenceV2,
   computeRunPlanningRevisionV2,
   evaluateConvergenceV2,
   fingerprintTaskGroupV2,
   fingerprintTaskGroupsV2,
+  renderConvergenceTaskContentV2,
+  type ConvergenceAppendFaultsV2,
   type ConvergenceEvaluationInputV2,
   type ConvergencePlanningContextV2,
   type ConvergenceRunContextV2,
@@ -784,6 +788,33 @@ describe("converge v2", () => {
     expect(await computeRunPlanningRevisionV2(input)).not.toBe(initial);
   });
 
+  it("binds run planning revisions to the authoritative change root", async () => {
+    const root = resolve(tmpdir(), `corgispec-target-revision-${Date.now()}-${Math.random()}`);
+    cleanup.push(root);
+    const firstRoot = resolve(root, "store-a/change");
+    const secondRoot = resolve(root, "store-b/change");
+    const revisions: string[] = [];
+    for (const changeRoot of [firstRoot, secondRoot]) {
+      mkdirSync(changeRoot, { recursive: true });
+      const tasks = resolve(changeRoot, "tasks.md");
+      writeFileSync(tasks, "## 1. Work\n\n- [ ] 1.1 Implement API\n");
+      revisions.push(await computeRunPlanningRevisionV2({
+        schemaName: "custom",
+        changeRoot,
+        taskArtifactId: "tasks",
+        artifactPaths: {
+          tasks: {
+            outputPath: "tasks.md",
+            resolvedOutputPath: tasks,
+            existingOutputPaths: [tasks],
+          },
+        },
+      }));
+    }
+
+    expect(revisions[0]).not.toBe(revisions[1]);
+  });
+
   it("blocks invalid planning and directs the caller to update", () => {
     const input = convergenceInput();
     input.planning.valid = false;
@@ -994,6 +1025,172 @@ describe("converge v2", () => {
     },
   );
 
+  it("recovers every pre-rename process-death residue without changing the Git fingerprint", async () => {
+    const root = resolve(
+      tmpdir(),
+      `corgispec-converge-temporary-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
+    cleanup.push(root);
+    mkdirSync(root, { recursive: true });
+    git(root, "init", "-b", "main");
+    git(root, "config", "user.email", "corgi@example.test");
+    git(root, "config", "user.name", "Corgi Test");
+    const taskArtifactPath = resolve(root, "openspec/changes/example/tasks.md");
+    const unrelatedSibling = resolve(
+      root,
+      "openspec/changes/example/.tasks.md.someone-else.tmp",
+    );
+    const unrelatedStateFile = resolve(root, ".corgi/loop/.converge-tmp/unrelated.tmp");
+    mkdirSync(resolve(taskArtifactPath, ".."), { recursive: true });
+    mkdirSync(resolve(unrelatedStateFile, ".."), { recursive: true });
+    const original = "## 1. Existing\n\n- [x] 1.1 Existing work\n";
+    const markdown = "## 2. Convergence follow-up\n\n- [ ] 2.1 Recover safely\n";
+    const next = renderConvergenceTaskContentV2(original, markdown);
+    writeFileSync(taskArtifactPath, original);
+    git(root, "add", "openspec/changes/example/tasks.md");
+    git(root, "commit", "-m", "baseline planning");
+    writeFileSync(unrelatedSibling, "not owned by corgispec\n");
+    writeFileSync(unrelatedStateFile, "also not owned by this append\n");
+
+    const workspace = createGitWorkspaceV2(root);
+    const baselineFingerprint = await workspace.workspaceFingerprint();
+    const faultPoints: Array<keyof ConvergenceAppendFaultsV2> = [
+      "afterTemporaryOpen",
+      "afterTemporaryChmod",
+      "afterTemporaryTruncate",
+      "afterTemporaryWrite",
+      "afterTemporaryFsync",
+      "afterTemporaryClose",
+      "beforeRename",
+    ];
+
+    for (const point of faultPoints) {
+      let residuePath = "";
+      let residue = Buffer.alloc(0);
+      const fault = async (): Promise<void> => {
+        const managed = findConvergenceTemporaryFiles(root);
+        expect(managed).toHaveLength(1);
+        residuePath = managed[0]!;
+        residue = readFileSync(residuePath);
+        throw new Error(`simulated process death at ${point}`);
+      };
+
+      await expect(appendConvergenceTaskGroupAtomicallyV2(
+        taskArtifactPath,
+        original,
+        markdown,
+        { [point]: fault },
+      )).rejects.toThrow(`simulated process death at ${point}`);
+      expect(residuePath).not.toBe("");
+      expect(findConvergenceTemporaryFiles(root)).toEqual([]);
+
+      // A real process death bypasses finally. Restore the bytes observed at
+      // the exact fault point to model that durable residue.
+      writeFileSync(residuePath, residue);
+      expect(await workspace.workspaceFingerprint()).toBe(baselineFingerprint);
+
+      await appendConvergenceTaskGroupAtomicallyV2(
+        taskArtifactPath,
+        original,
+        markdown,
+      );
+      expect(readFileSync(taskArtifactPath, "utf8")).toBe(next);
+      expect(findConvergenceTemporaryFiles(root)).toEqual([]);
+      expect(readFileSync(unrelatedSibling, "utf8")).toBe("not owned by corgispec\n");
+      expect(readFileSync(unrelatedStateFile, "utf8"))
+        .toBe("also not owned by this append\n");
+
+      writeFileSync(taskArtifactPath, original);
+      expect(await workspace.workspaceFingerprint()).toBe(baselineFingerprint);
+    }
+  });
+
+  it("fails closed and preserves a conflicting managed temporary file", async () => {
+    const root = resolve(
+      tmpdir(),
+      `corgispec-converge-temp-conflict-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
+    cleanup.push(root);
+    mkdirSync(root, { recursive: true });
+    git(root, "init", "-b", "main");
+    const taskArtifactPath = resolve(root, "tasks.md");
+    const original = "## 1. Existing\n\n- [ ] 1.1 Existing work\n";
+    const markdown = "## 2. Follow-up\n\n- [ ] 2.1 Add safety\n";
+    writeFileSync(taskArtifactPath, original);
+    let residuePath = "";
+
+    await expect(appendConvergenceTaskGroupAtomicallyV2(
+      taskArtifactPath,
+      original,
+      markdown,
+      {
+        afterTemporaryOpen: () => {
+          residuePath = findConvergenceTemporaryFiles(root)[0]!;
+          throw new Error("capture managed name");
+        },
+      },
+    )).rejects.toThrow("capture managed name");
+    const next = renderConvergenceTaskContentV2(original, markdown);
+    writeFileSync(residuePath, Buffer.from(next).subarray(0, Math.floor(next.length / 2)));
+    await appendConvergenceTaskGroupAtomicallyV2(
+      taskArtifactPath,
+      original,
+      markdown,
+    );
+    expect(readFileSync(taskArtifactPath, "utf8")).toBe(next);
+
+    writeFileSync(taskArtifactPath, original);
+    writeFileSync(residuePath, "foreign, non-prefix bytes");
+
+    await expect(appendConvergenceTaskGroupAtomicallyV2(
+      taskArtifactPath,
+      original,
+      markdown,
+    )).rejects.toMatchObject({
+      code: "converge_temporary_conflict",
+      details: { temporary: residuePath },
+    });
+    expect(readFileSync(taskArtifactPath, "utf8")).toBe(original);
+    expect(readFileSync(residuePath, "utf8")).toBe("foreign, non-prefix bytes");
+
+    rmSync(residuePath);
+    const outside = resolve(root, "outside-temporary.md");
+    writeFileSync(outside, "outside must remain unchanged\n");
+    symlinkSync(outside, residuePath, "file");
+    await expect(appendConvergenceTaskGroupAtomicallyV2(
+      taskArtifactPath,
+      original,
+      markdown,
+    )).rejects.toMatchObject({ code: "converge_temporary_conflict" });
+    expect(readFileSync(outside, "utf8")).toBe("outside must remain unchanged\n");
+    expect(readFileSync(taskArtifactPath, "utf8")).toBe(original);
+  });
+
+  it("rejects a symlinked managed temporary directory without touching its target", async () => {
+    const root = resolve(
+      tmpdir(),
+      `corgispec-converge-temp-dir-link-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
+    cleanup.push(root);
+    mkdirSync(root, { recursive: true });
+    git(root, "init", "-b", "main");
+    const taskArtifactPath = resolve(root, "tasks.md");
+    const outside = resolve(root, "outside-state");
+    mkdirSync(resolve(root, ".corgi"));
+    mkdirSync(outside);
+    symlinkSync(outside, resolve(root, ".corgi/loop"), "dir");
+    const original = "## 1. Existing\n\n- [ ] 1.1 Existing work\n";
+    writeFileSync(taskArtifactPath, original);
+
+    await expect(appendConvergenceTaskGroupAtomicallyV2(
+      taskArtifactPath,
+      original,
+      "## 2. Follow-up\n\n- [ ] 2.1 Stay contained\n",
+    )).rejects.toMatchObject({ code: "converge_temporary_conflict" });
+    expect(readFileSync(taskArtifactPath, "utf8")).toBe(original);
+    expect(readdirSync(outside)).toEqual([]);
+  });
+
   it("returns a structured recovery error if append fails after run invalidation", async () => {
     const input = convergenceInput();
     const fingerprints = fingerprintTaskGroupsV2(input.planning.taskGroups);
@@ -1094,6 +1291,18 @@ function snapshotFiles(root: string): Record<string, string> {
   };
   visit(root);
   return output;
+}
+
+function findConvergenceTemporaryFiles(root: string): string[] {
+  const directory = resolve(root, ".corgi/loop/.converge-tmp");
+  try {
+    return readdirSync(directory)
+      .filter((file) => file.startsWith(".corgispec-converge-v2-") && file.endsWith(".tmp"))
+      .map((file) => resolve(directory, file))
+      .sort();
+  } catch {
+    return [];
+  }
 }
 
 function git(root: string, ...args: string[]): string {

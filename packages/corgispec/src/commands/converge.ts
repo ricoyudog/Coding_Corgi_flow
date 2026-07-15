@@ -35,7 +35,11 @@ import {
   stableConvergenceJsonV2,
   type ConvergenceIntentV2,
 } from "../lib/convergence-intent-v2.js";
-import { withConvergenceLockV2 } from "../lib/convergence-lock-v2.js";
+import {
+  convergenceTargetIdentityV2,
+  withConvergenceLockV2,
+  withConvergenceTargetLockV2,
+} from "../lib/convergence-lock-v2.js";
 import { createGitWorkspaceV2, type GitWorkspaceV2 } from "../lib/git-workspace-v2.js";
 import { loadConfigFromDir } from "../lib/config.js";
 import { buildLifecycleReadyReport } from "../lib/lifecycle.js";
@@ -114,6 +118,7 @@ export interface ConvergeCommandDependenciesV2 {
     postTaskBytes: Uint8Array,
   ) => Promise<string>;
   withConvergenceLock?: typeof withConvergenceLockV2;
+  withConvergenceTargetLock?: typeof withConvergenceTargetLockV2;
   faults?: ConvergeFaultInjectorV2;
   /** Internal recursion marker: confirmation is already inside the wide lock. */
   confirmationLockHeld?: boolean;
@@ -294,42 +299,58 @@ async function runConfirmedWithLockV2(
   projectRoot: string,
   loopStore: LoopStoreV2,
 ): Promise<ConvergeExecutionV2> {
-  const lock = dependencies.withConvergenceLock ?? withConvergenceLockV2;
-  return await lock({ projectRoot, changeName: request.changeName }, async () => {
-    const recovery = await discoverConvergenceRecoveryV2(loopStore, request.changeName);
-    if (recovery) {
-      requireConfirmationToken(recovery.intent, request.confirmationToken);
-      return await recoverConfirmedConvergenceV2(
+  const projectLock = dependencies.withConvergenceLock ?? withConvergenceLockV2;
+  const targetLock = dependencies.withConvergenceTargetLock ?? withConvergenceTargetLockV2;
+  const inspectPlanning = dependencies.inspectPlanning ?? inspectConvergencePlanningDefault;
+  return await projectLock({ projectRoot, changeName: request.changeName }, async () => {
+    const targetBeforeLock = await inspectPlanning(projectRoot, request.changeName, request.store);
+    const expectedTargetIdentity = await convergenceTargetIdentityV2(targetBeforeLock.changeRoot);
+    return await targetLock({ targetRoot: targetBeforeLock.changeRoot }, async () => {
+      const targetUnderLock = await inspectPlanning(projectRoot, request.changeName, request.store);
+      if (
+        await convergenceTargetIdentityV2(targetUnderLock.changeRoot) !== expectedTargetIdentity
+      ) {
+        throw commandError(
+          "converge_target_changed",
+          "The authoritative OpenSpec change root changed while acquiring its convergence lock",
+        );
+      }
+
+      const recovery = await discoverConvergenceRecoveryV2(loopStore, request.changeName);
+      if (recovery) {
+        requireConfirmationToken(recovery.intent, request.confirmationToken);
+        return await recoverConfirmedConvergenceV2(
+          request,
+          dependencies,
+          projectRoot,
+          loopStore,
+          recovery,
+        );
+      }
+
+      const evaluation = await evaluateConvergeReadOnlyV2(
+        { ...request, confirmationToken: undefined },
+        dependencies,
+      );
+      if (evaluation.exitCode === 2) return evaluation;
+      if (
+        evaluation.output.status !== "needs_work" ||
+        !evaluation.output.confirmationToken ||
+        request.confirmationToken !== evaluation.output.confirmationToken
+      ) {
+        throw commandError(
+          "converge_not_confirmed",
+          "Convergence state changed before the confirmation lock was acquired",
+        );
+      }
+      return await beginConfirmedConvergenceV2(
         request,
         dependencies,
         projectRoot,
         loopStore,
-        recovery,
+        evaluation.output,
       );
-    }
-
-    const evaluation = await evaluateConvergeReadOnlyV2(
-      { ...request, confirmationToken: undefined },
-      dependencies,
-    );
-    if (evaluation.exitCode === 2) return evaluation;
-    if (
-      evaluation.output.status !== "needs_work" ||
-      !evaluation.output.confirmationToken ||
-      request.confirmationToken !== evaluation.output.confirmationToken
-    ) {
-      throw commandError(
-        "converge_not_confirmed",
-        "Convergence state changed before the confirmation lock was acquired",
-      );
-    }
-    return await beginConfirmedConvergenceV2(
-      request,
-      dependencies,
-      projectRoot,
-      loopStore,
-      evaluation.output,
-    );
+    });
   });
 }
 

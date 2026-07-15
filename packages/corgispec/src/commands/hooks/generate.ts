@@ -45,17 +45,15 @@ export function createHooksGenerateCommand(): Command {
         process.exitCode = 1; return;
       }
 
-      const binaryPath = resolveBinaryPath();
-
       switch (platform) {
         case "claude":
-          generateClaudeOutput(binaryPath, opts);
+          generateClaudeOutput(resolveBinaryPath(), opts);
           break;
         case "opencode":
-          generateOpenCodeOutput(binaryPath, opts);
+          generateOpenCodeOutput(opts);
           break;
         case "codex":
-          generateCodexOutput(binaryPath, opts);
+          generateCodexOutput(opts);
           break;
       }
     });
@@ -78,6 +76,14 @@ function resolveBinaryPath(): string {
   return "npx corgispec";
 }
 
+function resolveRunningCliEntry(): string {
+  const cliEntry = process.argv[1] ? resolve(process.argv[1]) : "";
+  if (!cliEntry || !existsSync(cliEntry)) {
+    throw new Error("Cannot resolve the running CorgiSpec CLI entry for generated hooks");
+  }
+  return cliEntry;
+}
+
 // ─── Platform Listing ────────────────────────────────────────────────────
 
 function showPlatformListing(): void {
@@ -89,7 +95,7 @@ function showPlatformListing(): void {
     "  opencode  OpenCode (TypeScript plugin, default)"
   );
   console.log(
-    "  codex     Codex (.codex/config.toml + .codex/hooks/*.py wrappers)"
+    "  codex     Codex (.codex/config.toml + .codex/hooks/*.cjs wrappers)"
   );
   console.log(
     "\nUsage: corgispec hooks generate --platform <name> [--output <path>] [--force] [--deep]"
@@ -271,29 +277,26 @@ function generateClaudeOutput(
  *   - https://github.com/anomalyco/opencode/blob/dev/packages/opencode/src/tool/shell/prompt.ts (L22-30)
  */
 function generateOpenCodeOutput(
-  binaryPath: string,
   opts: GenerateOptions
 ): void {
-  const tsCode = buildOpenCodeDeepPlugin(binaryPath);
+  const tsCode = buildOpenCodeDeepPlugin();
   writeOutput(tsCode, opts.output, opts.force);
 }
 
-function buildOpenCodeDeepPlugin(binaryPath: string): string {
-  const binaryCommand = binaryPath === "npx corgispec" ? "npx" : binaryPath;
-  const binaryPrefix = binaryPath === "npx corgispec" ? ["corgispec"] : [];
+function buildOpenCodeDeepPlugin(): string {
+  const cliEntryJson = JSON.stringify(resolveRunningCliEntry());
   return `import type { Plugin } from "@opencode-ai/plugin";
 import { spawnSync } from "node:child_process";
 
-const BINARY_COMMAND = ${JSON.stringify(binaryCommand)};
-const BINARY_PREFIX = ${JSON.stringify(binaryPrefix)};
+const CLI_ENTRY = ${cliEntryJson};
 
 function runHook(
   subcommand: string,
   options: { input?: string; timeout: number; passthrough?: boolean },
 ): string {
   const result = spawnSync(
-    BINARY_COMMAND,
-    [...BINARY_PREFIX, "hook", subcommand],
+    process.execPath,
+    [CLI_ENTRY, "hook", subcommand],
     {
       input: options.input,
       encoding: "utf-8",
@@ -336,7 +339,41 @@ function buildStopPayload(event: unknown): string {
   });
 }
 
-export const CorgiSpecDeep: Plugin = async () => {
+export const CorgiSpecDeep: Plugin = async ({ client, directory }) => {
+  const continuationPending = new Set<string>();
+  const requestContinuation = (sessionId: string, text: string): void => {
+    if (!sessionId || continuationPending.has(sessionId)) return;
+    continuationPending.add(sessionId);
+    void client.session.promptAsync({
+      path: { id: sessionId },
+      query: { directory },
+      body: { parts: [{ type: "text", text }] },
+    }).then((result) => {
+      if (result.error) {
+        process.stderr.write("[corgispec opencode] continuation request failed\\n");
+      }
+    }).catch((error: unknown) => {
+      process.stderr.write("[corgispec opencode] continuation request failed: "
+        + (error instanceof Error ? error.message : String(error)) + "\\n");
+    }).finally(() => {
+      continuationPending.delete(sessionId);
+    });
+  };
+  const hookFailureMessage = (subcommand: string, error: unknown): string => {
+    const failure = error as Error & {
+      exitCode?: number | null;
+      stdout?: string;
+      stderr?: string;
+    };
+    return [
+      "CorgiSpec prevented this session from being considered complete.",
+      "Run the required canonical CLI action, then continue the task.",
+      "Hook: " + subcommand,
+      "Exit code: " + String(failure.exitCode ?? "unknown"),
+      failure.stderr ? "stderr: " + failure.stderr.trim() : "",
+      failure.stdout ? "stdout: " + failure.stdout.trim() : "",
+    ].filter(Boolean).join("\\n");
+  };
   return {
     "experimental.chat.system.transform": async (_input, output) => {
       try {
@@ -371,28 +408,37 @@ export const CorgiSpecDeep: Plugin = async () => {
     event: async ({ event }) => {
       if (event.type === "session.idle") {
         const payload = buildStopPayload(event);
+        const sessionId = String(JSON.parse(payload).session_id ?? "");
         try {
           runHook("stop-check", { input: payload, timeout: 10_000, passthrough: true });
-        } catch {
-          // Stop validation is non-blocking
+        } catch (error) {
+          // OpenCode's event hook is fire-and-forget, so throwing cannot block
+          // session.idle. Use its supported async prompt API to re-enter.
+          requestContinuation(sessionId, hookFailureMessage("stop-check", error));
+          return;
         }
-        // Run Contract v2 lifecycle failures are blocking. Preserve the hook's
-        // stdin session identity, stdout/stderr, and non-zero result.
-        const loopResult = runHook("loop-check", {
-          input: payload,
-          timeout: 15_000,
-          passthrough: true,
-        });
-        const loopDecision = JSON.parse(loopResult) as {
-          decision?: string;
-          reason?: string;
-          changeName?: string;
-          runId?: string;
-        };
-        if (loopDecision.decision === "block") {
-          const error = new Error(loopDecision.reason ?? "CorgiSpec loop is still active");
-          Object.assign(error, { exitCode: 1, loopDecision });
-          throw error;
+        try {
+          const loopResult = runHook("loop-check", {
+            input: payload,
+            timeout: 15_000,
+            passthrough: true,
+          });
+          const loopDecision = JSON.parse(loopResult) as {
+            decision?: string;
+            reason?: string;
+            changeName?: string;
+            runId?: string;
+            action?: unknown;
+          };
+          if (loopDecision.decision === "block") {
+            requestContinuation(
+              sessionId,
+              "CorgiSpec Run Contract v2 is still active. Continue with the canonical action:\\n"
+                + JSON.stringify(loopDecision),
+            );
+          }
+        } catch (error) {
+          requestContinuation(sessionId, hookFailureMessage("loop-check", error));
         }
       }
       if (event.type === "session.compacted") {
@@ -462,7 +508,7 @@ const HOOK_EVENTS = [
   },
 ] as const;
 
-function buildCodexToml(binaryPath: string): string {
+function buildCodexToml(): string {
   const lines: string[] = ["[features]", "hooks = true", ""];
 
   for (const hook of HOOK_EVENTS) {
@@ -476,10 +522,10 @@ function buildCodexToml(binaryPath: string): string {
     lines.push(`[[hooks.${hook.event}.hooks]]`);
     lines.push(`type = "command"`);
     lines.push(
-      `command = 'python3 "\${HOME}/.codex/hooks/${scriptName}.py"'`
+      `command = 'node "\${HOME}/.codex/hooks/${scriptName}.cjs"'`
     );
     lines.push(
-      `commandWindows = 'python3 "%USERPROFILE%\\.codex\\hooks\\${scriptName}.py"'`
+      `commandWindows = 'node "%USERPROFILE%\\.codex\\hooks\\${scriptName}.cjs"'`
     );
     lines.push(`timeout = ${hook.timeout}`);
     if (hook.async) {
@@ -491,50 +537,50 @@ function buildCodexToml(binaryPath: string): string {
   return lines.join("\n");
 }
 
-function buildPythonWrapper(
-  subcommand: string,
-  binaryPath: string
+function buildNodeWrapper(
+  subcommand: string
 ): string {
-  const binaryParts = binaryPath === "npx corgispec"
-    ? ["npx", "corgispec"]
-    : [binaryPath];
-  const binaryArgs = JSON.stringify(binaryParts);
-  return `#!/usr/bin/env python3
-"""CorgiSpec hook: ${subcommand}"""
-import subprocess, sys
+  const cliEntryJson = JSON.stringify(resolveRunningCliEntry());
+  return `#!/usr/bin/env node
+"use strict";
+const { spawnSync } = require("node:child_process");
 
-def main():
-    input_data = sys.stdin.read()
-    result = subprocess.run(
-        [*${binaryArgs}, "hook", "${subcommand}"],
-        input=input_data,
-        capture_output=True,
-        text=True,
-    )
-    if result.stdout:
-        sys.stdout.write(result.stdout)
-    if result.stderr:
-        sys.stderr.write(result.stderr)
-    sys.exit(result.returncode)
-
-if __name__ == "__main__":
-    main()
+let input = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", (chunk) => { input += chunk; });
+process.stdin.on("end", () => {
+  // Invoke the resolved JavaScript entry with the Node executable that is
+  // already running this wrapper. This is shell-free and avoids Windows npm
+  // .cmd/.bat shims, which child_process cannot execute directly without a shell.
+  const result = spawnSync(process.execPath, [${cliEntryJson}, "hook", "${subcommand}"], {
+    input,
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  if (result.stdout) process.stdout.write(result.stdout);
+  if (result.stderr) process.stderr.write(result.stderr);
+  if (result.error) {
+    process.stderr.write(result.error.message);
+    process.exitCode = 1;
+    return;
+  }
+  process.exitCode = result.status ?? 1;
+});
 `;
 }
 
 function generateCodexOutput(
-  binaryPath: string,
   opts: GenerateOptions
 ): void {
   if (!opts.output) {
-    const toml = buildCodexToml(binaryPath);
+    const toml = buildCodexToml();
     console.log("=== .codex/config.toml ===");
     process.stdout.write(toml);
     console.log("");
     for (const hook of HOOK_EVENTS) {
       const scriptName = `corgispec_${hook.subcommand.replace(/-/g, "_")}`;
-      console.log(`=== .codex/hooks/${scriptName}.py ===`);
-      process.stdout.write(buildPythonWrapper(hook.subcommand, binaryPath));
+      console.log(`=== .codex/hooks/${scriptName}.cjs ===`);
+      process.stdout.write(buildNodeWrapper(hook.subcommand));
       console.log("");
     }
     return;
@@ -553,14 +599,14 @@ function generateCodexOutput(
 
   mkdirSync(hooksDir, { recursive: true });
 
-  const toml = buildCodexToml(binaryPath);
+  const toml = buildCodexToml();
   writeFileSync(configTomlPath, toml);
   console.log(`Wrote ${configTomlPath}`);
 
   for (const hook of HOOK_EVENTS) {
     const scriptName = `corgispec_${hook.subcommand.replace(/-/g, "_")}`;
-    const scriptPath = resolve(hooksDir, `${scriptName}.py`);
-    const code = buildPythonWrapper(hook.subcommand, binaryPath);
+    const scriptPath = resolve(hooksDir, `${scriptName}.cjs`);
+    const code = buildNodeWrapper(hook.subcommand);
     writeFileSync(scriptPath, code);
     console.log(`Wrote ${scriptPath}`);
   }

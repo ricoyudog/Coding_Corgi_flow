@@ -41,6 +41,16 @@
     "spec-driven-development"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ricoyudog/Coding_Corgi_flow.git",
+    "directory": "packages/corgispec"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/",
+    "tag": "next"
+  },
   "dependencies": {
     "ajv": "^8.17.1",
     "commander": "^13.1.0",

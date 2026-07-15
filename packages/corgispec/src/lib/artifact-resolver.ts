@@ -1,4 +1,4 @@
-import { realpath, stat } from "node:fs/promises";
+import { lstat, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import {
   type OpenSpecActionContext,
@@ -218,18 +218,18 @@ export async function assertWritableArtifactPath(
   const canonicalRoot = await canonicalExisting(resolved.changeRoot);
   let existingAncestor = absoluteCandidate;
   while (true) {
+    let entry;
     try {
-      const canonicalAncestor = await realpath(existingAncestor);
-      if (!isPathInside(canonicalRoot, canonicalAncestor)) {
+      entry = await lstat(existingAncestor);
+    } catch (error) {
+      if (!hasFileSystemCode(error, "ENOENT")) {
         throw new ArtifactResolverError(
-          `Write target resolves outside change root through a symlink: ${candidate}`,
-          "symlink_escape",
-          candidate
+          `Write target could not be inspected: ${candidate}`,
+          "path_unavailable",
+          candidate,
+          error
         );
       }
-      return absoluteCandidate;
-    } catch (error) {
-      if (error instanceof ArtifactResolverError) throw error;
       const parent = path.dirname(existingAncestor);
       if (parent === existingAncestor) {
         throw new ArtifactResolverError(
@@ -240,8 +240,70 @@ export async function assertWritableArtifactPath(
         );
       }
       existingAncestor = parent;
+      continue;
     }
+
+    let canonicalAncestor: string;
+    try {
+      canonicalAncestor = await realpath(existingAncestor);
+    } catch (error) {
+      if (entry.isSymbolicLink()) {
+        throw new ArtifactResolverError(
+          `Write target contains an unresolved symlink: ${candidate}`,
+          "symlink_escape",
+          candidate,
+          error
+        );
+      }
+      throw new ArtifactResolverError(
+        `Existing write target could not be resolved: ${candidate}`,
+        "path_unavailable",
+        candidate,
+        error
+      );
+    }
+    if (!isPathInside(canonicalRoot, canonicalAncestor)) {
+      throw new ArtifactResolverError(
+        `Write target resolves outside change root through a symlink: ${candidate}`,
+        "symlink_escape",
+        candidate
+      );
+    }
+
+    // realpath on Windows may accept a non-existent suffix below a regular
+    // file. Prove that the nearest existing ancestor can actually contain a
+    // new descendant instead of relying on platform-specific realpath rules.
+    if (existingAncestor !== absoluteCandidate) {
+      let targetStat;
+      try {
+        targetStat = await stat(existingAncestor);
+      } catch (error) {
+        throw new ArtifactResolverError(
+          `Existing write ancestor could not be inspected: ${candidate}`,
+          "path_unavailable",
+          candidate,
+          error
+        );
+      }
+      if (!targetStat.isDirectory()) {
+        throw new ArtifactResolverError(
+          `Existing write ancestor is not a directory: ${candidate}`,
+          "path_unavailable",
+          candidate
+        );
+      }
+    }
+    return absoluteCandidate;
   }
+}
+
+function hasFileSystemCode(error: unknown, code: string): boolean {
+  return Boolean(
+    error &&
+    typeof error === "object" &&
+    "code" in error &&
+    String(error.code) === code
+  );
 }
 
 /**

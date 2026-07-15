@@ -1,9 +1,11 @@
 import { spawn } from "node:child_process";
 import { hostname, tmpdir } from "node:os";
 import {
+  existsSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -229,6 +231,54 @@ describe("LoopStoreV2 locking and multi-process CAS", () => {
     await expect(store.inspect("race-change")).rejects.toBeInstanceOf(LoopStoreLockedError);
     rmSync(lock);
   });
+
+  it("recovers after process death before an initialization is published", async () => {
+    const projectRoot = fixtureRoot();
+    const initialized = initial();
+    const buildRoot = resolve(projectRoot, "build-init-death");
+    mkdirSync(buildRoot, { recursive: true });
+    const packageRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
+    const tsupCli = resolve(packageRoot, "node_modules/tsup/dist/cli-default.js");
+    const source = resolve(packageRoot, "src/lib/loop-store-v2.ts");
+    const build = await child(
+      tsupCli,
+      source,
+      "--format=esm",
+      `--out-dir=${buildRoot}`,
+    );
+    expect(build.code, build.stderr).toBe(0);
+
+    const bundle = resolve(buildRoot, "loop-store-v2.js");
+    const inputPath = resolve(projectRoot, "initialize.json");
+    writeFileSync(inputPath, JSON.stringify(initialized));
+    const script = resolve(projectRoot, "initialize-and-die.mjs");
+    writeFileSync(script, `
+      import { pathToFileURL } from "node:url";
+      import { readFile } from "node:fs/promises";
+      const { LoopStoreV2 } = await import(pathToFileURL(process.argv[2]).href);
+      const input = JSON.parse(await readFile(process.argv[4], "utf8"));
+      const store = new LoopStoreV2({
+        projectRoot: process.argv[3],
+        faults(point) {
+          if (point === "before_initialization_rename") process.kill(process.pid, "SIGKILL");
+        },
+      });
+      await store.initialize(input);
+    `);
+    const died = await child(script, bundle, projectRoot, inputPath);
+    expect(died.code).not.toBe(0);
+
+    const paths = new LoopStoreV2({ projectRoot }).paths("race-change", "race-run");
+    expect(existsSync(paths.runRoot!)).toBe(false);
+    expect(readdirSync(paths.runs).some((name) => name.startsWith(".init-race-run-"))).toBe(true);
+
+    const recovered = new LoopStoreV2({ projectRoot, lockStaleMs: 1_000 });
+    await expect(recovered.initialize(initialized)).resolves.toEqual(initialized.state);
+    await expect(recovered.inspect("race-change")).resolves.toMatchObject({
+      state: { runId: "race-run" },
+      events: [{ event: { type: "run_initialized" } }],
+    });
+  }, 20_000);
 
   it("enforces CAS across real Node processes", async () => {
     const projectRoot = fixtureRoot();
