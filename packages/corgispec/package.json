@@ -1,6 +1,6 @@
 {
   "name": "corgispec",
-  "version": "2.4.3",
+  "version": "3.0.0-rc.1",
   "description": "Unified CLI for Corgi workflow — skill management, validation, and AI instruction generation",
   "type": "module",
   "bin": {
@@ -8,14 +8,24 @@
   },
   "scripts": {
     "build": "tsup",
+    "bundle:assets": "node scripts/bundle-assets.js",
     "dev": "tsup --watch",
-    "pretest": "npm run build",
+    "typecheck": "tsc --noEmit",
+    "pretest": "npm run bundle:assets && npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepublishOnly": "npm run build && node scripts/bundle-assets.js"
+    "precoverage": "npm run bundle:assets && npm run build",
+    "coverage": "vitest run --coverage",
+    "validate:skills": "node dist/corgispec.js validate --path ../..",
+    "check:skill-mirrors": "node scripts/check-skill-mirrors.js",
+    "audit:prod": "npm audit --omit=dev --audit-level=high",
+    "prepack": "npm run bundle:assets && npm run build && npm run typecheck",
+    "pack:smoke": "node scripts/package-smoke.js",
+    "release:check": "npm run test && npm run coverage && npm run validate:skills && npm run check:skill-mirrors && npm run audit:prod && npm run pack:smoke",
+    "prepublishOnly": "npm run release:check"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.19.0"
   },
   "files": [
     "dist",
@@ -39,8 +49,10 @@
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.0.0",
+    "@vitest/coverage-v8": "4.1.10",
+    "fast-check": "4.9.0",
     "tsup": "^8.3.0",
     "typescript": "^5.7.0",
-    "vitest": "^2.1.0"
+    "vitest": "4.1.10"
   }
 }

@@ -1,0 +1,4 @@
+interface:
+  display_name: "CorgiSpec Update"
+  short_description: "Reconcile an existing Corgi planning package safely"
+  default_prompt: "Use $corgispec-update to reconcile this change planning package without touching implementation files."

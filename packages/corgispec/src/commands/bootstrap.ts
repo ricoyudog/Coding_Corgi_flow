@@ -8,7 +8,6 @@ import type { SchemaType } from "../lib/config.js";
 import type { BootstrapMode } from "../lib/install-assets.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const VALID_SCHEMAS = ["github-tracked", "gitlab-tracked"] as const;
 const VALID_MODES = ["auto", "fresh", "update", "legacy", "verify"] as const;
 const VALID_PLATFORMS = ["claude", "opencode", "codex"] as const;
 const VALID_SCOPES = ["global", "local", "both"] as const;
@@ -31,7 +30,7 @@ export function createBootstrapCommand(): Command {
   cmd
     .description("Bootstrap Corgi assets and user-level skills into a project")
     .option("--target <path>", "Target project directory", ".")
-    .option("--schema <schema>", "Schema to use (github-tracked or gitlab-tracked)")
+    .option("--schema <schema>", "OpenSpec schema to use (built-in or custom)")
     .option("--mode <mode>", "Bootstrap mode (auto, fresh, update, legacy, verify)", "auto")
     .option("--platform <platforms>", "Comma-separated platforms to install for (claude, opencode, codex)")
     .option("--scope <scope>", "Install scope (global, local, both)")
@@ -113,12 +112,12 @@ function validateSchema(schema: string | undefined): ValidationResult<SchemaType
     return { ok: true, value: undefined };
   }
 
-  if ((VALID_SCHEMAS as readonly string[]).includes(schema)) {
-    return { ok: true, value: schema as SchemaType };
+  if (/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(schema)) {
+    return { ok: true, value: schema };
   }
 
   console.log(
-    `Invalid schema '${schema}'. Supported: ${VALID_SCHEMAS.join(", ")}`
+    `Invalid schema '${schema}'. Use a kebab-case OpenSpec schema name.`
   );
   return { ok: false };
 }

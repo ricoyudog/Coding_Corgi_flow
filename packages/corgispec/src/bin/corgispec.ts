@@ -14,6 +14,8 @@ import { createProposeCommand } from "../commands/propose.js";
 import { createApplyCommand } from "../commands/apply.js";
 import { createReviewCommand } from "../commands/review.js";
 import { createArchiveCommand } from "../commands/archive.js";
+import { createReadyCommand } from "../commands/ready.js";
+import { createUpdateCommand } from "../commands/update.js";
 import { createInitCommand } from "../commands/init.js";
 import { createDoctorCommand } from "../commands/doctor.js";
 import { createHookSessionStartCommand } from "../commands/hooks/session-start.js";
@@ -64,6 +66,8 @@ program.addCommand(createProposeCommand());
 program.addCommand(createApplyCommand());
 program.addCommand(createReviewCommand());
 program.addCommand(createArchiveCommand());
+program.addCommand(createUpdateCommand());
+program.addCommand(createReadyCommand());
 
 // Hook subcommands (corgispec hook <name>)
 program.addCommand(createHookCommand());

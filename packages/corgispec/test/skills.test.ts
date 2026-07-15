@@ -153,6 +153,19 @@ describe("validateSkill", () => {
     const issues = validateSkill(skills[0]!, allSkills);
     expect(issues).toContain("Dependency 'nonexistent-dep' not found");
   });
+
+  it("reports malformed legacy dependency metadata without crashing", () => {
+    createValidSkill(TEST_DIR, "legacy-skill", {
+      depends_on: undefined,
+      dependencies: { molecules: ["other-skill"] },
+    });
+    const skills = discoverSkills(TEST_DIR);
+    const allSkills = new Map(skills.map((s) => [s.slug, s.meta.tier] as [string, string]));
+
+    expect(() => validateSkill(skills[0]!, allSkills)).not.toThrow();
+    const issues = validateSkill(skills[0]!, allSkills);
+    expect(issues.some((issue) => issue.startsWith("Schema:"))).toBe(true);
+  });
 });
 
 describe("validateAllSkills", () => {

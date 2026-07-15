@@ -1,0 +1,24 @@
+{
+  "slug": "corgispec-update",
+  "tier": "molecule",
+  "version": "1.0.0",
+  "description": "Reconcile approved existing planning artifacts and finish with strict readiness checks",
+  "depends_on": [
+    "corgispec-ready"
+  ],
+  "platform": "universal",
+  "tags": [
+    "lifecycle",
+    "planning",
+    "update",
+    "reconciliation"
+  ],
+  "installation": {
+    "targets": [
+      "opencode",
+      "claude",
+      "codex"
+    ],
+    "base_path": "molecules/corgispec-update"
+  }
+}

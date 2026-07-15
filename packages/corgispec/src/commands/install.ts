@@ -33,7 +33,8 @@ export function getBundledSkillsDir(): string {
 export function installSkillsTo(
   sourceDir: string,
   targetDir: string,
-  dryRun: boolean
+  dryRun: boolean,
+  options: { quiet?: boolean } = {},
 ): string[] {
   const installed: string[] = [];
   const tierDirs = ["atoms", "molecules", "compounds"];
@@ -45,14 +46,18 @@ export function installSkillsTo(
   function installEntry(src: string, name: string): void {
     const dest = resolve(targetDir, name);
     if (dryRun) {
-      console.log(`  DRY-RUN: ${src} → ${dest}`);
+      if (!options.quiet) {
+        console.log(`  DRY-RUN: ${src} → ${dest}`);
+      }
     } else {
       mkdirSync(targetDir, { recursive: true });
       if (existsSync(dest)) {
         rmSync(dest, { recursive: true });
       }
       cpSync(src, dest, { recursive: true });
-      console.log(`  Installed: ${name} → ${dest}`);
+      if (!options.quiet) {
+        console.log(`  Installed: ${name} → ${dest}`);
+      }
     }
     installed.push(name);
   }

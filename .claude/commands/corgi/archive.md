@@ -1,26 +1,12 @@
 ---
 name: "Corgi: Archive"
-description: Archive a completed change, close tracking issues, and sync delta specs
+description: Validate and archive a CorgiSpec change using its authoritative store paths
 category: Workflow
-tags: [workflow, archive, experimental]
+tags: [workflow, archive]
 ---
 
-Archive a completed change, close tracking issues, and sync delta specs.
-
-**Input**: Optionally specify a change name after `/corgi:archive`.
-
-**Steps**
-
-1. **Determine platform**
-
-   Read `openspec/config.yaml` and check the `schema` field.
-
-2. **Dispatch to platform skill**
-
-   - If `schema: gitlab-tracked` → Follow the instructions in the **corgispec-archive-change** skill
-   - If `schema: github-tracked` → Follow the instructions in the **corgispec-gh-archive** skill
-   - Otherwise → Tell the user: "Unsupported schema '<value>'. Supported: gitlab-tracked, github-tracked." and stop.
-
-3. **Pass through all input**
-
-   Forward the user's input (change name, etc.) to the selected skill as-is.
+1. Resolve the change and isolated worktree, then run `corgispec status "<change>" --json`.
+2. Require `changeRoot`, `artifactPaths`, `contextFiles`, `taskArtifactId`, `trackingProvider`, and `trackingProviderSource`. If absent, stop and request a CLI upgrade.
+3. Route only by normalized `trackingProvider`: `github` → **corgispec-gh-archive**; `gitlab` or `none` → **corgispec-archive-change**.
+4. Pass all input and CLI context through unchanged. Never route by `schemaName` or construct a planning/archive path.
+5. Verify CLI blockers, actual archived root, tracker closeout, knowledge extraction, and worktree cleanup before reporting completion.

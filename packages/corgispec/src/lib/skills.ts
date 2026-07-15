@@ -158,6 +158,16 @@ export function validateSkill(
   schemasDir?: string
 ): string[] {
   const issues: string[] = [];
+  // Discovery deliberately retains malformed metadata so validation can report
+  // every problem. Never trust collection fields until the schema has passed:
+  // older Corgi releases used an object-shaped `dependencies` field and a
+  // validator must diagnose that input instead of crashing on `.length` or
+  // iteration.
+  const dependencies = Array.isArray(skill.meta.depends_on)
+    ? skill.meta.depends_on.filter((dependency): dependency is string =>
+        typeof dependency === "string"
+      )
+    : [];
 
   // 1. SKILL.md exists
   if (!skill.hasSkillMd) {
@@ -190,12 +200,12 @@ export function validateSkill(
   }
 
   // 4. Tier constraints
-  if (skill.meta.tier === "atom" && skill.meta.depends_on.length > 0) {
+  if (skill.meta.tier === "atom" && dependencies.length > 0) {
     issues.push("Atom skills must not have dependencies");
   }
 
   // 5. Dependencies exist
-  for (const dep of skill.meta.depends_on) {
+  for (const dep of dependencies) {
     if (!allSkills.has(dep)) {
       issues.push(`Dependency '${dep}' not found`);
     }
@@ -203,7 +213,7 @@ export function validateSkill(
 
   // 6. Tier hierarchy: molecules only depend on atoms, compounds on molecules/atoms
   if (skill.meta.tier === "molecule") {
-    for (const dep of skill.meta.depends_on) {
+    for (const dep of dependencies) {
       const depTier = allSkills.get(dep);
       if (depTier && depTier !== "atom") {
         issues.push(

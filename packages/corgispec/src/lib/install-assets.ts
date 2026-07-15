@@ -43,7 +43,9 @@ export interface InstallManifestFile {
 
 export interface InstallManifest {
   version: number;
+  sourceRepo?: string;
   schema?: SchemaType;
+  isolation?: IsolationConfig;
   installedAt?: string;
   updatedAt?: string;
   managedFiles?: Array<string | InstallManifestFile>;

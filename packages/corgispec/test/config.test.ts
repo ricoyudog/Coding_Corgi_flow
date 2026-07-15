@@ -2,7 +2,14 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { loadConfig, loadConfigFromDir, findConfigPath, ConfigError } from "../src/lib/config.js";
+import {
+  loadConfig,
+  loadConfigFromDir,
+  findConfigPath,
+  ConfigError,
+  resolveTaskArtifactId,
+  resolveTrackingProvider,
+} from "../src/lib/config.js";
 
 const TEST_DIR = resolve(tmpdir(), "corgispec-config-test-" + Date.now());
 
@@ -117,12 +124,54 @@ rules:
     expect(() => loadConfig(configPath)).toThrow("Missing required field: 'schema'");
   });
 
-  it("throws on unsupported schema value", () => {
+  it("accepts arbitrary OpenSpec schema names", () => {
     const configPath = resolve(TEST_DIR, "openspec/config.yaml");
-    writeFileSync(configPath, "schema: unknown-schema\n");
+    writeFileSync(configPath, "schema: product-release-v2\n");
+
+    expect(loadConfig(configPath).schema).toBe("product-release-v2");
+  });
+
+  it("loads explicit Corgi tracking and task artifact configuration", () => {
+    const configPath = resolve(TEST_DIR, "openspec/config.yaml");
+    writeFileSync(
+      configPath,
+      `schema: custom-flow
+corgi:
+  tracking:
+    provider: none
+  taskArtifactId: delivery-checklist
+`
+    );
+
+    const config = loadConfig(configPath);
+    expect(config.corgi).toEqual({
+      tracking: { provider: "none" },
+      taskArtifactId: "delivery-checklist",
+    });
+    expect(resolveTrackingProvider(config)).toEqual({ provider: "none", source: "explicit" });
+    expect(resolveTaskArtifactId(config, ["tasks", "delivery-checklist"])).toBe(
+      "delivery-checklist"
+    );
+  });
+
+  it.each([
+    ["corgi: true", "Field 'corgi' must be a mapping"],
+    ["corgi:\n  tracking: github", "Field 'corgi.tracking' must be a mapping"],
+    [
+      "corgi:\n  tracking: {}",
+      "Field 'corgi.tracking.provider' is required when tracking is specified",
+    ],
+    [
+      "corgi:\n  tracking:\n    provider: jira",
+      "Invalid corgi.tracking.provider 'jira'",
+    ],
+    ["corgi:\n  taskArtifactId: '  '", "Field 'corgi.taskArtifactId' must be a non-empty string"],
+  ])("rejects invalid Corgi configuration: %s", (body, message) => {
+    const configPath = resolve(TEST_DIR, "openspec/config.yaml");
+    writeFileSync(configPath, `schema: custom-flow\n${body}\n`);
 
     expect(() => loadConfig(configPath)).toThrow(ConfigError);
-    expect(() => loadConfig(configPath)).toThrow("Unsupported schema 'unknown-schema'");
+    expect(() => loadConfig(configPath)).toThrow(message);
   });
 
   it("throws on invalid isolation mode", () => {
@@ -147,6 +196,31 @@ rules:
 
     expect(() => loadConfig(configPath)).toThrow(ConfigError);
     expect(() => loadConfig(configPath)).toThrow("'rules.proposal' must be an array");
+  });
+});
+
+describe("legacy config resolution", () => {
+  it.each([
+    ["github-tracked", "github"],
+    ["gitlab-tracked", "gitlab"],
+  ] as const)("infers %s tracking without coupling all schemas", (schema, provider) => {
+    expect(resolveTrackingProvider({ schema })).toEqual({
+      provider,
+      source: "legacy-schema",
+    });
+  });
+
+  it("defaults custom schemas to no tracker", () => {
+    expect(resolveTrackingProvider({ schema: "custom-flow" })).toEqual({
+      provider: "none",
+      source: "default",
+    });
+  });
+
+  it("only defaults taskArtifactId when the schema exposes tasks", () => {
+    const config = { schema: "custom-flow" };
+    expect(resolveTaskArtifactId(config, ["proposal", "tasks"])).toBe("tasks");
+    expect(resolveTaskArtifactId(config, ["proposal", "work-items"])).toBeNull();
   });
 });
 

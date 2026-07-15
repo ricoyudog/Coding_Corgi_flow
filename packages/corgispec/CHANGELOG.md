@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-rc.1] - 2026-07-15
+
+### Breaking
+
+- CorgiSpec now requires **Node.js >=20.19.0** and an independently installed **OpenSpec CLI >=1.6.0 <2.0.0**. OpenSpec 1.3–1.5 are no longer supported.
+- OpenSpec 1.6 JSON responses are now the source of truth for change roots, artifact DAGs, glob expansion, status, and instructions. Integrations that relied on Corgi guessing `tasks.md`, `specs/`, or `openspec/changes/<name>` must consume the returned `changeRoot` and `artifactPaths` instead.
+
+### Added
+
+- `corgispec update <change> [--store <id>] --json` and the `/corgi:update` skill expose a planning-only reconciliation contract. The CLI itself is read-only; the skill shows and confirms each artifact-scoped diff before editing.
+- `corgispec ready <change> [--strict] [--store <id>] --json` and the `/corgi:ready` skill provide a deterministic planning-integrity gate covering OpenSpec strict validation, artifact completeness, task structure, placeholders, open questions, and capability/spec parity.
+- Custom OpenSpec schemas are first-class. `corgi.tracking.provider` selects `github`, `gitlab`, or `none`, while `corgi.taskArtifactId` identifies the single artifact containing executable Task Groups.
+- OpenSpec Stores are supported through authoritative paths returned by OpenSpec and the `--store <id>` selector.
+- Planning revisions and canonical path checks protect lifecycle operations from stale artifacts, symlink escapes, and writes outside the resolved change root.
+
+### Changed
+
+- Legacy `github-tracked` and `gitlab-tracked` schemas still infer their matching tracker, but `corgispec doctor` now recommends writing the explicit `corgi.tracking.provider` setting.
+- Lifecycle JSON preserves compatibility fields while exposing `planningComplete`, `implementationComplete`, `changeRoot`, and `artifactPaths`. The legacy `isComplete` field means both planning and implementation are complete.
+- `doctor` and bootstrap now probe the real OpenSpec runtime and schema contract before managed writes instead of reporting a fixed prerequisite pass.
+- Clean-checkout tests rebuild bundled assets first. The release check now includes build, typecheck, coverage thresholds, and an installable npm tarball smoke test.
+
+### Migration
+
+- Upgrade Node and OpenSpec before installing this RC, add an explicit `corgi` block to `openspec/config.yaml`, then run `corgispec doctor` and `corgispec ready <change> --strict` for each active change. See the repository README and `INSTALL.md` for examples.
+
 ## [2.4.3] - 2026-06-16
 
 ### Changed

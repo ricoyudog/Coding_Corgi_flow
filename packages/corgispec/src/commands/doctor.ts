@@ -1,12 +1,28 @@
 import { Command } from "commander";
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-import { existsSync, accessSync, constants, readdirSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { findConfigPath, loadConfig } from "../lib/config.js";
-import { detectPlatforms } from "../lib/platform.js";
+import { resolve, relative } from "node:path";
+import {
+  existsSync,
+  accessSync,
+  constants,
+  readdirSync,
+  readFileSync,
+  lstatSync,
+} from "node:fs";
+import { createHash } from "node:crypto";
+import {
+  findConfigPath,
+  loadConfig,
+  loadConfigFromDir,
+  resolveTrackingProvider,
+} from "../lib/config.js";
+import { detectPlatforms, type PlatformInfo } from "../lib/platform.js";
 import { detectHookConfig } from "../lib/hooks.js";
-import yaml from "js-yaml";
+import { discoverSkills, validateSkill, type DiscoveredSkill } from "../lib/skills.js";
+import { getBundledSkillsDir } from "./install.js";
+import {
+  inspectOpenSpecRuntime,
+  NodeCommandRunner,
+} from "../lib/openspec-runtime.js";
 
 interface CheckResult {
   name: string;
@@ -24,27 +40,30 @@ export function createDoctorCommand(): Command {
     )
     .option("--path <dir>", "Working directory", ".")
     .option("--json", "Output as JSON")
-    .action((opts) => {
+    .action(async (opts) => {
       const cwd = resolve(opts.path);
       const results: CheckResult[] = [];
 
       // 1. Node version check
       results.push(checkNodeVersion());
 
-      // 2. Skill directory checks
+      // 2. OpenSpec CLI contract check
+      results.push(await checkOpenSpecRuntime(cwd));
+
+      // 3. Skill directory checks
       results.push(...checkSkillDirs());
 
-      // 3. Config validation
+      // 4. Config validation
       results.push(checkConfig(cwd));
 
-      // 4. Platform detection
+      // 5. Platform detection
       results.push(...checkPlatforms());
 
-      // 5. Hook configuration
+      // 6. Hook configuration
       results.push(checkHooks(cwd));
 
-      // 6. Schema validation
-      results.push(checkSchemas(cwd));
+      // 7. Active schema validation through OpenSpec itself
+      results.push(await checkSchema(cwd));
 
       // Output
       if (opts.json) {
@@ -65,9 +84,9 @@ export function createDoctorCommand(): Command {
 
 function checkNodeVersion(): CheckResult {
   const version = process.versions.node;
-  const major = parseInt(version.split(".")[0]!, 10);
+  const [major = 0, minor = 0] = version.split(".").map((part) => Number.parseInt(part, 10));
 
-  if (major >= 18) {
+  if (major > 20 || (major === 20 && minor >= 19)) {
     return {
       name: "Node.js",
       passed: true,
@@ -78,52 +97,154 @@ function checkNodeVersion(): CheckResult {
   return {
     name: "Node.js",
     passed: false,
-    message: `v${version} (requires >= 18)`,
-    suggestion: "Upgrade Node.js to version 18 or later.",
+    message: `v${version} (requires >= 20.19.0)`,
+    suggestion: "Upgrade Node.js to version 20.19.0 or later.",
   };
 }
 
+async function checkOpenSpecRuntime(cwd: string): Promise<CheckResult> {
+  try {
+    const runtime = await inspectOpenSpecRuntime({
+      cwd,
+      executable: process.env["CORGISPEC_OPENSPEC_BIN"] || "openspec",
+    });
+    return {
+      name: "OpenSpec CLI",
+      passed: true,
+      message: `${runtime.version.raw} (native planning contract)`,
+    };
+  } catch (error) {
+    return {
+      name: "OpenSpec CLI",
+      passed: false,
+      message: error instanceof Error ? error.message : String(error),
+      suggestion: "Install @fission-ai/openspec >=1.6.0 <2.0.0 and ensure `openspec` is on PATH.",
+    };
+  }
+}
+
 function checkSkillDirs(): CheckResult[] {
-  const results: CheckResult[] = [];
-  const home = homedir();
+  const detected = detectPlatforms().filter((platform) => platform.detected);
+  if (detected.length === 0) {
+    return [{
+      name: "AI Skills",
+      passed: true,
+      message: "not checked (no AI platform detected)",
+    }];
+  }
 
-  const dirs = [
-    { name: "~/.claude/skills/", path: resolve(home, ".claude/skills") },
-    {
-      name: "~/.config/opencode/skill/",
-      path: resolve(home, ".config/opencode/skill"),
-    },
-  ];
+  let bundled: DiscoveredSkill[];
+  try {
+    bundled = discoverSkills(getBundledSkillsDir());
+  } catch (error) {
+    return [{
+      name: "AI Skills",
+      passed: false,
+      message: error instanceof Error ? error.message : String(error),
+      suggestion: "Reinstall corgispec from a package with verified assets.",
+    }];
+  }
 
-  for (const dir of dirs) {
-    if (!existsSync(dir.path)) {
-      results.push({
-        name: dir.name,
-        passed: false,
-        message: "not found",
-        suggestion: `Run \`corgispec install\` to create.`,
-      });
-    } else {
-      // Check writable
-      try {
-        accessSync(dir.path, constants.W_OK);
-        results.push({
-          name: dir.name,
-          passed: true,
-          message: "exists and writable",
-        });
-      } catch {
-        results.push({
-          name: dir.name,
-          passed: false,
-          message: "exists but not writable",
-          suggestion: `Check permissions on ${dir.path}`,
-        });
-      }
+  return detected.map((platform) => checkSkillInstallation(platform, bundled));
+}
+
+function checkSkillInstallation(
+  platform: PlatformInfo,
+  bundled: DiscoveredSkill[],
+): CheckResult {
+  const name = `${platform.platform} skills`;
+  if (!existsSync(platform.skillDir)) {
+    return {
+      name,
+      passed: false,
+      message: `${platform.skillDir} not found`,
+      suggestion: `Run \`corgispec install --platform ${platform.platform}\`.`,
+    };
+  }
+
+  try {
+    accessSync(platform.skillDir, constants.W_OK);
+  } catch {
+    return {
+      name,
+      passed: false,
+      message: `${platform.skillDir} is not writable`,
+      suggestion: `Check permissions on ${platform.skillDir}.`,
+    };
+  }
+
+  const expected = bundled.filter((skill) =>
+    Array.isArray(skill.meta.installation?.targets) &&
+    skill.meta.installation.targets.includes(platform.platform)
+  );
+  const installed = discoverSkills(platform.skillDir);
+  const installedBySlug = new Map(installed.map((skill) => [skill.slug, skill]));
+  const tiers = new Map(installed.map((skill) => [skill.slug, skill.meta.tier]));
+  const problems: string[] = [];
+
+  for (const skill of expected) {
+    const actual = installedBySlug.get(skill.slug);
+    if (!actual) {
+      problems.push(`missing ${skill.slug}`);
+      continue;
+    }
+    const validationIssues = validateSkill(actual, tiers);
+    if (validationIssues.length > 0) {
+      problems.push(`${skill.slug} metadata/content invalid`);
+      continue;
+    }
+    if (!directoriesMatch(skill.dir, actual.dir)) {
+      problems.push(`${skill.slug} differs from bundled checksum`);
     }
   }
 
-  return results;
+  if (problems.length > 0) {
+    return {
+      name,
+      passed: false,
+      message: `${problems.slice(0, 3).join("; ")}${problems.length > 3 ? `; +${problems.length - 3} more` : ""}`,
+      suggestion: `Run \`corgispec install --platform ${platform.platform}\` to repair the managed skills.`,
+    };
+  }
+
+  return {
+    name,
+    passed: true,
+    message: `${expected.length} managed skills verified at ${platform.skillDir}`,
+  };
+}
+
+function directoriesMatch(expectedDir: string, actualDir: string): boolean {
+  try {
+    const expected = hashDirectory(expectedDir);
+    const actual = hashDirectory(actualDir);
+    if (expected.size !== actual.size) return false;
+    for (const [path, hash] of expected) {
+      if (actual.get(path) !== hash) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function hashDirectory(root: string): Map<string, string> {
+  const hashes = new Map<string, string>();
+  const visit = (directory: string): void => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const absolute = resolve(directory, entry.name);
+      if (entry.isDirectory()) {
+        visit(absolute);
+      } else if (entry.isFile() && !lstatSync(absolute).isSymbolicLink()) {
+        const path = relative(root, absolute).split("\\").join("/");
+        hashes.set(path, createHash("sha256").update(readFileSync(absolute)).digest("hex"));
+      } else {
+        throw new Error(`Unsupported skill entry: ${absolute}`);
+      }
+    }
+  };
+  visit(root);
+  return hashes;
 }
 
 function checkConfig(cwd: string): CheckResult {
@@ -139,10 +260,19 @@ function checkConfig(cwd: string): CheckResult {
 
   try {
     const config = loadConfig(configPath);
+    const tracking = resolveTrackingProvider(config);
     return {
       name: "Config",
       passed: true,
-      message: `valid (schema: ${config.schema})`,
+      message: `valid (schema: ${config.schema}, tracking: ${tracking.provider}${
+        tracking.source === "legacy-schema" ? ", inferred from legacy schema" : ""
+      })`,
+      ...(tracking.source === "legacy-schema"
+        ? {
+            suggestion:
+              "Add `corgi.tracking.provider` explicitly; schema no longer selects the issue tracker.",
+          }
+        : {}),
     };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -180,100 +310,62 @@ function checkPlatforms(): CheckResult[] {
   return results;
 }
 
-function checkSchemas(cwd: string): CheckResult {
-  // Check project schemas first, then bundled schemas
-  const __dirname = dirname(fileURLToPath(import.meta.url));
-  const schemaDirs = [
-    resolve(cwd, "openspec/schemas"),
-    resolve(__dirname, "../assets/schemas"),
-    resolve(__dirname, "../../assets/schemas"),
-  ];
-
-  let schemasDir: string | null = null;
-  for (const dir of schemaDirs) {
-    if (existsSync(dir)) {
-      schemasDir = dir;
-      break;
-    }
-  }
-
-  if (!schemasDir) {
+async function checkSchema(cwd: string): Promise<CheckResult> {
+  let schema: string;
+  try {
+    schema = loadConfigFromDir(cwd).schema;
+  } catch {
     return {
-      name: "Schemas",
-      passed: true, // Not a hard failure if no schemas available
-      message: "no schemas directory found",
+      name: "Schema",
+      passed: true,
+      message: "not checked (no valid project config)",
     };
   }
 
   try {
-    const entries = readdirSync(schemasDir, { withFileTypes: true });
-    const schemaDirNames = entries
-      .filter((e) => e.isDirectory())
-      .map((e) => e.name);
-
-    let validCount = 0;
-    const errors: string[] = [];
-
-    for (const name of schemaDirNames) {
-      const schemaFile = resolve(schemasDir, name, "schema.yaml");
-      if (!existsSync(schemaFile)) {
-        errors.push(`${name}/schema.yaml missing`);
-        continue;
-      }
-
-      try {
-        const content = readFileSync(schemaFile, "utf-8");
-        const parsed = yaml.load(content) as Record<string, unknown> | null;
-
-        // Validate required schema structure
-        if (!parsed || typeof parsed !== "object") {
-          errors.push(`${name}/schema.yaml is not a valid YAML document`);
-          continue;
-        }
-
-        if (!parsed.name || typeof parsed.name !== "string") {
-          errors.push(`${name}/schema.yaml missing required 'name' field`);
-          continue;
-        }
-
-        if (parsed.version == null || typeof parsed.version !== "number") {
-          errors.push(`${name}/schema.yaml missing required 'version' field (must be a number)`);
-          continue;
-        }
-
-        if (!parsed.artifacts || !Array.isArray(parsed.artifacts)) {
-          errors.push(`${name}/schema.yaml missing required 'artifacts' array`);
-          continue;
-        }
-
-        validCount++;
-      } catch (parseErr: unknown) {
-        const msg = parseErr instanceof Error ? parseErr.message : String(parseErr);
-        errors.push(`${name}/schema.yaml is not valid YAML: ${msg}`);
-      }
+    const runner = new NodeCommandRunner();
+    const result = await runner.run({
+      command: process.env["CORGISPEC_OPENSPEC_BIN"] || "openspec",
+      args: ["schema", "validate", schema, "--json"],
+      cwd,
+      timeoutMs: 15_000,
+      env: { OPENSPEC_TELEMETRY: "0" },
+    });
+    let parsed: { valid?: unknown; issues?: unknown } | null = null;
+    try {
+      parsed = JSON.parse(result.stdout) as { valid?: unknown; issues?: unknown };
+    } catch {
+      // A non-JSON upstream response is a contract failure even when exit 0.
     }
-
-    if (errors.length > 0) {
-      return {
-        name: "Schemas",
-        passed: false,
-        message: errors.join("; "),
-        suggestion: "Reinstall or repair schema files.",
-      };
+    if (
+      !result.timedOut &&
+      result.exitCode === 0 &&
+      parsed !== null &&
+      parsed.valid === true
+    ) {
+      return { name: "Schema", passed: true, message: `${schema} valid (OpenSpec)` };
     }
-
+    const issues = Array.isArray(parsed?.issues)
+      ? parsed.issues
+          .map((issue) =>
+            typeof issue === "object" && issue !== null && "message" in issue
+              ? String((issue as { message: unknown }).message)
+              : String(issue),
+          )
+          .join("; ")
+      : result.stderr.trim() || "OpenSpec schema validation returned an invalid response";
     return {
-      name: "Schemas",
-      passed: true,
-      message: `${validCount} schema(s) valid`,
-    };
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return {
-      name: "Schemas",
+      name: "Schema",
       passed: false,
-      message: msg,
-      suggestion: "Check schema directory permissions.",
+      message: issues,
+      suggestion: `Run \`openspec schema validate ${schema}\` and repair the active schema.`,
+    };
+  } catch (error) {
+    return {
+      name: "Schema",
+      passed: false,
+      message: error instanceof Error ? error.message : String(error),
+      suggestion: "Check the OpenSpec executable and schema permissions.",
     };
   }
 }

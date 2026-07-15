@@ -18,7 +18,15 @@
  *   openspec/schemas/            → assets/schemas/ (workflow schemas for init/doctor)
  */
 
-import { cpSync, mkdirSync, rmSync, existsSync, readdirSync, readFileSync } from "node:fs";
+import {
+  cpSync,
+  mkdirSync,
+  rmSync,
+  existsSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
@@ -188,7 +196,47 @@ if (existsSync(workflowSchemasSource)) {
   errors.push(`Workflow schemas source not found at ${workflowSchemasSource}`);
 }
 
-// --- 6. Content verification (checksum comparison) ---
+// --- 6. Deterministic asset manifest (verified again from the packed package) ---
+const manifestPath = resolve(assetsDir, "asset-manifest.json");
+
+function collectAssetHashes(directory, prefix = "") {
+  const hashes = {};
+  const entries = readdirSync(directory, { withFileTypes: true }).sort((left, right) =>
+    left.name.localeCompare(right.name)
+  );
+
+  for (const entry of entries) {
+    const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
+    const absolutePath = resolve(directory, entry.name);
+
+    if (entry.isDirectory()) {
+      Object.assign(hashes, collectAssetHashes(absolutePath, relativePath));
+    } else if (entry.isFile() && relativePath !== "asset-manifest.json") {
+      hashes[relativePath] = createHash("sha256")
+        .update(readFileSync(absolutePath))
+        .digest("hex");
+    }
+  }
+
+  return hashes;
+}
+
+const assetHashes = collectAssetHashes(assetsDir);
+writeFileSync(
+  manifestPath,
+  `${JSON.stringify(
+    {
+      schemaVersion: 1,
+      algorithm: "sha256",
+      files: assetHashes,
+    },
+    null,
+    2
+  )}\n`
+);
+console.log(`✓ Wrote asset manifest for ${Object.keys(assetHashes).length} file(s)`);
+
+// --- 7. Content verification (checksum comparison) ---
 console.log("\nVerifying bundled content...");
 let verifyCount = 0;
 let verifyErrors = 0;

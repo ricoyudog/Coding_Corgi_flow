@@ -36,11 +36,11 @@ These steps are fully automated. No human gate is required. All detection is bes
 
 ## 2. Spec Coverage Verification Procedure
 
-### Locating the Spec
+### Locating normative planning evidence
 
-1. Read the change's spec from `openspec/changes/<name>/specs/<capability>/spec.md`
-2. If multiple capability specs exist, read ALL of them
-3. If no specs exist at all: report "No spec found for this group", mark ℹ️, skip the rest of this section
+1. Read requirement-bearing files only from `status.contextFiles` and concrete `status.artifactPaths`.
+2. Read every applicable requirement-bearing artifact returned by the CLI, including multi-file artifacts.
+3. If none exists: report "No normative planning requirements returned for this group", mark ℹ️, and skip the rest of this section.
 
 ### Requirement-by-Requirement Analysis
 

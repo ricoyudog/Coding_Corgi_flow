@@ -1,0 +1,54 @@
+{
+  "changeName": "add-auth",
+  "schemaName": "custom-delivery",
+  "planningHome": {
+    "kind": "repo",
+    "root": "${PLANNING_ROOT}",
+    "changesDir": "${CHANGES_DIR}",
+    "defaultSchema": "spec-driven"
+  },
+  "changeRoot": "${CHANGE_ROOT}",
+  "artifactPaths": {
+    "proposal": {
+      "outputPath": "proposal.md",
+      "resolvedOutputPath": "${CHANGE_ROOT}/proposal.md",
+      "existingOutputPaths": ["${CHANGE_ROOT}/proposal.md"]
+    },
+    "specs": {
+      "outputPath": "specs/**/*.md",
+      "resolvedOutputPath": "${CHANGE_ROOT}/specs/**/*.md",
+      "existingOutputPaths": [
+        "${CHANGE_ROOT}/specs/auth/spec.md",
+        "${CHANGE_ROOT}/specs/session/nested/spec.md"
+      ]
+    },
+    "delivery": {
+      "outputPath": "delivery.md",
+      "resolvedOutputPath": "${CHANGE_ROOT}/delivery.md",
+      "existingOutputPaths": ["${CHANGE_ROOT}/delivery.md"]
+    }
+  },
+  "nextSteps": ["All artifacts complete."],
+  "actionContext": {
+    "mode": "repo-local",
+    "sourceOfTruth": "repo",
+    "planningArtifacts": ["proposal", "specs", "delivery"],
+    "linkedContext": [],
+    "allowedEditRoots": ["${PLANNING_ROOT}"],
+    "requiresAffectedAreaSelection": false,
+    "constraints": ["Edit planning artifacts only"]
+  },
+  "isComplete": true,
+  "applyRequires": ["delivery"],
+  "artifacts": [
+    { "id": "proposal", "outputPath": "proposal.md", "status": "done" },
+    { "id": "specs", "outputPath": "specs/**/*.md", "status": "done" },
+    { "id": "delivery", "outputPath": "delivery.md", "status": "done" }
+  ],
+  "root": {
+    "path": "${PLANNING_ROOT}",
+    "source": "store",
+    "store_id": "shared-product"
+  },
+  "futureField": { "accepted": true }
+}

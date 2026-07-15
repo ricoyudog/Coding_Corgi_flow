@@ -1,113 +1,43 @@
 ---
 name: corgispec-review
-description: Review a completed Task Group via GitLab issue feedback.
-license: MIT
-compatibility: Requires corgispec CLI.
-metadata:
-  author: corgispec
-  version: "2.0"
-  generatedBy: "1.3.0"
+description: Review one completed CorgiSpec Task Group, gather quality evidence, and optionally synchronize a GitLab approval decision. Use when reviewing a change whose normalized tracking provider is GitLab or none.
 ---
 
-Review a completed Task Group with quality checks and interactive approval.
+# Review one Task Group
 
-## Preconditions (VERIFY BEFORE STARTING)
+**Context Gate**: If session context already contains ALL of: `isolation.mode`, active changes with worktree paths, current branch, reuse it; otherwise read configuration and discover worktrees.
 
-- [ ] Change exists in `openspec/changes/<name>/`
-- [ ] `.gitlab.yaml` exists with parent and group issue IIDs
-- [ ] If `isolation.mode` is `worktree`: worktree exists for this change (error if not)
+Gather evidence first, then ask the human to approve or reject. Do not infer any planning path.
 
-## Forbidden Actions
+## Resolve context
 
-- NEVER auto-approve or auto-reject, ONLY the user decides
-- NEVER change issue labels without explicit user choice
-- NEVER close issues — closing removes them from board label columns; label changes are sufficient
-- NEVER skip the user decision prompt in Step 5
-- NEVER fabricate test results or screenshots
-- NEVER implement fixes during review
+1. Resolve the change and isolated worktree with [references/worktree-discovery.md](references/worktree-discovery.md) when required.
+2. Run `corgispec status "<change>" --json` and `corgispec apply "<change>" --json` from the selected worktree.
+3. Require matching `changeRoot` plus `artifactPaths`, `contextFiles`, `taskArtifactId`, `trackingProvider`, and `trackingProviderSource`. Stop and request a CLI upgrade when absent.
+4. Accept `trackingProvider: "gitlab"` or `"none"`. Route `"github"` to `corgispec-gh-review`; never infer provider from `schemaName`.
+5. Treat returned paths as authoritative even outside the current working directory.
 
----
+## Select and inspect
 
-## Steps
+1. When tracked, read `<changeRoot>/.gitlab.yaml`, query live child labels, and select the requested group or first group in review state. When untracked, select a completed group from status or ask when ambiguous.
+2. Use `taskArtifactId` and its concrete `artifactPaths` to verify every selected-group task is complete. Do not parse a guessed file.
+3. Read implementation files from the apply checkpoint/tracker summary or actual diff. Read planning evidence only from `contextFiles` and concrete `artifactPaths`.
+4. Read and execute [references/quality-checks.md](references/quality-checks.md), plus the security and performance checklists when applicable.
+5. Post the evidence report to the child issue when tracked; otherwise present it locally.
 
-### 1. Discover: select change and resolve worktree
+## Human decision
 
-**Context Gate**: If session context already contains ALL of: `isolation.mode`, active changes with worktree paths, current branch
-→ Gate passed — SKIP config reading below and proceed to the next step.
-Otherwise: read `openspec/config.yaml` and proceed with discovery.
+Read [references/review-decisions.md](references/review-decisions.md).
 
-**If `isolation.mode: worktree`**: Changes live inside worktrees, not the main checkout. Read `references/worktree-discovery.md` for the full discovery procedure. Quick summary:
-1. `corgispec list --json`, if it returns changes, use them
-2. If empty (new session from main checkout): scan `<isolation.root>/` directories, verify each with `git worktree list` and check `openspec/changes/<name>/` exists inside
-3. Auto-select if one found, prompt if multiple
-4. ALL subsequent work uses the worktree as workdir
+- On approval, verify the current child state, move it to done, update parent progress, and report remaining groups. For untracked changes, record no remote state.
+- On rejection, read [references/repair-flow.md](references/repair-flow.md). Append confirmed fix tasks only to the concrete task-artifact path returned by the CLI, then reset the tracked child to in-progress when configured.
+- Never implement fixes during review.
 
-**If no isolation**: `corgispec list --json` directly. Auto-select if one, prompt if multiple.
+## Guardrails
 
-If name provided by user, use it directly.
+- Keep deterministic CLI fields separate from reviewer judgment.
+- Never hardcode artifact roles, planning locations, or task filenames.
+- Never edit planning content except confirmed repair tasks in the authorized task artifact.
+- Never commit, push, archive, or publish.
 
-### 2. Discover: select Task Group and verify completion
-
-Read `.gitlab.yaml` for the group list. Check each group's labels via GitLab. Default to the first group in `workflow::review` state.
-
-Read `tasks.md`. If the selected group's tasks are not all `[x]`, stop.
-
-### 3. Review: inspect existing GitLab feedback
-
-Read child issue notes. If reviewer feedback exists, present it to the user before proceeding.
-
-### 4. Review: gather evidence and post the review report
-
-Run automated quality checks and assemble a Review Report.
-
-Quality checks inform the decision. They do not decide the outcome.
-
-Read `references/quality-checks.md` for the full quality check procedure (code quality, spec verification, functional testing, report format).
-
-Post the review report to the GitLab child issue:
-
-```bash
-glab issue note <child_iid> --message "$REVIEW_REPORT"
-```
-
-Posting the report records evidence for the human gate. Do not change labels, close issues, update parent progress, or generate repair tasks in this step.
-
-### 5. Human gate: ask the user for a decision
-
-**This step is MANDATORY. You MUST stop here and wait for user input.**
-
-Use the structured question/choice tool (e.g., `question()`) to present exactly these options.
-Do NOT present them as plain text — use the interactive selection tool so the user can click/select directly:
-
-1. **Approve** — commit & push all changes, move the group issue to done, and advance
-2. **Reject** — fail this group and enter repair (no commit)
-3. **Discuss** — talk before deciding
-
-Quality checks inform the decision. Only the user approves or rejects.
-
-**Do NOT proceed until the user explicitly chooses.**
-
-### 6. Advance / Repair: execute the user's decision
-
-Read `references/review-decisions.md` for the full approve, reject, and discuss procedures.
-
-- **Approve**: commit & push local changes, move the child issue to done, update parent progress
-- **Reject**: enter repair flow (see `references/repair-flow.md`)
-- **Discuss**: free-form conversation, then re-ask approve or reject
-
-All label changes, parent updates, and repair task generation happen only inside the approve or reject paths after the user chooses.
-
----
-
-## Postconditions (VERIFY BEFORE REPORTING DONE)
-
-- [ ] Review report was posted to the GitLab child issue
-- [ ] User explicitly chose approve, reject, or discuss (not auto-decided)
-- [ ] If approve: all local changes committed and pushed before label change (or confirmed no changes to commit)
-- [ ] If approve: if commit or push failed, label change was NOT performed and error was reported
-- [ ] If approve: child issue label changed to `workflow::done` (issue left open — closing removes it from board)
-- [ ] If approve: parent issue progress updated
-- [ ] If reject: fix tasks added to `tasks.md`, child issue moved to `workflow::in-progress`
-- [ ] If reject: no fixes were implemented during review
-
-**If you reached postconditions without asking the user in Step 5, you violated the contract. Stop and re-do Step 5.**
+Report the group, evidence, human decision, task-artifact edits, tracker result, `changeRoot`, and worktree.

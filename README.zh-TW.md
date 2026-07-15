@@ -65,9 +65,10 @@ Coding Corgi Flow 是 [OpenSpec](https://github.com/Fission-AI/OpenSpec)（由 [
 
 ### 先決條件
 
-- **Node.js 18+**
+- **Node.js >=20.19.0**
+- **OpenSpec CLI >=1.6.0 <2.0.0** — CorgiSpec 3 不支援 OpenSpec 1.3–1.5
 - **LLM Agent** — OpenCode、Claude Code、Cursor、AmpCode 等
-- **`gh` CLI**（GitHub）或 **`glab` CLI**（GitLab）
+- **`gh` CLI**（GitHub）或 **`glab` CLI**（GitLab），僅在啟用 issue tracking 時需要
 
 ### 安裝與 Bootstrap
 
@@ -76,9 +77,13 @@ Coding Corgi Flow 是 [OpenSpec](https://github.com/Fission-AI/OpenSpec)（由 [
 **A. npm（推薦）**
 
 ```bash
-npm install -g corgispec
-corgispec bootstrap --path /path/to/your-project --schema github-tracked
+npm install -g @fission-ai/openspec@^1.6.0
+npm install -g /path/to/corgispec-3.0.0-rc.1.tgz
+corgispec doctor --path /path/to/your-project
+corgispec bootstrap --target /path/to/your-project --schema github-tracked
 ```
+
+此 RC 以驗證過的 tarball/CI artifact 發佈，不會 publish 到 npm registry。請把 `/path/to/...` 換成下載後的 artifact 路徑。
 
 **B. Claude Code / Codex Plugin**
 
@@ -128,6 +133,8 @@ Fetch and follow instructions from https://raw.githubusercontent.com/ricoyudog/C
 | 指令 | 功能 |
 |---|---|
 | `/corgi-propose` | 產生規劃 artifact（proposal、specs、design、tasks）+ 建立 issue |
+| `/corgi-update` | 雙向協調既有規劃 artifact，每次確認一個 artifact 範圍的 diff |
+| `/corgi-ready` | Apply 或 loop 前執行確定性的 planning integrity 檢查 |
 | `/corgi-apply` | 執行一個 Task Group，同步 closeout，暫停等 review |
 | `/corgi-verify` | 自動化品質關卡 — lint、build、tests、spec coverage |
 | `/corgi-review` | 五軸審查，蒐集證據，approve/reject/discuss |
@@ -142,6 +149,23 @@ Fetch and follow instructions from https://raw.githubusercontent.com/ricoyudog/C
 | `/corgi-ask` | 從 vault 中以預算感知檢索回答問題 |
 
 > Claude Code 使用 `/corgi:<command>` 格式（如 `/corgi:propose`）。平台從 `config.yaml` 自動偵測。
+
+### 3.0 RC 的 Planning Integrity
+
+OpenSpec 1.6 JSON 是 artifact 相依、glob 展開檔案、instructions 與位置的唯一真相來源。Corgi 使用 OpenSpec 回傳的 `planningHome`、`changeRoot`、`artifactPaths` 與 `actionContext`；不再假設 change 位於本地 `openspec/changes/<name>`，也不再寫死 artifact 檔名。因此，透過 OpenSpec Store 選取的 change 可以位於目前 repository 之外。
+
+```bash
+# 唯讀的協調 context；實際規劃修改由 skill 顯示並逐一確認。
+corgispec update add-auth --json
+
+# 確定性 preflight；--strict 也會把 warning 提升為 blocker。
+corgispec ready add-auth --strict --json
+
+# 需要時明確選取 OpenSpec Store。
+corgispec ready add-auth --store shared-product --strict --json
+```
+
+`ready` 的退出碼：`0` 表示 ready、`1` 表示規劃 blocker、`2` 表示環境或 contract 錯誤。`update` 的退出碼：`0` 表示可開始協調、`1` 表示 active legacy loop 阻擋規劃修改、`2` 表示 contract 錯誤。在 agent session 中，Claude Code 使用 `/corgi:update <change>`、`/corgi:ready <change>`；OpenCode 使用 `/corgi-update <change>`、`/corgi-ready <change>`；Codex 使用已安裝的 `$corgispec-update`、`$corgispec-ready` skills。
 
 ---
 
@@ -326,7 +350,7 @@ node bin/ds-skills.js list --path ../.. --tier atom --platform github
 
 ## 📐 Schema
 
-Schema 定義 artifact pipeline。兩個內建 schema（`gitlab-tracked`、`github-tracked`）產出相同的 4-artifact 流程：
+Schema 定義 artifact pipeline。CorgiSpec 接受任何 OpenSpec schema 名稱，並遵循 OpenSpec 回傳的 artifact graph 與路徑。兩個內建 schema（`gitlab-tracked`、`github-tracked`）產出以下相同的 4-artifact 流程：
 
 | 產物 | 檔案 | 用途 |
 |---|---|---|
@@ -421,7 +445,13 @@ apply:
 所有設定在 `openspec/config.yaml`：
 
 ```yaml
-schema: github-tracked       # 或 gitlab-tracked
+schema: product-delivery     # 任何已安裝的 OpenSpec schema
+
+# 選填：Corgi 專用設定
+corgi:
+  tracking:
+    provider: github         # github | gitlab | none
+  taskArtifactId: tasks      # 含可執行 Task Group 的 artifact
 
 # 選填：worktree 隔離，平行處理多個 change
 isolation:
@@ -442,7 +472,26 @@ rules:
     - 每個 task 最多 2 小時
 ```
 
-Installer 只管理 `schema` 和 `isolation` 鍵。`context` 和 `rules` 請自行添加。
+`schema` 現在只選擇 OpenSpec workflow，不再選擇 issue tracker。只有 schema 確實提供 id 為 `tasks` 的 artifact 時，才能省略 `corgi.taskArtifactId`。Apply 與 ready 要求該 artifact 解析成唯一一個具體檔案。Installer 會保留專案自行維護的 `context` 與 `rules`。
+
+### 從 CorgiSpec 2.x 遷移
+
+1. 升級至 Node >=20.19.0 與 OpenSpec >=1.6.0 <2.0.0，再安裝驗證過的 `corgispec-3.0.0-rc.1.tgz` artifact。
+2. 保留既有 schema 名稱，但明確寫出原先推斷的 tracker：
+
+   ```yaml
+   schema: github-tracked
+   corgi:
+     tracking:
+       provider: github
+     taskArtifactId: tasks
+   ```
+
+   `gitlab-tracked` 請使用 `gitlab`；不需要 issue integration 時使用 `none`。遷移期間仍可讀取 legacy 推斷，`corgispec doctor` 會提示建議修改。
+3. 執行 `corgispec doctor --path .`，再對每個 active change 執行 `corgispec ready <change> --strict --json`。所有 blocker 解決後才能 apply。
+4. 若 change 屬於 Store，lifecycle command 都要加上 `--store <id>`，且只能使用 JSON 回傳的 authoritative path。
+
+OpenSpec 1.3–1.5 無法作為 fallback。若 doctor 回報 `openspec_version_unsupported`，請先升級 OpenSpec。
 
 完整安裝/更新/驗證參考（全新安裝、受管理更新、本地修改、legacy 遷移），請見下方 [安裝 / 更新 / 驗證參考](#-安裝--更新--驗證參考)。
 

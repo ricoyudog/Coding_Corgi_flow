@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execSync, spawnSync } from "node:child_process";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -11,6 +11,7 @@ const PACKAGE_ROOT = resolve(__dirname, "..");
 const CLI = resolve(PACKAGE_ROOT, "dist/corgispec.js");
 const ASSETS_ROOT = resolve(PACKAGE_ROOT, "assets");
 const TEST_ROOT = resolve(tmpdir(), `corgispec-bootstrap-${Date.now()}`);
+const ORIGINAL_OPENSPEC_BIN = process.env["CORGISPEC_OPENSPEC_BIN"];
 
 function bootstrapEnv(pathValue: string | undefined): NodeJS.ProcessEnv {
   return {
@@ -31,6 +32,30 @@ function createFakeGhBin(root: string): string {
   );
   chmodSync(ghPath, 0o755);
   return binDir;
+}
+
+function createFakeOpenSpecBin(root: string): string {
+  const binDir = resolve(root, "fake-openspec-bin");
+  const openspecPath = resolve(binDir, "openspec");
+  mkdirSync(binDir, { recursive: true });
+  writeFileSync(
+    openspecPath,
+    [
+      "#!/bin/sh",
+      "if [ -n \"$CORGISPEC_FAKE_LOG\" ]; then printf '%s|%s\\n' \"$PWD\" \"$*\" >> \"$CORGISPEC_FAKE_LOG\"; fi",
+      "if [ \"$1\" = \"--version\" ]; then printf '1.6.0\\n'; exit 0; fi",
+      "if [ \"$1\" = \"list\" ]; then printf '{\"changes\":[],\"root\":{\"path\":\"/tmp\",\"source\":\"implicit\"}}\\n'; exit 0; fi",
+      "if [ \"$1\" = \"schema\" ] && [ \"$2\" = \"validate\" ] && [ \"$4\" = \"--json\" ]; then",
+      "  if [ \"$CORGISPEC_FAKE_SCHEMA_RESULT\" = \"invalid\" ]; then printf '{\"valid\":false,\"issues\":[{\"message\":\"schema not found\"}]}\\n'; exit 1; fi",
+      "  if [ \"$CORGISPEC_FAKE_SCHEMA_RESULT\" = \"malformed\" ]; then printf 'not-json\\n'; exit 0; fi",
+      "  if [ \"$CORGISPEC_FAKE_SCHEMA_RESULT\" = \"nonzero\" ]; then printf '{\"valid\":true}\\n'; printf 'validator failed\\n' >&2; exit 7; fi",
+      "  printf '{\"valid\":true,\"issues\":[],\"futureField\":{\"accepted\":true}}\\n'; exit 0",
+      "fi",
+      "printf '{\"error\":{\"message\":\"unsupported fake invocation\"}}\\n'; exit 1",
+    ].join("\n"),
+  );
+  chmodSync(openspecPath, 0o755);
+  return openspecPath;
 }
 
 function userSkillDirs(userSkillRoot: string) {
@@ -82,9 +107,19 @@ describe("bootstrap library", () => {
     userSkillRoot = resolve(TEST_ROOT, `user-skills-${counter}`);
     mkdirSync(targetDir, { recursive: true });
     mkdirSync(userSkillRoot, { recursive: true });
+    delete process.env["CORGISPEC_FAKE_SCHEMA_RESULT"];
+    delete process.env["CORGISPEC_FAKE_LOG"];
+    process.env["CORGISPEC_OPENSPEC_BIN"] = createFakeOpenSpecBin(TEST_ROOT);
   });
 
   afterEach(() => {
+    if (ORIGINAL_OPENSPEC_BIN === undefined) {
+      delete process.env["CORGISPEC_OPENSPEC_BIN"];
+    } else {
+      process.env["CORGISPEC_OPENSPEC_BIN"] = ORIGINAL_OPENSPEC_BIN;
+    }
+    delete process.env["CORGISPEC_FAKE_SCHEMA_RESULT"];
+    delete process.env["CORGISPEC_FAKE_LOG"];
     rmSync(TEST_ROOT, { recursive: true, force: true });
   });
 
@@ -98,22 +133,42 @@ describe("bootstrap library", () => {
     expect(output).toContain("bootstrap");
   });
 
-  it("prints JSON output for bootstrap command", () => {
+  it("prints pure JSON for a fresh local bootstrap", () => {
     writeFileSync(resolve(targetDir, "README.md"), "# Json CLI Project\n\nBootstrap target.\n");
     const fakeBin = createFakeGhBin(targetDir);
 
-    const output = execSync(
-      `node ${CLI} bootstrap --target ${JSON.stringify(targetDir)} --mode verify --json`,
+    const command = spawnSync(
+      process.execPath,
+      [CLI, "bootstrap", "--target", targetDir, "--scope", "local", "--yes", "--no-memory", "--json"],
       {
         encoding: "utf-8",
         env: bootstrapEnv(`${fakeBin}:${process.env["PATH"] ?? ""}`),
-      }
+      },
+    );
+
+    expect(command.status).toBe(0);
+    expect(command.stderr).toBe("");
+    const parsed = JSON.parse(command.stdout) as Record<string, unknown>;
+    expect(parsed.status).toBe("success");
+    expect(parsed.mode).toBe("fresh");
+    expect(parsed).toHaveProperty("reportPath");
+  });
+
+  it("prints pure JSON for a fresh bootstrap using the default scope", () => {
+    writeFileSync(resolve(targetDir, "README.md"), "# Default Json CLI Project\n");
+    const fakeBin = createFakeGhBin(targetDir);
+
+    const output = execSync(
+      `node ${CLI} bootstrap --target ${JSON.stringify(targetDir)} --yes --json`,
+      {
+        encoding: "utf-8",
+        env: bootstrapEnv(`${fakeBin}:${process.env["PATH"] ?? ""}`),
+      },
     );
 
     const parsed = JSON.parse(output) as Record<string, unknown>;
     expect(parsed.status).toBe("success");
-    expect(parsed.mode).toBe("verify");
-    expect(parsed).toHaveProperty("reportPath");
+    expect(parsed.mode).toBe("fresh");
   });
 
   it("prints summary output and sets non-zero exit code when bootstrap stops", () => {
@@ -141,7 +196,7 @@ describe("bootstrap library", () => {
   it("rejects an invalid schema before running bootstrap", () => {
     try {
       execSync(
-        `node ${CLI} bootstrap --target ${JSON.stringify(targetDir)} --schema invalid-schema`,
+        `node ${CLI} bootstrap --target ${JSON.stringify(targetDir)} --schema 'Invalid Schema!'`,
         {
           encoding: "utf-8",
           env: bootstrapEnv(process.env["PATH"]),
@@ -154,6 +209,95 @@ describe("bootstrap library", () => {
       expect(existsSync(resolve(targetDir, "openspec"))).toBe(false);
     }
   });
+
+  it("bootstraps an arbitrary OpenSpec schema without requiring a tracker CLI", async () => {
+    writeFileSync(resolve(targetDir, "README.md"), "# Custom Workflow\n");
+    mkdirSync(resolve(targetDir, "openspec/schemas/team-flow"), { recursive: true });
+    writeFileSync(
+      resolve(targetDir, "openspec/schemas/team-flow/schema.yaml"),
+      "name: team-flow\nversion: 1\nartifacts: []\n",
+    );
+    const invocationLog = resolve(TEST_ROOT, "custom-schema-invocations.log");
+    process.env["CORGISPEC_FAKE_LOG"] = invocationLog;
+    const result = await runBootstrap({
+      target: targetDir,
+      schema: "team-flow",
+      mode: "auto",
+      yes: true,
+      noMemory: true,
+      json: false,
+      assetsRoot: ASSETS_ROOT,
+      userSkillDirs: userSkillDirs(userSkillRoot),
+      scope: "local",
+    });
+
+    expect(result.status).toBe("success");
+    const config = readFileSync(resolve(targetDir, "openspec/config.yaml"), "utf-8");
+    expect(config).toContain("schema: team-flow");
+    expect(config).toContain("provider: none");
+    expect(config).not.toContain("taskArtifactId:");
+    const schemaInvocation = readFileSync(invocationLog, "utf-8")
+      .split(/\r?\n/)
+      .find((line) => line.includes("schema validate team-flow --json"));
+    expect(schemaInvocation?.startsWith(`${targetDir}|`)).toBe(true);
+  });
+
+  it("validates a not-yet-installed bundled schema in an isolated staging project", async () => {
+    writeFileSync(resolve(targetDir, "README.md"), "# Bundled Schema\n");
+    const invocationLog = resolve(TEST_ROOT, "bundled-schema-invocations.log");
+    process.env["CORGISPEC_FAKE_LOG"] = invocationLog;
+
+    const result = await runBootstrap({
+      target: targetDir,
+      schema: "github-tracked",
+      mode: "auto",
+      yes: true,
+      noMemory: true,
+      json: false,
+      assetsRoot: ASSETS_ROOT,
+      userSkillDirs: userSkillDirs(userSkillRoot),
+      scope: "local",
+    });
+
+    expect(result.status).toBe("success");
+    const schemaInvocation = readFileSync(invocationLog, "utf-8")
+      .split(/\r?\n/)
+      .find((line) => line.includes("schema validate github-tracked --json"));
+    expect(schemaInvocation).toBeDefined();
+    expect(schemaInvocation?.startsWith(`${targetDir}|`)).toBe(false);
+    expect(schemaInvocation).toContain("corgispec-schema-validate-");
+    expect(existsSync(schemaInvocation!.split("|", 1)[0]!)).toBe(false);
+  });
+
+  it.each([
+    ["invalid", "missing-team-flow", "schema not found"],
+    ["malformed", "github-tracked", "malformed JSON"],
+    ["nonzero", "github-tracked", "validator failed"],
+  ])(
+    "rejects %s schema validation before mutating the target",
+    async (fakeResult, schema, expectedMessage) => {
+      writeFileSync(resolve(targetDir, "README.md"), "# Invalid Schema\n");
+      const before = listDirEntries(targetDir);
+      process.env["CORGISPEC_FAKE_SCHEMA_RESULT"] = fakeResult;
+
+      const result = await runBootstrap({
+        target: targetDir,
+        schema,
+        mode: "auto",
+        yes: true,
+        noMemory: true,
+        json: false,
+        assetsRoot: ASSETS_ROOT,
+        userSkillDirs: userSkillDirs(userSkillRoot),
+        scope: "local",
+      });
+
+      expect(result.status).toBe("failed");
+      expect(result.message).toContain(expectedMessage);
+      expect(listDirEntries(targetDir)).toEqual(before);
+      expect(existsSync(result.reportPath)).toBe(false);
+    },
+  );
 
   it("rejects an invalid mode before running bootstrap", () => {
     try {
@@ -237,10 +381,23 @@ describe("bootstrap library", () => {
     expect(report).toContain("FAIL");
   });
 
-  it("verify mode is non-mutating and writes no install artifacts", async () => {
+  it("verify mode checks a managed install without changing any files", async () => {
     writeFileSync(resolve(targetDir, "README.md"), "# Verify Project\n\nBootstrap target.\n");
-    mkdirSync(resolve(targetDir, "openspec"), { recursive: true });
-    writeFileSync(resolve(targetDir, "openspec/config.yaml"), "schema: github-tracked\n");
+    const installed = await runBootstrap({
+      target: targetDir,
+      schema: "github-tracked",
+      mode: "auto",
+      yes: true,
+      noMemory: true,
+      json: false,
+      assetsRoot: ASSETS_ROOT,
+      userSkillDirs: userSkillDirs(userSkillRoot),
+      scope: "local",
+    });
+    expect(installed.status).toBe("success");
+    const reportPath = resolve(targetDir, "openspec/.corgi-install-report.md");
+    writeFileSync(reportPath, "sentinel report\n");
+    const before = listDirEntries(targetDir);
 
     const result = await runBootstrap({
       target: targetDir,
@@ -254,12 +411,60 @@ describe("bootstrap library", () => {
 
     expect(result.status).toBe("success");
     expect(result.mode).toBe("verify");
-    expect(existsSync(resolve(targetDir, "openspec/.corgi-install.json"))).toBe(false);
-    expect(existsSync(resolve(targetDir, ".opencode/commands/corgi-propose.md"))).toBe(false);
+    expect(listDirEntries(targetDir)).toEqual(before);
+    expect(readFileSync(reportPath, "utf-8")).toBe("sentinel report\n");
+  });
 
-    const report = readFileSync(resolve(targetDir, "openspec/.corgi-install-report.md"), "utf-8");
-    expect(report).toContain("Mode: verify-only");
-    expect(report).toContain("none (verify-only)");
+  it("verify mode rejects an unmanaged empty directory without writing", async () => {
+    writeFileSync(resolve(targetDir, "README.md"), "# Unmanaged Verify Project\n");
+    const before = listDirEntries(targetDir);
+
+    const result = await runBootstrap({
+      target: targetDir,
+      mode: "verify",
+      yes: true,
+      noMemory: true,
+      json: false,
+      assetsRoot: ASSETS_ROOT,
+      userSkillDirs: userSkillDirs(userSkillRoot),
+    });
+
+    expect(result.status).toBe("stopped");
+    expect(result.message).toContain("managed bootstrap state");
+    expect(listDirEntries(targetDir)).toEqual(before);
+    expect(existsSync(result.reportPath)).toBe(false);
+  });
+
+  it("verify mode fails closed on a managed hash mismatch without rewriting it", async () => {
+    writeFileSync(resolve(targetDir, "README.md"), "# Modified Managed Project\n");
+    const installed = await runBootstrap({
+      target: targetDir,
+      schema: "github-tracked",
+      mode: "auto",
+      yes: true,
+      noMemory: true,
+      json: false,
+      assetsRoot: ASSETS_ROOT,
+      userSkillDirs: userSkillDirs(userSkillRoot),
+      scope: "local",
+    });
+    expect(installed.status).toBe("success");
+    const modifiedPath = resolve(targetDir, ".opencode/commands/corgi-propose.md");
+    writeFileSync(modifiedPath, "locally modified\n");
+
+    const result = await runBootstrap({
+      target: targetDir,
+      mode: "verify",
+      yes: true,
+      noMemory: true,
+      json: false,
+      assetsRoot: ASSETS_ROOT,
+      userSkillDirs: userSkillDirs(userSkillRoot),
+    });
+
+    expect(result.status).toBe("stopped");
+    expect(result.message).toContain("hashes do not match");
+    expect(readFileSync(modifiedPath, "utf-8")).toBe("locally modified\n");
   });
 
   it("stops when explicit update mode is incompatible with an init-needed target", async () => {
@@ -412,10 +617,7 @@ describe("bootstrap library", () => {
       expect(result.message.toLowerCase()).toContain("glab");
       expect(existsSync(resolve(targetDir, "openspec/.corgi-install.json"))).toBe(false);
       expect(existsSync(resolve(targetDir, ".opencode/commands/corgi-propose.md"))).toBe(false);
-
-      const report = readFileSync(resolve(targetDir, "openspec/.corgi-install-report.md"), "utf-8");
-      expect(report).toContain("gh/glab CLI");
-      expect(report).toContain("FAIL");
+      expect(existsSync(result.reportPath)).toBe(false);
     } finally {
       process.env["PATH"] = originalPath;
     }
@@ -597,12 +799,18 @@ describe("bootstrap library", () => {
   it("runs bootstrap CLI with platform and scope flags", () => {
     writeFileSync(resolve(targetDir, "README.md"), "# CLI Platform+Scope\n\nTest.\n");
     const fakeBin = createFakeGhBin(targetDir);
+    const env = bootstrapEnv(`${fakeBin}:${process.env["PATH"] ?? ""}`);
+
+    execSync(
+      `node ${CLI} bootstrap --target ${JSON.stringify(targetDir)} --platform claude,opencode --scope local --yes --no-memory --json`,
+      { encoding: "utf-8", env },
+    );
 
     const output = execSync(
       `node ${CLI} bootstrap --target ${JSON.stringify(targetDir)} --platform claude,opencode --scope local --mode verify --json`,
       {
         encoding: "utf-8",
-        env: bootstrapEnv(`${fakeBin}:${process.env["PATH"] ?? ""}`),
+        env,
       }
     );
 

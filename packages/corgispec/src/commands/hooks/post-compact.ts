@@ -5,15 +5,19 @@ import {
   findProjectRoot,
   gatherSessionContext,
   formatHookOutput,
+  type HookPlanningDependencies,
 } from "../../lib/hooks.js";
 
-export function createHookPostCompactCommand(): Command {
+export function createHookPostCompactCommand(
+  dependencies: HookPlanningDependencies = {},
+): Command {
   const cmd = new Command("post-compact");
 
   cmd
     .description("Re-emit session context after compaction")
     .option("--path <dir>", "Working directory", ".")
-    .action(async (opts) => {
+    .option("--store <id>", "OpenSpec Store id")
+    .action(async (opts: { path: string; store?: string }) => {
       if (isHooksDisabled()) {
         process.exitCode = 1; return;
       }
@@ -24,14 +28,27 @@ export function createHookPostCompactCommand(): Command {
         process.exitCode = 1; return;
       }
 
-      const ctx = gatherSessionContext(projectRoot);
-      if (!ctx) {
-        process.exitCode = 1; return;
-      }
+      try {
+        const ctx = await gatherSessionContext(
+          projectRoot,
+          { store: opts.store },
+          dependencies,
+        );
+        if (!ctx) {
+          process.exitCode = 1; return;
+        }
 
-      process.stdout.write(formatHookOutput("PostCompact", ctx));
-      process.exit(0);
+        process.stdout.write(formatHookOutput("PostCompact", ctx));
+        process.exitCode = 0;
+      } catch (error) {
+        process.stderr.write(`[post-compact] ${errorMessage(error)}\n`);
+        process.exitCode = 2;
+      }
     });
 
   return cmd;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

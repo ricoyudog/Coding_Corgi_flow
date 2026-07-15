@@ -7,6 +7,7 @@ import { mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execSync } from "node:child_process";
+import { installFakeOpenSpec, setupFakeChange } from "./fake-openspec.js";
 
 const CLI = resolve(__dirname, "../../dist/corgispec.js");
 
@@ -141,12 +142,13 @@ function runLoopCheck(
 function runStopCheck(
   tempDir: string,
   stdin: object = {},
+  env: NodeJS.ProcessEnv = { ...process.env, CORGISPEC_HOOKS_DISABLE: undefined },
 ): { exitCode: number; stdout: string; stderr: string } {
   try {
     const output = execSync("node " + CLI + " hook stop-check --path " + tempDir, {
       encoding: "utf-8",
       input: JSON.stringify(stdin),
-      env: { ...process.env, CORGISPEC_HOOKS_DISABLE: undefined },
+      env,
     });
     return { exitCode: 0, stdout: output || "", stderr: "" };
   } catch (err: any) {
@@ -371,13 +373,17 @@ describe("hook loop-check (integration)", () => {
 
   it("stop-check exits 2 when no loop and has incomplete tasks", () => {
     // No loop state -> stop-check falls through to normal task check
-    mkdirSync(resolve(tempDir, "openspec/changes/wip-change"), { recursive: true });
-    writeFileSync(
-      resolve(tempDir, "openspec/changes/wip-change/tasks.md"),
-      "## 1. Implementation\n\n- [ ] 1.1 Not done yet\n",
-    );
+    const change = setupFakeChange({
+      projectRoot: tempDir,
+      changeName: "wip-change",
+      taskContent: "## 1. Implementation\n\n- [ ] 1.1 Not done yet\n",
+    });
+    const openspec = installFakeOpenSpec(tempDir, {
+      listRoot: change.planningRoot,
+      statuses: { "wip-change": change.status },
+    });
 
-    const result = runStopCheck(tempDir);
+    const result = runStopCheck(tempDir, {}, openspec.env);
     expect(result.exitCode).toBe(2);
   });
 });
