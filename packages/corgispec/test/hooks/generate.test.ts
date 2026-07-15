@@ -77,9 +77,13 @@ describe("hooks generate", () => {
 
     it("passes Stop hook stdin, stdout, stderr, session, and exit code through Claude command config", () => {
       const fakeBin = resolve(tempDir, "claude-bin");
-      const fakeCorgispec = resolve(fakeBin, "corgispec");
+      const fakeEntry = resolve(fakeBin, "fake-corgispec.cjs");
+      const fakeCorgispec = resolve(
+        fakeBin,
+        process.platform === "win32" ? "corgispec.cmd" : "corgispec",
+      );
       mkdirSync(fakeBin, { recursive: true });
-      writeFileSync(fakeCorgispec, `#!/usr/bin/env node
+      const source = `#!/usr/bin/env node
 let input = "";
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (chunk) => { input += chunk; });
@@ -88,8 +92,17 @@ process.stdin.on("end", () => {
   process.stderr.write("CLAUDE-ERR:" + process.argv.slice(2).join(" "));
   process.exitCode = 7;
 });
-`);
-      chmodSync(fakeCorgispec, 0o755);
+`;
+      if (process.platform === "win32") {
+        writeFileSync(fakeEntry, source);
+        writeFileSync(
+          fakeCorgispec,
+          `@echo off\r\n"${process.execPath}" "${fakeEntry}" %*\r\n`,
+        );
+      } else {
+        writeFileSync(fakeCorgispec, source);
+        chmodSync(fakeCorgispec, 0o755);
+      }
       const env = { ...process.env, PATH: `${fakeBin}${delimiter}${process.env.PATH ?? ""}` };
       const generated = execSync(`node ${CLI} hooks generate --platform claude`, {
         encoding: "utf8",

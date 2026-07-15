@@ -332,6 +332,9 @@ describe("assertWritableArtifactPath", () => {
 
   it("validates a nested glob through its static ancestor without treating it as a file", async () => {
     await expect(
+      assertArtifactOutputPath({ changeRoot }, "proposal.md", false)
+    ).resolves.toBe(resolve(changeRoot, "proposal.md"));
+    await expect(
       assertArtifactOutputPath({ changeRoot }, resolve(changeRoot, "specs/**/*.md"), true)
     ).resolves.toBe(resolve(changeRoot, "specs/**/*.md"));
   });
