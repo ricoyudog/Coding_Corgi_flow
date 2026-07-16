@@ -118,13 +118,17 @@ function verifyAssetManifest(assetsDirectory) {
   }
   for (const required of [
     "skills/atoms/corgispec-ready/SKILL.md",
+    "skills/molecules/corgispec-propose/SKILL.md",
+    "skills/molecules/corgispec-gh-propose/SKILL.md",
     "skills/molecules/corgispec-update/SKILL.md",
     "skills/molecules/corgispec-converge/SKILL.md",
     "skills/compounds/corgispec-loop/SKILL.md",
+    "commands/opencode/corgi-propose.md",
     "commands/opencode/corgi-ready.md",
     "commands/opencode/corgi-update.md",
     "commands/opencode/corgi-converge.md",
     "commands/opencode/corgi-loop.md",
+    "commands/claude/corgi/propose.md",
     "commands/claude/corgi/ready.md",
     "commands/claude/corgi/update.md",
     "commands/claude/corgi/converge.md",
@@ -382,7 +386,14 @@ try {
       cwd: consumerDirectory,
     }),
   );
-  if (!Array.isArray(skills) || !["corgispec-ready", "corgispec-update", "corgispec-converge", "corgispec-loop"]
+  if (!Array.isArray(skills) || ![
+    "corgispec-ready",
+    "corgispec-propose",
+    "corgispec-gh-propose",
+    "corgispec-update",
+    "corgispec-converge",
+    "corgispec-loop",
+  ]
     .every((slug) => skills.some((skill) => skill.slug === slug))) {
     fail("packaged skill inventory is missing a 3.0 lifecycle skill");
   }

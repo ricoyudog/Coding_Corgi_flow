@@ -12,3 +12,12 @@ description: Create a complete CorgiSpec planning package and optional tracker h
    - `gitlab` or `none`: follow **corgispec-propose**; skip tracker closeout for none.
 5. Pass the CLI JSON and user intent through unchanged. Never route by `schemaName` or reconstruct a planning path.
 6. Verify strict readiness, authoritative `changeRoot`, artifact completion, tracker result, and worktree before reporting completion.
+
+## Terminal handoff boundary
+
+- Throughout propose, keep `HEAD` unchanged. Do not install packages, create commits, push branches, open implementation pull requests, or publish at any point. Worktree setup must not commit housekeeping changes.
+- Propose is a planning-only workflow and is terminal for the current turn.
+- A strict `ready` result confirms planning integrity; it is not user approval to implement.
+- An original request phrased as "fix", "implement", or "build" supplies planning intent only and does not authorize implementation after propose.
+- After reporting, end the current turn. Do not invoke apply, loop, implementation, review, archive, commit, push, or publish actions.
+- Implementation may begin only after a later explicit user request for `/corgi-apply <change>` or `/corgi-loop <change>`.
