@@ -8,6 +8,9 @@ import { runBootstrap } from "../src/lib/bootstrap.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = resolve(__dirname, "..");
+const PACKAGE_VERSION = (JSON.parse(
+  readFileSync(resolve(PACKAGE_ROOT, "package.json"), "utf8"),
+) as { version: string }).version;
 const CLI = resolve(PACKAGE_ROOT, "dist/corgispec.js");
 const ASSETS_ROOT = resolve(PACKAGE_ROOT, "assets");
 const TEST_ROOT = resolve(tmpdir(), `corgispec-bootstrap-${Date.now()}`);
@@ -382,6 +385,7 @@ describe("bootstrap library", () => {
     expect(result.mode).toBe("update");
     expect(result.message.toLowerCase()).toContain("local modifications");
     expect(listDirEntries(userSkillRoot)).toEqual(userSkillsBeforeStop);
+    expect(result.migration.backups.some((path) => path.includes(".corgi-backups"))).toBe(true);
 
     const report = readFileSync(resolve(targetDir, "openspec/.corgi-install-report.md"), "utf-8");
     expect(report).toContain("Managed files");
@@ -746,7 +750,7 @@ describe("bootstrap library", () => {
     expect(result.status).toBe("success");
   });
 
-  it("defaults to global scope when not specified", async () => {
+  it("defaults to both scopes when not specified", async () => {
     writeFileSync(resolve(targetDir, "README.md"), "# Default Scope Project\n\nBootstrap target.\n");
 
     const result = await runBootstrap({
@@ -842,5 +846,254 @@ describe("bootstrap library", () => {
     });
 
     expect(result.status).toBe("success");
+  });
+
+  it("migrates a v1 manifest to v2, preserves installedAt, and repairs missing files", async () => {
+    writeFileSync(resolve(targetDir, "README.md"), "# V1 Repair\n");
+    const installed = await runBootstrap({
+      target: targetDir,
+      schema: "github-tracked",
+      mode: "auto",
+      yes: true,
+      noMemory: true,
+      json: false,
+      assetsRoot: ASSETS_ROOT,
+      scope: "local",
+    });
+    expect(installed.status).toBe("success");
+
+    const manifestPath = resolve(targetDir, "openspec/.corgi-install.json");
+    const current = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+      files: Record<string, { sha256: string }>;
+    };
+    const installedAt = "2025-01-02T03:04:05.000Z";
+    writeFileSync(
+      manifestPath,
+      `${JSON.stringify({
+        version: 1,
+        installedAt,
+        schema: "github-tracked",
+        files: current.files,
+      }, null, 2)}\n`,
+    );
+    const missing = ".opencode/commands/corgi-propose.md";
+    rmSync(resolve(targetDir, missing));
+
+    const result = await runBootstrap({
+      target: targetDir,
+      mode: "update",
+      yes: true,
+      noMemory: true,
+      json: false,
+      assetsRoot: ASSETS_ROOT,
+      scope: "local",
+    });
+
+    expect(result.status).toBe("success");
+    expect(result.migration.fromManifestVersion).toBe(1);
+    expect(result.migration.repaired).toContain(missing);
+    expect(existsSync(resolve(targetDir, missing))).toBe(true);
+    const migrated = JSON.parse(readFileSync(manifestPath, "utf8")) as Record<string, unknown>;
+    expect(migrated.version).toBe(2);
+    expect(migrated.packageVersion).toBe(PACKAGE_VERSION);
+    expect(migrated.installedAt).toBe(installedAt);
+  });
+
+  it("migrates existing Claude hooks but preserves hookless opt-in", async () => {
+    writeFileSync(resolve(targetDir, "README.md"), "# Hook Migration\n");
+    mkdirSync(resolve(targetDir, ".claude"), { recursive: true });
+    writeFileSync(
+      resolve(targetDir, ".claude/settings.json"),
+      `${JSON.stringify({
+        permissions: { allow: ["Read"] },
+        hooks: {
+          PreToolUse: [{ hooks: [{ type: "command", command: "npx corgispec hook pre-write" }] }],
+          Stop: [{ hooks: [{ type: "command", command: "npx corgispec hook stop-check" }] }],
+        },
+      }, null, 2)}\n`,
+    );
+
+    const result = await runBootstrap({
+      target: targetDir,
+      schema: "github-tracked",
+      mode: "auto",
+      yes: true,
+      noMemory: true,
+      json: false,
+      assetsRoot: ASSETS_ROOT,
+      scope: "local",
+      platforms: ["claude", "opencode"],
+      binaryPath: "npx corgispec",
+    });
+
+    expect(result.status).toBe("success");
+    const settings = readFileSync(resolve(targetDir, ".claude/settings.json"), "utf8");
+    expect(settings).toContain('"allow": [');
+    expect(settings).not.toContain("hook pre-write");
+    expect(settings).not.toContain("hook stop-check");
+    expect(settings).toContain("hook session-start");
+    expect(existsSync(resolve(targetDir, ".opencode/plugins/corgispec-deep.ts"))).toBe(false);
+    const manifest = JSON.parse(
+      readFileSync(resolve(targetDir, "openspec/.corgi-install.json"), "utf8"),
+    ) as { hooks?: Record<string, unknown> };
+    expect(manifest.hooks).toHaveProperty("claude");
+    expect(manifest.hooks).not.toHaveProperty("opencode");
+  });
+
+  it("retires a signature-proven YAML manifest after writing the canonical v2 manifest", async () => {
+    writeFileSync(resolve(targetDir, "README.md"), "# YAML Manifest\n");
+    const first = await runBootstrap({
+      target: targetDir,
+      schema: "github-tracked",
+      mode: "auto",
+      yes: true,
+      noMemory: true,
+      json: false,
+      assetsRoot: ASSETS_ROOT,
+      scope: "local",
+    });
+    expect(first.status).toBe("success");
+    const canonical = resolve(targetDir, "openspec/.corgi-install.json");
+    const current = JSON.parse(readFileSync(canonical, "utf8")) as {
+      files: Record<string, { sha256: string }>;
+    };
+    rmSync(canonical);
+    const legacy = resolve(targetDir, "openspec/install-manifest.yaml");
+    writeFileSync(
+      legacy,
+      [
+        "version: 1",
+        "installedAt: '2025-02-03T04:05:06.000Z'",
+        "schema: github-tracked",
+        "managedFiles:",
+        ...Object.entries(current.files).flatMap(([path, entry]) => [
+          `  - path: ${path}`,
+          `    sha256: ${entry.sha256}`,
+        ]),
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runBootstrap({
+      target: targetDir,
+      mode: "update",
+      yes: true,
+      noMemory: true,
+      json: false,
+      assetsRoot: ASSETS_ROOT,
+      scope: "local",
+    });
+
+    expect(result.status).toBe("success");
+    expect(existsSync(canonical)).toBe(true);
+    expect(existsSync(legacy)).toBe(false);
+    expect(result.migration.removed).toContain("openspec/install-manifest.yaml");
+  });
+
+  it("preflights both scopes before any managed project or user writes", async () => {
+    writeFileSync(resolve(targetDir, "README.md"), "# Conflict\n");
+    const customSkill = resolve(userSkillRoot, "claude/corgispec-ready");
+    mkdirSync(customSkill, { recursive: true });
+    writeFileSync(resolve(customSkill, "SKILL.md"), "# unrelated local skill\n");
+
+    const result = await runBootstrap({
+      target: targetDir,
+      schema: "github-tracked",
+      mode: "auto",
+      yes: true,
+      noMemory: true,
+      json: false,
+      assetsRoot: ASSETS_ROOT,
+      userSkillDirs: userSkillDirs(userSkillRoot),
+      userStateDir: resolve(TEST_ROOT, "user-state"),
+      scope: "both",
+    });
+
+    expect(result.status).toBe("stopped");
+    expect(existsSync(resolve(targetDir, "openspec/.corgi-install.json"))).toBe(false);
+    expect(existsSync(resolve(targetDir, ".opencode/commands/corgi-propose.md"))).toBe(false);
+    expect(existsSync(resolve(userSkillRoot, "codex/corgispec-ready"))).toBe(false);
+    expect(readFileSync(resolve(customSkill, "SKILL.md"), "utf8")).toBe("# unrelated local skill\n");
+    expect(result.migration.backups.some((path) => path.includes("user-state/backups"))).toBe(true);
+  });
+
+  it("global scope synchronizes skills and commands without touching project state", async () => {
+    writeFileSync(resolve(targetDir, "README.md"), "# Global Assets\n");
+    const result = await runBootstrap({
+      target: targetDir,
+      mode: "auto",
+      yes: true,
+      noMemory: true,
+      json: false,
+      assetsRoot: ASSETS_ROOT,
+      userSkillDirs: userSkillDirs(userSkillRoot),
+      userStateDir: resolve(TEST_ROOT, "global-state"),
+      scope: "global",
+    });
+
+    expect(result.status).toBe("success");
+    expect(existsSync(resolve(userSkillRoot, "claude/corgispec-ready/SKILL.md"))).toBe(true);
+    expect(existsSync(resolve(userSkillRoot, "opencode/corgispec-ready/SKILL.md"))).toBe(true);
+    expect(existsSync(resolve(userSkillRoot, "codex/corgispec-ready/SKILL.md"))).toBe(true);
+    expect(existsSync(resolve(userSkillRoot, "claude-commands/propose.md"))).toBe(true);
+    expect(existsSync(resolve(userSkillRoot, "opencode-commands/corgi-propose.md"))).toBe(true);
+    expect(existsSync(resolve(targetDir, "openspec"))).toBe(false);
+    expect(result.reportPath).toBe(resolve(TEST_ROOT, "global-state/install-report.md"));
+  });
+
+  it("is idempotent after a complete local migration", async () => {
+    writeFileSync(resolve(targetDir, "README.md"), "# Idempotent\n");
+    const first = await runBootstrap({
+      target: targetDir,
+      schema: "github-tracked",
+      mode: "auto",
+      yes: true,
+      noMemory: true,
+      json: false,
+      assetsRoot: ASSETS_ROOT,
+      scope: "local",
+    });
+    expect(first.status).toBe("success");
+
+    const second = await runBootstrap({
+      target: targetDir,
+      mode: "update",
+      yes: true,
+      noMemory: true,
+      json: false,
+      assetsRoot: ASSETS_ROOT,
+      scope: "local",
+    });
+
+    expect(second.status).toBe("success");
+    expect(second.migration.conflicts).toEqual([]);
+    expect(second.migration.backups).toEqual([]);
+    expect(second.migration.preserved.length).toBeGreaterThan(0);
+  });
+
+  it("removes only signature-proven legacy project skill trees", async () => {
+    writeFileSync(resolve(targetDir, "README.md"), "# Legacy Skills\n");
+    const owned = resolve(targetDir, ".claude/skills/openspec-apply");
+    mkdirSync(owned, { recursive: true });
+    writeFileSync(
+      resolve(owned, "SKILL.md"),
+      "---\nname: openspec-apply\n---\nUse OpenSpec to apply a Corgi change.\n",
+    );
+
+    const result = await runBootstrap({
+      target: targetDir,
+      schema: "github-tracked",
+      mode: "auto",
+      yes: true,
+      noMemory: true,
+      json: false,
+      assetsRoot: ASSETS_ROOT,
+      scope: "local",
+      platforms: ["claude"],
+    });
+
+    expect(result.status).toBe("success");
+    expect(existsSync(owned)).toBe(false);
+    expect(result.migration.removed).toContain(".claude/skills/openspec-apply");
   });
 });

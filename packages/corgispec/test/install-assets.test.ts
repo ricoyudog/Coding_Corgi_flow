@@ -12,10 +12,15 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
 import {
+  LEGACY_PROJECT_ASSET_CATALOG,
+  classifyManagedProjectFiles,
   classifyTargetState,
+  createMigrationSummary,
   getManagedProjectFiles,
   patchInstallerConfig,
+  readInstallManifest,
   relativeManagedFiles,
+  sha256File,
   type TargetStateKind,
 } from "../src/lib/install-assets.js";
 
@@ -213,6 +218,39 @@ isolation:
     });
   });
 
+  it("adds an explicit tracking provider without replacing other Corgi config", () => {
+    const existingYaml = `schema: github-tracked
+corgi:
+  taskArtifactId: execution-plan
+  tracking:
+    label: keep-me
+context: preserve me
+rules:
+  execution-plan:
+    - Keep this rule
+isolation:
+  mode: worktree
+  root: .worktrees
+`;
+
+    const patchedYaml = patchInstallerConfig(existingYaml, {
+      schema: "github-tracked",
+      trackingProvider: "github",
+    });
+    const parsed = yaml.load(patchedYaml) as Record<string, any>;
+
+    expect(parsed.corgi).toEqual({
+      taskArtifactId: "execution-plan",
+      tracking: {
+        label: "keep-me",
+        provider: "github",
+      },
+    });
+    expect(parsed.context).toBe("preserve me");
+    expect(parsed.rules).toEqual({ "execution-plan": ["Keep this rule"] });
+    expect(parsed.isolation).toEqual({ mode: "worktree", root: ".worktrees" });
+  });
+
   it("enumerates managed project files from a provided assets root", () => {
     const assetsRoot = resolve(caseDir, "assets");
     writeFile(resolve(assetsRoot, "commands/opencode/corgi-install.md"), "# cmd\n");
@@ -244,5 +282,157 @@ isolation:
 
     expect(state.kind satisfies TargetStateKind).toBe("managed-update");
     expect(state.managedFiles).toEqual([".opencode/commands/corgi-install.md"]);
+  });
+
+  it("reads v1 JSON and legacy YAML manifests without throwing", () => {
+    const jsonDir = resolve(caseDir, "json");
+    writeFile(resolve(jsonDir, "openspec/.corgi-install.json"), JSON.stringify({
+      version: 1,
+      installedAt: "2026-01-02T03:04:05.000Z",
+      files: {
+        ".opencode\\commands\\corgi-install.md": {},
+      },
+    }));
+    const jsonRead = readInstallManifest(jsonDir);
+
+    expect(jsonRead.status).toBe("valid");
+    expect(jsonRead.sourceVersion).toBe(1);
+    expect(jsonRead.sourceFormat).toBe("json");
+    expect(jsonRead.manifest?.installedAt).toBe("2026-01-02T03:04:05.000Z");
+    expect(Object.keys(jsonRead.manifest?.files ?? {})).toEqual([
+      ".opencode/commands/corgi-install.md",
+    ]);
+
+    const yamlDir = resolve(caseDir, "yaml");
+    writeFile(
+      resolve(yamlDir, "openspec/install-manifest.yaml"),
+      "version: 1\ninstalledAt: 2025-01-01T00:00:00.000Z\nmanagedFiles:\n  - path: openspec/config.yaml\n"
+    );
+    const yamlRead = readInstallManifest(yamlDir);
+
+    expect(yamlRead.status).toBe("valid");
+    expect(yamlRead.sourceVersion).toBe(1);
+    expect(yamlRead.sourceFormat).toBe("yaml");
+    expect(yamlRead.manifest?.files).toEqual({ "openspec/config.yaml": {} });
+  });
+
+  it("prefers the canonical manifest while reporting a legacy manifest for retirement", () => {
+    writeFile(
+      resolve(caseDir, "openspec/.corgi-install.json"),
+      JSON.stringify({ version: 1, files: { "openspec/config.yaml": {} } })
+    );
+    writeFile(
+      resolve(caseDir, "openspec/install-manifest.yaml"),
+      "version: 1\nmanagedFiles:\n  - legacy.md\n"
+    );
+
+    const read = readInstallManifest(caseDir);
+
+    expect(read.status).toBe("valid");
+    expect(read.manifestPath).toBe(resolve(caseDir, "openspec/.corgi-install.json"));
+    expect(read.legacyPaths).toEqual([
+      resolve(caseDir, "openspec/install-manifest.yaml"),
+    ]);
+  });
+
+  it("returns invalid or ambiguous results for unsafe manifests instead of throwing", () => {
+    writeFile(resolve(caseDir, "openspec/.corgi-install.json"), "{ broken");
+    expect(readInstallManifest(caseDir)).toMatchObject({
+      status: "invalid",
+      manifestPath: resolve(caseDir, "openspec/.corgi-install.json"),
+    });
+
+    rmSync(resolve(caseDir, "openspec/.corgi-install.json"));
+    writeFile(
+      resolve(caseDir, "openspec/install-manifest.yaml"),
+      "version: 1\nmanagedFiles: []\n"
+    );
+    writeFile(
+      resolve(caseDir, "openspec/install-manifest.yml"),
+      "version: 1\nmanagedFiles: []\n"
+    );
+    expect(readInstallManifest(caseDir).status).toBe("ambiguous");
+  });
+
+  it("classifies managed files independently and treats missing files as repairable", () => {
+    const sourceRoot = resolve(caseDir, "source");
+    const targetRoot = resolve(caseDir, "target");
+    const currentSource = resolve(sourceRoot, "current.md");
+    const missingSource = resolve(sourceRoot, "missing.md");
+    const outdatedSource = resolve(sourceRoot, "outdated.md");
+    const modifiedSource = resolve(sourceRoot, "modified.md");
+    writeFile(currentSource, "current package\n");
+    writeFile(missingSource, "missing package\n");
+    writeFile(outdatedSource, "new package\n");
+    writeFile(modifiedSource, "new modified package\n");
+    writeFile(resolve(targetRoot, "current.md"), "current package\n");
+    writeFile(resolve(targetRoot, "outdated.md"), "old package\n");
+    writeFile(resolve(targetRoot, "modified.md"), "user edit\n");
+
+    const oldOutdated = resolve(caseDir, "old-outdated.md");
+    const oldModified = resolve(caseDir, "old-modified.md");
+    writeFile(oldOutdated, "old package\n");
+    writeFile(oldModified, "old modified package\n");
+    const classifications = classifyManagedProjectFiles({
+      targetDir: targetRoot,
+      expectedFiles: [
+        { path: "current.md", sourcePath: currentSource },
+        { path: "missing.md", sourcePath: missingSource },
+        { path: "outdated.md", sourcePath: outdatedSource },
+        { path: "modified.md", sourcePath: modifiedSource },
+      ],
+      manifest: {
+        version: 1,
+        files: {
+          "outdated.md": { sha256: sha256File(oldOutdated) },
+          "modified.md": { sha256: sha256File(oldModified) },
+          "missing.md": { sha256: sha256File(missingSource) },
+        },
+      },
+      obsoleteCandidates: [],
+    });
+
+    expect(Object.fromEntries(classifications.map(({ path, state }) => [path, state]))).toEqual({
+      "current.md": "current",
+      "missing.md": "missing",
+      "modified.md": "locally-modified",
+      "outdated.md": "outdated",
+    });
+  });
+
+  it("only classifies catalog paths as obsolete when the Corgi signature matches", () => {
+    const owned = LEGACY_PROJECT_ASSET_CATALOG.find(
+      (entry) => entry.path === ".opencode/commands/opsx-install.md"
+    )!;
+    const custom = {
+      path: ".opencode/commands/custom-install.md",
+      kind: "command" as const,
+      signatures: ["corgispec generated"],
+    };
+    writeFile(resolve(caseDir, owned.path), "# opsx install\n");
+    writeFile(resolve(caseDir, custom.path), "# custom install\n");
+
+    const classifications = classifyManagedProjectFiles({
+      targetDir: caseDir,
+      expectedFiles: [],
+      obsoleteCandidates: [owned, custom],
+    });
+
+    expect(classifications).toMatchObject([
+      { path: custom.path, state: "ambiguous" },
+      { path: owned.path, state: "obsolete" },
+    ]);
+  });
+
+  it("creates an empty stable migration summary", () => {
+    expect(createMigrationSummary(1)).toEqual({
+      fromManifestVersion: 1,
+      repaired: [],
+      updated: [],
+      removed: [],
+      preserved: [],
+      conflicts: [],
+      backups: [],
+    });
   });
 });

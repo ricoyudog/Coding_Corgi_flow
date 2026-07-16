@@ -136,15 +136,135 @@ function verifyAssetManifest(assetsDirectory) {
   return declaredFiles.length;
 }
 
-function createSmokeProject() {
-  const projectDirectory = resolve(consumerDirectory, "project");
+function copyPackagedAsset(installedRoot, projectDirectory, assetPath, targetPath) {
+  const source = resolve(installedRoot, "assets", assetPath);
+  const target = resolve(projectDirectory, targetPath);
+  if (!existsSync(source)) fail(`fixture asset ${assetPath} is missing from the installed package`);
+  mkdirSync(dirname(target), { recursive: true });
+  const content = readFileSync(source);
+  writeFileSync(target, content);
+  return {
+    targetPath,
+    sha256: createHash("sha256").update(content).digest("hex"),
+  };
+}
+
+function writeRc1ManagedFixture(projectDirectory, installedRoot, includeClaudeHooks) {
+  const managed = [
+    copyPackagedAsset(
+      installedRoot,
+      projectDirectory,
+      "commands/opencode/corgi-ready.md",
+      ".opencode/commands/corgi-ready.md",
+    ),
+    copyPackagedAsset(
+      installedRoot,
+      projectDirectory,
+      "commands/claude/corgi/ready.md",
+      ".claude/commands/corgi/ready.md",
+    ),
+  ];
+  const manifest = {
+    version: 1,
+    installedAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    sourceRepo: "corgispec@3.0.0-rc.1",
+    schema: "github-tracked",
+    isolation: { mode: "none" },
+    files: Object.fromEntries(
+      managed.map(({ targetPath, sha256 }) => [targetPath, { sha256 }]),
+    ),
+  };
+  writeFileSync(
+    resolve(projectDirectory, "openspec/.corgi-install.json"),
+    `${JSON.stringify(manifest, null, 2)}\n`,
+  );
+
+  if (includeClaudeHooks) {
+    mkdirSync(resolve(projectDirectory, ".claude"), { recursive: true });
+    writeFileSync(
+      resolve(projectDirectory, ".claude/settings.json"),
+      `${JSON.stringify({
+        permissions: { allow: ["Read"], deny: ["Bash(rm:*)"] },
+        env: { PACKAGE_SMOKE_CUSTOM: "preserve-me" },
+        hooks: {
+          PreToolUse: [
+            {
+              matcher: "Edit|Write",
+              hooks: [{ type: "command", command: "corgispec hook pre-write", timeout: 5 }],
+            },
+            {
+              matcher: "Read",
+              hooks: [{ type: "command", command: "node ./custom-pre-tool.cjs" }],
+            },
+          ],
+          Stop: [
+            {
+              hooks: [{ type: "command", command: "corgispec hook stop-check", timeout: 10 }],
+            },
+            {
+              hooks: [{ type: "command", command: "node ./custom-stop.cjs" }],
+            },
+          ],
+        },
+      }, null, 2)}\n`,
+    );
+  }
+}
+
+function claudeHookCommands(settings) {
+  if (!settings.hooks || typeof settings.hooks !== "object") return [];
+  return Object.values(settings.hooks).flatMap((entries) =>
+    Array.isArray(entries)
+      ? entries.flatMap((entry) =>
+          Array.isArray(entry?.hooks)
+            ? entry.hooks
+                .map((hook) => hook?.command)
+                .filter((command) => typeof command === "string")
+            : []
+        )
+      : []
+  );
+}
+
+function packagedSkillNames(installedRoot) {
+  const entrypoints = collectRelativeFiles(resolve(installedRoot, "assets/skills"))
+    .filter((path) => path.endsWith("/SKILL.md"));
+  return Array.from(new Set(entrypoints.map((path) => path.split("/").at(-2)))).sort();
+}
+
+function verifyInstalledSkills(installedRoot, skillRoots) {
+  const names = packagedSkillNames(installedRoot);
+  if (names.length === 0) fail("installed package contains no skill entrypoints");
+  for (const skillRoot of skillRoots) {
+    for (const name of names) {
+      if (!existsSync(resolve(skillRoot, name, "SKILL.md"))) {
+        fail(`${name} was not installed for ${skillRoot}`);
+      }
+    }
+  }
+}
+
+function verifyMirroredFiles(sourceRoot, targetRoot, label) {
+  for (const relativePath of collectRelativeFiles(sourceRoot)) {
+    const source = resolve(sourceRoot, relativePath);
+    const target = resolve(targetRoot, relativePath);
+    if (!existsSync(target)) fail(`${label} ${relativePath} was not installed`);
+    if (!readFileSync(source).equals(readFileSync(target))) {
+      fail(`${label} ${relativePath} does not match the packaged asset`);
+    }
+  }
+}
+
+function createSmokeProject(name = "project") {
+  const projectDirectory = resolve(consumerDirectory, name);
   const homeDirectory = resolve(temporaryRoot, "home");
   const changeRoot = resolve(projectDirectory, "openspec/changes/smoke-change");
   mkdirSync(changeRoot, { recursive: true });
   mkdirSync(homeDirectory, { recursive: true });
   writeFileSync(
     resolve(projectDirectory, "openspec/config.yaml"),
-    "schema: smoke-schema\ncorgi:\n  tracking:\n    provider: none\n  taskArtifactId: tasks\n",
+    "schema: github-tracked\ncorgi:\n  tracking:\n    provider: none\n  taskArtifactId: tasks\n",
   );
   writeFileSync(resolve(changeRoot, "proposal.md"), "# Smoke proposal\n");
   writeFileSync(resolve(changeRoot, "tasks.md"), "## 1. Smoke\n- [ ] 1.1 Verify packaged CLI\n");
@@ -168,8 +288,8 @@ if (args[0] === "--version") process.stdout.write("1.6.0\\n");
 else if (args[0] === "schema" && args[1] === "validate") output({ valid: true, issues: [] });
 else if (args[0] === "list") output({ changes: [{ name: "smoke-change", completedTasks: 0, totalTasks: 1, lastModified: "2026-01-01T00:00:00Z", status: "active" }], root: { path: root, source: "repo" } });
 else if (args[0] === "status") output({
-  changeName: "smoke-change", schemaName: "smoke-schema",
-  planningHome: { kind: "repo", root, changesDir: path.resolve(root, "openspec/changes"), defaultSchema: "smoke-schema" },
+  changeName: "smoke-change", schemaName: "github-tracked",
+  planningHome: { kind: "repo", root, changesDir: path.resolve(root, "openspec/changes"), defaultSchema: "github-tracked" },
   changeRoot, artifactPaths, nextSteps: [],
   actionContext: { mode: "repo-local", sourceOfTruth: "repo", planningArtifacts: ["proposal", "tasks"], linkedContext: [], allowedEditRoots: [changeRoot], requiresAffectedAreaSelection: false, constraints: ["planning only"] },
   isComplete: true, applyRequires: ["tasks"],
@@ -275,17 +395,132 @@ try {
     cwd: smoke.projectDirectory,
     env: smoke.env,
   });
-  for (const skillRoot of [
+  const userSkillRoots = [
     resolve(smoke.env.HOME, ".claude/skills"),
     resolve(smoke.env.HOME, ".config/opencode/skill"),
     resolve(smoke.env.HOME, ".codex/skills"),
-  ]) {
-    for (const slug of ["corgispec-ready", "corgispec-update", "corgispec-converge", "corgispec-loop"]) {
-      if (!existsSync(resolve(skillRoot, slug, "SKILL.md"))) {
-        fail(`${slug} was not installed for ${skillRoot}`);
-      }
+  ];
+  verifyInstalledSkills(installedRoot, userSkillRoots);
+
+  writeRc1ManagedFixture(smoke.projectDirectory, installedRoot, true);
+  const bootstrap = JSON.parse(
+    run(process.execPath, [
+      binPath,
+      "bootstrap",
+      "--target",
+      smoke.projectDirectory,
+      "--mode",
+      "update",
+      "--scope",
+      "both",
+      "--platform",
+      "claude,opencode,codex",
+      "--yes",
+      "--no-memory",
+      "--json",
+    ], { cwd: smoke.projectDirectory, env: smoke.env }),
+  );
+  if (bootstrap.status !== "success") {
+    fail(`packaged bootstrap upgrade returned ${String(bootstrap.status)}`);
+  }
+
+  const upgradedManifest = JSON.parse(
+    readFileSync(resolve(smoke.projectDirectory, "openspec/.corgi-install.json"), "utf8"),
+  );
+  if (upgradedManifest.version !== 2) {
+    fail(`packaged bootstrap left manifest at version ${String(upgradedManifest.version)}`);
+  }
+  if (upgradedManifest.packageVersion !== installedPackage.version) {
+    fail("packaged bootstrap did not record the installed package version");
+  }
+  if (upgradedManifest.installedAt !== "2026-01-01T00:00:00.000Z") {
+    fail("packaged bootstrap did not preserve the original install timestamp");
+  }
+  if (upgradedManifest.latestMigration?.fromManifestVersion !== 1) {
+    fail("packaged bootstrap did not record the v1 migration source");
+  }
+  if (upgradedManifest.hooks?.claude?.owned !== true) {
+    fail("packaged bootstrap did not record ownership of migrated Claude hooks");
+  }
+
+  const claudeSettings = JSON.parse(
+    readFileSync(resolve(smoke.projectDirectory, ".claude/settings.json"), "utf8"),
+  );
+  const hookCommands = claudeHookCommands(claudeSettings);
+  if (hookCommands.some((command) => command.includes("hook pre-write"))) {
+    fail("packaged bootstrap retained the legacy generic pre-write hook");
+  }
+  if (hookCommands.some((command) => command.includes("hook stop-check"))) {
+    fail("packaged bootstrap retained the legacy generic stop-check hook");
+  }
+  if (!hookCommands.some((command) => command.includes("hook loop-check"))) {
+    fail("packaged bootstrap did not install the current Claude hook set");
+  }
+  for (const customCommand of ["node ./custom-pre-tool.cjs", "node ./custom-stop.cjs"]) {
+    if (!hookCommands.includes(customCommand)) {
+      fail(`packaged bootstrap removed custom Claude hook ${customCommand}`);
     }
   }
+  if (
+    claudeSettings.permissions?.allow?.[0] !== "Read"
+    || claudeSettings.env?.PACKAGE_SMOKE_CUSTOM !== "preserve-me"
+  ) {
+    fail("packaged bootstrap did not preserve custom Claude settings");
+  }
+
+  verifyInstalledSkills(installedRoot, userSkillRoots);
+  verifyMirroredFiles(
+    resolve(installedRoot, "assets/commands/claude/corgi"),
+    resolve(smoke.env.HOME, ".claude/commands/corgi"),
+    "Claude user command",
+  );
+  verifyMirroredFiles(
+    resolve(installedRoot, "assets/commands/opencode"),
+    resolve(smoke.env.HOME, ".config/opencode/commands"),
+    "OpenCode user command",
+  );
+  verifyMirroredFiles(
+    resolve(installedRoot, "assets/commands/claude/corgi"),
+    resolve(smoke.projectDirectory, ".claude/commands/corgi"),
+    "Claude project command",
+  );
+  verifyMirroredFiles(
+    resolve(installedRoot, "assets/commands/opencode"),
+    resolve(smoke.projectDirectory, ".opencode/commands"),
+    "OpenCode project command",
+  );
+  verifyMirroredFiles(
+    resolve(installedRoot, "assets/schemas/github-tracked"),
+    resolve(smoke.projectDirectory, "openspec/schemas/github-tracked"),
+    "project schema asset",
+  );
+
+  const hookless = createSmokeProject("hookless-project");
+  writeRc1ManagedFixture(hookless.projectDirectory, installedRoot, false);
+  const hooklessBootstrap = JSON.parse(
+    run(process.execPath, [
+      binPath,
+      "bootstrap",
+      "--target",
+      hookless.projectDirectory,
+      "--mode",
+      "update",
+      "--scope",
+      "local",
+      "--platform",
+      "claude",
+      "--yes",
+      "--no-memory",
+      "--json",
+    ], { cwd: hookless.projectDirectory, env: hookless.env }),
+  );
+  if (hooklessBootstrap.status !== "success") {
+    fail(`hookless packaged bootstrap returned ${String(hooklessBootstrap.status)}`);
+  }
+  if (existsSync(resolve(hookless.projectDirectory, ".claude/settings.json"))) {
+    fail("packaged bootstrap opted a hookless project into Claude hooks");
+  }
+
   const doctor = JSON.parse(
     run(process.execPath, [binPath, "doctor", "--path", smoke.projectDirectory, "--json"], {
       cwd: smoke.projectDirectory,

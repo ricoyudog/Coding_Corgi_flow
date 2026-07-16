@@ -5,7 +5,7 @@ Use this file as the entry point when an LLM agent installs or upgrades CorgiSpe
 ## Runtime requirements
 
 - Node.js >=20.19.0
-- `corgispec@3.0.0-rc.3`
+- `corgispec@3.0.0-rc.4`
 - `@fission-ai/openspec` >=1.6.0 <2.0.0
 
 OpenSpec 1.3–1.5 are unsupported; do not continue with a compatibility fallback.
@@ -18,7 +18,7 @@ openspec --version
 corgispec --version
 ```
 
-`next` is the npm prerelease channel and currently resolves to `corgispec@3.0.0-rc.3`. Use `npm install -g corgispec@3.0.0-rc.3` when an exact, reproducible version is required. Do not use the unqualified package name for this upgrade: `corgispec` and `corgispec@latest` remain on stable `2.4.3`.
+`next` is the npm prerelease channel and currently resolves to `corgispec@3.0.0-rc.4`. Use `npm install -g corgispec@3.0.0-rc.4` when an exact, reproducible version is required. Do not use the unqualified package name for this upgrade: `corgispec` and `corgispec@latest` remain on stable `2.4.3`.
 
 ## Fresh bootstrap
 
@@ -44,7 +44,34 @@ corgispec --version
      --task-artifact execution-plan
    ```
 
-4. Read `openspec/.corgi-install-report.md` in the target project and report whether bootstrap succeeded, stopped, or failed. If bootstrap reports a legacy approval gate, ask that exact approval question and rerun only after approval.
+4. Read `openspec/.corgi-install-report.md` in the target project and report whether bootstrap succeeded, stopped, or failed. If it stopped on a modified, malformed, or ambiguously owned asset, report the backup paths and require manual resolution before rerunning.
+
+## Managed updates and automatic repair
+
+`corgispec bootstrap --mode auto` and `--mode update` preflight all selected Corgi-managed surfaces before writing. Within the selected scope they update outdated project commands/schema/config/manifest, synchronize user-level skills and Claude Code/OpenCode commands, restore missing managed files, remove or replace only legacy assets with a verifiable Corgi signature, and migrate hooks that Corgi previously installed.
+
+Scope controls the managed surface:
+
+| Scope | Managed assets |
+|---|---|
+| `local` | Project commands, schema, config, manifest, and existing hooks |
+| `global` | User-level skills for the selected platforms, plus Claude Code and OpenCode user commands |
+| `both` | Preflight and update the local and global surfaces together |
+
+Use `--platform <claude|opencode|codex>` (comma-separated when selecting more than one) to restrict detection, repair, and hook migration to those platforms. Without the flag, bootstrap keeps the normal all-platform behavior.
+
+Missing managed files are restored automatically. Locally modified files, malformed structured configuration, and assets whose Corgi ownership cannot be established are backed up and stop the update; bootstrap never force-merges or silently overwrites them. Backups are stored at:
+
+- Project assets: `openspec/.corgi-backups/<timestamp>/project/`
+- User-level assets: `~/.corgispec/backups/<timestamp>/<platform>/`
+
+Hookless projects remain opt-in: bootstrap does not create hooks where Corgi hooks have never been installed. Existing Corgi hooks are migrated with the same generators used by `corgispec hooks generate`:
+
+- Claude Code replaces only Corgi hook commands and preserves permissions, unrelated settings, and non-Corgi hooks.
+- OpenCode consolidates recognized legacy Corgi plugin files into the current plugin and preserves unrelated plugins.
+- Codex migrates legacy hook JSON to TOML plus Node `.cjs` wrappers and preserves MCP, approval, feature, and non-Corgi hook settings.
+
+After bootstrap, rerun `corgispec doctor --path /path/to/project`. Doctor verifies Claude Code, OpenCode, and Codex hook health independently; a valid configuration on one platform does not hide stale or missing managed state on another.
 
 ## Upgrade from CorgiSpec 2.x
 
@@ -94,7 +121,9 @@ The first call is read-only. If it reports an implementation gap, the matching p
 
 ## Optional lifecycle hooks
 
-The hook CLI has two entry points: generate platform configuration with `corgispec hooks generate --platform <claude|opencode|codex>`, and invoke a generated bridge with `corgispec hook <name>`. Codex generation writes TOML plus Node `.cjs` wrappers; it does not require Python. Generated stop handling includes both `stop-check` and `loop-check`.
+The hook CLI has two entry points: generate platform configuration with `corgispec hooks generate --platform <claude|opencode|codex>`, and invoke a generated bridge with `corgispec hook <name>`. Codex generation writes TOML plus Node `.cjs` wrappers; it does not require Python. Generic generated stop handling keeps session-bound `loop-check`; `stop-check` remains available only where an active Corgi lifecycle scopes it.
+
+Use `hooks generate` to opt a hookless project in. Later `bootstrap --mode auto|update` runs detect and repair that existing hook installation; they do not opt in other platforms automatically.
 
 OpenCode 1.18.x has no awaited stop hook. Its TypeScript plugin observes `session.idle`, preserves hook stdout/stderr, and uses `session.promptAsync` to re-enter an interactive session when canonical work remains. Treat `corgispec ready` and `corgispec loop ...` as the hard gates. For one-shot `opencode run` automation, inspect those CLI results explicitly because process teardown can race the asynchronous re-entry.
 
@@ -109,11 +138,11 @@ npm run release:check
 npm pack
 ```
 
-The release check rebuilds bundled assets, builds and typechecks the package, runs the complete test and coverage gates, creates a temporary npm tarball, installs it into a temporary project, and smoke-tests the packaged CLI and asset checksums. The optional final `npm pack` writes `corgispec-3.0.0-rc.3.tgz` for release verification or offline installation; normal consumers install the prerelease from npm with `corgispec@next`.
+The release check rebuilds bundled assets, builds and typechecks the package, runs the complete test and coverage gates, creates a temporary npm tarball, installs it into a temporary project, and smoke-tests the packaged CLI and asset checksums. The optional final `npm pack` writes `corgispec-3.0.0-rc.4.tgz` for release verification or offline installation; normal consumers install the prerelease from npm with `corgispec@next`.
 
 ## Rules
 
 - Do not bypass failed Node, OpenSpec runtime, schema, ready, test, coverage, or package-smoke checks.
 - Do not infer change or artifact paths when OpenSpec JSON provides authoritative paths.
 - Do not run separate user-level and project-level install steps unless bootstrap explicitly reports a missing component.
-- Do not silently overwrite local managed-file changes or approve a legacy migration on the user's behalf.
+- Do not bypass a stopped migration or overwrite its backups. Resolve modified, malformed, or ambiguous assets before rerunning bootstrap.

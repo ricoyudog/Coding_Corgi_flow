@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-rc.4] - 2026-07-16
+
+### Added
+
+- `bootstrap --mode auto|update` now builds one migration plan for the complete selected Corgi-managed surface before writing. Project commands/schema/config/manifest, existing hooks, user-level skills, and Claude/OpenCode user commands are classified as current, missing, outdated, locally modified, obsolete, or ambiguous.
+- Install manifest v2 preserves the original `installedAt`, records the package version, project hashes, per-platform hook ownership/generator format, and a structured migration summary. Canonical JSON, v1 JSON, and legacy YAML manifests are read safely and converge on `openspec/.corgi-install.json`.
+- Project and user-level conflict backups use deterministic timestamped roots, and a filesystem transaction restores every touched managed path if a later write fails.
+
+### Changed
+
+- Bootstrap defaults to `both` scopes, synchronizes all 29 bundled skills for Claude Code, OpenCode, and Codex, and installs all bundled Claude/OpenCode user commands. `--platform` restricts both discovery and repair while retaining unselected manifest ownership records.
+- Existing Claude Code, OpenCode, and Codex hooks are migrated through the same pure generators used by `hooks generate`. Projects that never installed Corgi hooks remain hookless and opt-in.
+- `doctor` reports hook health independently for all three platforms instead of treating the first healthy configuration as authoritative.
+
+### Fixed
+
+- Missing managed files are repaired instead of being mistaken for local modifications. Real hash mismatches, malformed structured files, and ambiguous ownership are backed up and stop before either local or global managed assets are changed.
+- Signature-proven legacy manifests, hook files, and project-local skill trees are removed safely without deleting unrelated settings, plugins, MCP configuration, approval policy, features, or custom hooks.
+
+### Tests
+
+- Added RC.1 migration fixtures, v1/YAML manifest upgrades, hookless preservation, three-platform hook migration, platform/scope isolation, concurrent preflight conflicts, idempotency, rollback, Windows/WSL command paths, package-smoke, and doctor regression coverage.
+
 ## [3.0.0-rc.3] - 2026-07-16
 
 ### Fixed

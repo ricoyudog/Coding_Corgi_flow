@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { chmodSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
-import { resolve } from "node:path";
+import { delimiter, dirname, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execSync } from "node:child_process";
+import { buildClaudeConfig } from "../src/lib/hook-install.js";
 
 const CLI = resolve(__dirname, "../dist/corgispec.js");
 const ORIGINAL_OPENSPEC_BIN = process.env["CORGISPEC_OPENSPEC_BIN"];
@@ -10,14 +11,26 @@ const ORIGINAL_OPENSPEC_BIN = process.env["CORGISPEC_OPENSPEC_BIN"];
 describe("doctor command", () => {
   let tempDir: string;
 
+  function testCorgispecBinary(): string {
+    const binDir = resolve(tempDir, "test-bin");
+    const name = process.platform === "win32" ? "corgispec.cmd" : "corgispec";
+    const binary = resolve(binDir, name);
+    mkdirSync(binDir, { recursive: true });
+    writeFileSync(binary, process.platform === "win32" ? "@exit /b 0\r\n" : "#!/bin/sh\nexit 0\n");
+    if (process.platform !== "win32") chmodSync(binary, 0o755);
+    return binary;
+  }
+
   function commandEnv(): NodeJS.ProcessEnv {
     const home = resolve(tempDir, "home");
     mkdirSync(home, { recursive: true });
+    const binary = testCorgispecBinary();
     return {
       ...process.env,
       HOME: home,
       USERPROFILE: home,
       XDG_CONFIG_HOME: resolve(home, ".config"),
+      PATH: `${dirname(binary)}${delimiter}${process.env["PATH"] ?? ""}`,
     };
   }
 
@@ -108,6 +121,40 @@ describe("doctor command", () => {
       expect(item).toHaveProperty("name");
       expect(item).toHaveProperty("passed");
       expect(item).toHaveProperty("message");
+    }
+  });
+
+  it("reports Claude, OpenCode, and Codex hooks independently", () => {
+    const binaryPath = testCorgispecBinary();
+    mkdirSync(resolve(tempDir, ".claude"), { recursive: true });
+    writeFileSync(
+      resolve(tempDir, ".claude/settings.json"),
+      `${JSON.stringify(buildClaudeConfig(binaryPath), null, 2)}\n`,
+    );
+    mkdirSync(resolve(tempDir, ".opencode/plugins"), { recursive: true });
+    writeFileSync(
+      resolve(tempDir, ".opencode/plugins/corgispec.ts"),
+      "// locally edited file at a historical Corgi path\nexport default {};\n",
+    );
+
+    try {
+      runDoctor("--json");
+      expect.fail("doctor should report the stale OpenCode hook independently");
+    } catch (err: any) {
+      const parsed = JSON.parse(String(err.stdout)) as Array<{
+        name: string;
+        passed: boolean;
+        message: string;
+      }>;
+      expect(parsed.find((item) => item.name === "Hooks (claude)")).toEqual(
+        expect.objectContaining({ passed: true }),
+      );
+      expect(parsed.find((item) => item.name === "Hooks (opencode)")).toEqual(
+        expect.objectContaining({ passed: false }),
+      );
+      expect(parsed.find((item) => item.name === "Hooks (codex)")).toEqual(
+        expect.objectContaining({ passed: true, message: expect.stringContaining("opt-in") }),
+      );
     }
   });
 
