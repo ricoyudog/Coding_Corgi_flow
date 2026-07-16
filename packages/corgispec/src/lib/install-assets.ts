@@ -1,25 +1,87 @@
 import { createHash } from "node:crypto";
 import {
   existsSync,
+  lstatSync,
   readFileSync,
   readdirSync,
   statSync,
 } from "node:fs";
-import { dirname, relative, resolve } from "node:path";
+import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
-import type { IsolationConfig, SchemaType } from "./config.js";
+import type {
+  IsolationConfig,
+  SchemaType,
+  TrackingProvider,
+} from "./config.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const MANIFEST_PATHS = [
+export const INSTALL_MANIFEST_VERSION = 2 as const;
+export const CANONICAL_INSTALL_MANIFEST_PATH =
+  "openspec/.corgi-install.json" as const;
+export const LEGACY_INSTALL_MANIFEST_PATHS = [
   "openspec/install-manifest.yaml",
-  "openspec/.corgi-install.json",
+  "openspec/install-manifest.yml",
+  "openspec/.opsx-install.json",
+] as const;
+
+const MANIFEST_PATHS = [
+  CANONICAL_INSTALL_MANIFEST_PATH,
+  ...LEGACY_INSTALL_MANIFEST_PATHS,
 ] as const;
 
 const LEGACY_MARKERS = [
   ".opencode/commands/corgi-install.md",
   ".claude/commands/corgi/install.md",
+] as const;
+
+/**
+ * Known paths alone never establish ownership. Callers must also require all
+ * signatures to match before scheduling removal of one of these files.
+ */
+export interface LegacyProjectAssetCatalogEntry {
+  path: string;
+  kind: "manifest" | "command";
+  signatures: readonly string[];
+}
+
+export const LEGACY_PROJECT_ASSET_CATALOG: readonly LegacyProjectAssetCatalogEntry[] = [
+  {
+    path: "openspec/install-manifest.yaml",
+    kind: "manifest",
+    signatures: ["version:", "managedFiles:"],
+  },
+  {
+    path: "openspec/install-manifest.yml",
+    kind: "manifest",
+    signatures: ["version:", "managedFiles:"],
+  },
+  {
+    path: "openspec/.opsx-install.json",
+    kind: "manifest",
+    signatures: ["\"version\"", "\"files\""],
+  },
+  {
+    path: ".opencode/commands/opsx-install.md",
+    kind: "command",
+    signatures: ["opsx", "install"],
+  },
+  {
+    path: ".claude/commands/opsx/install.md",
+    kind: "command",
+    signatures: ["opsx", "install"],
+  },
+] as const;
+
+/**
+ * Historical project-local skill prefixes. A prefix match is only a discovery
+ * hint; ownership still requires a Corgi/OpenSpec signature in each file.
+ */
+export const LEGACY_PROJECT_SKILL_PREFIXES = [
+  ".claude/skills/openspec-",
+  ".opencode/skills/openspec-",
+  ".codex/skills/openspec-",
 ] as const;
 
 export type BootstrapMode =
@@ -36,20 +98,67 @@ export type TargetStateKind =
   | "legacy"
   | "inconsistent";
 
+export type ManifestHookPlatform = "claude" | "opencode" | "codex";
+
+export interface MigrationSummary {
+  fromManifestVersion: number | null;
+  repaired: string[];
+  updated: string[];
+  removed: string[];
+  preserved: string[];
+  conflicts: string[];
+  backups: string[];
+}
+
+export interface InstallManifestHookMetadata {
+  /** True only when the generator has positively identified Corgi ownership. */
+  owned: boolean;
+  /** Stable generator format identifier, for example `claude-settings-v2`. */
+  format: string;
+  /** Project-relative files used by this platform's hook integration. */
+  files: string[];
+}
+
 export interface InstallManifestFile {
-  path: string;
+  /** Legacy managedFiles entries carry their path in the entry itself. */
+  path?: string;
   sha256?: string;
 }
 
+/**
+ * The in-memory shape intentionally accepts v1 fields so callers can migrate
+ * JSON and YAML manifests without maintaining a second compatibility type.
+ * Writers always emit version 2.
+ */
 export interface InstallManifest {
   version: number;
+  packageVersion?: string;
   sourceRepo?: string;
   schema?: SchemaType;
   isolation?: IsolationConfig;
   installedAt?: string;
   updatedAt?: string;
   managedFiles?: Array<string | InstallManifestFile>;
-  files?: Record<string, { sha256?: string }>;
+  files?: Record<string, InstallManifestFile>;
+  hooks?: Partial<Record<ManifestHookPlatform, InstallManifestHookMetadata>>;
+  latestMigration?: MigrationSummary;
+}
+
+export type InstallManifestReadStatus =
+  | "missing"
+  | "valid"
+  | "invalid"
+  | "ambiguous";
+
+export interface InstallManifestReadResult {
+  status: InstallManifestReadStatus;
+  manifest?: InstallManifest;
+  manifestPath?: string;
+  sourceFormat?: "json" | "yaml";
+  sourceVersion?: number;
+  /** Legacy manifests that remain and can be retired after a successful write. */
+  legacyPaths: string[];
+  errors: string[];
 }
 
 export interface TargetState {
@@ -59,12 +168,48 @@ export interface TargetState {
   configPath: string;
   manifestPath?: string;
   managedFiles: string[];
+  manifestRead: InstallManifestReadResult;
 }
 
 export interface InstallerConfigPatchInput {
   schema: SchemaType;
   isolation?: IsolationConfig;
   installer?: Record<string, unknown>;
+  /** Adds only corgi.tracking.provider and preserves all sibling Corgi fields. */
+  trackingProvider?: TrackingProvider;
+}
+
+export type ManagedProjectFileState =
+  | "current"
+  | "missing"
+  | "outdated"
+  | "locally-modified"
+  | "obsolete"
+  | "ambiguous";
+
+export interface ExpectedManagedProjectFile {
+  /** Project-relative destination path. */
+  path: string;
+  /** Either a precomputed hash or a readable source file is required. */
+  sha256?: string;
+  sourcePath?: string;
+}
+
+export interface ManagedProjectFileClassification {
+  path: string;
+  state: ManagedProjectFileState;
+  currentSha256?: string;
+  expectedSha256?: string;
+  installedSha256?: string;
+  reason: string;
+}
+
+export interface ClassifyManagedProjectFilesInput {
+  targetDir: string;
+  expectedFiles: readonly ExpectedManagedProjectFile[];
+  manifest?: InstallManifest;
+  /** Only exact catalog entries with matching signatures may become obsolete. */
+  obsoleteCandidates?: readonly LegacyProjectAssetCatalogEntry[];
 }
 
 function getAssetsRoot(assetsRoot?: string): string {
@@ -107,7 +252,18 @@ function listFiles(rootDir: string): string[] {
 }
 
 function normalizeRelativePath(path: string): string {
-  return path.replace(/\\/g, "/");
+  return path.replace(/\\/g, "/").replace(/^\.\//, "");
+}
+
+function isSafeRelativePath(path: string): boolean {
+  const normalized = normalizeRelativePath(path);
+  return (
+    normalized.length > 0
+    && !isAbsolute(path)
+    && normalized !== ".."
+    && !normalized.startsWith("../")
+    && !normalized.includes("/../")
+  );
 }
 
 function parseMaybeYamlOrJson(filePath: string): unknown {
@@ -118,14 +274,120 @@ function parseMaybeYamlOrJson(filePath: string): unknown {
   return yaml.load(content);
 }
 
-function getManifestPath(targetDir: string): string | undefined {
-  for (const relativePath of MANIFEST_PATHS) {
-    const candidate = resolve(targetDir, relativePath);
-    if (existsSync(candidate)) {
-      return candidate;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeManifest(parsed: unknown): InstallManifest {
+  if (!isRecord(parsed)) {
+    throw new Error("manifest must be an object");
+  }
+
+  const version = parsed.version === undefined ? 1 : parsed.version;
+  if (!Number.isInteger(version) || (version as number) < 1) {
+    throw new Error("manifest version must be a positive integer");
+  }
+  if ((version as number) > INSTALL_MANIFEST_VERSION) {
+    throw new Error(`unsupported manifest version ${String(version)}`);
+  }
+
+  if (parsed.files !== undefined && !isRecord(parsed.files)) {
+    throw new Error("manifest files must be an object");
+  }
+  if (parsed.managedFiles !== undefined && !Array.isArray(parsed.managedFiles)) {
+    throw new Error("manifest managedFiles must be an array");
+  }
+
+  const files: Record<string, InstallManifestFile> = {};
+  for (const [rawPath, rawEntry] of Object.entries(parsed.files ?? {})) {
+    const path = normalizeRelativePath(rawPath);
+    if (!isSafeRelativePath(path) || !isRecord(rawEntry)) {
+      throw new Error(`invalid managed file entry '${rawPath}'`);
+    }
+    const sha256 = rawEntry.sha256;
+    if (sha256 !== undefined && (typeof sha256 !== "string" || !isSha256(sha256))) {
+      throw new Error(`invalid sha256 for managed file '${rawPath}'`);
+    }
+    files[path] = sha256 === undefined ? {} : { sha256 };
+  }
+
+  const managedFiles: Array<string | InstallManifestFile> = [];
+  for (const rawEntry of parsed.managedFiles ?? []) {
+    const rawPath = typeof rawEntry === "string"
+      ? rawEntry
+      : isRecord(rawEntry) && typeof rawEntry.path === "string"
+        ? rawEntry.path
+        : undefined;
+    if (!rawPath || !isSafeRelativePath(rawPath)) {
+      throw new Error("invalid legacy managedFiles entry");
+    }
+    const path = normalizeRelativePath(rawPath);
+    const sha256 = typeof rawEntry === "string" ? undefined : rawEntry.sha256;
+    if (sha256 !== undefined && (typeof sha256 !== "string" || !isSha256(sha256))) {
+      throw new Error(`invalid sha256 for managed file '${rawPath}'`);
+    }
+    managedFiles.push(sha256 === undefined ? path : { path, sha256 });
+    if (!(path in files)) {
+      files[path] = sha256 === undefined ? {} : { sha256 };
     }
   }
-  return undefined;
+
+  const manifest = parsed as unknown as InstallManifest;
+  return {
+    ...manifest,
+    version: version as number,
+    files,
+    managedFiles: managedFiles.length > 0 ? managedFiles : manifest.managedFiles,
+  };
+}
+
+export function readInstallManifest(targetDir: string): InstallManifestReadResult {
+  const present = MANIFEST_PATHS
+    .map((relativePath) => ({
+      relativePath,
+      path: resolve(targetDir, relativePath),
+    }))
+    .filter(({ path }) => existsSync(path));
+  const legacyPaths = present
+    .filter(({ relativePath }) => relativePath !== CANONICAL_INSTALL_MANIFEST_PATH)
+    .map(({ path }) => path);
+
+  if (present.length === 0) {
+    return { status: "missing", legacyPaths: [], errors: [] };
+  }
+
+  const canonical = present.find(
+    ({ relativePath }) => relativePath === CANONICAL_INSTALL_MANIFEST_PATH
+  );
+  if (!canonical && present.length > 1) {
+    return {
+      status: "ambiguous",
+      legacyPaths,
+      errors: ["Multiple legacy install manifests exist; ownership is ambiguous."],
+    };
+  }
+
+  const selected = canonical ?? present[0]!;
+  try {
+    const manifest = normalizeManifest(parseMaybeYamlOrJson(selected.path));
+    return {
+      status: "valid",
+      manifest,
+      manifestPath: selected.path,
+      sourceFormat: selected.path.endsWith(".json") ? "json" : "yaml",
+      sourceVersion: manifest.version,
+      legacyPaths,
+      errors: [],
+    };
+  } catch (error) {
+    return {
+      status: "invalid",
+      manifestPath: selected.path,
+      sourceFormat: selected.path.endsWith(".json") ? "json" : "yaml",
+      legacyPaths,
+      errors: [error instanceof Error ? error.message : String(error)],
+    };
+  }
 }
 
 function readSchemaFromConfig(configPath: string): SchemaType | undefined {
@@ -133,42 +395,38 @@ function readSchemaFromConfig(configPath: string): SchemaType | undefined {
     return undefined;
   }
 
-  const parsed = yaml.load(readFileSync(configPath, "utf-8"));
-  if (!parsed || typeof parsed !== "object") {
+  try {
+    const parsed = yaml.load(readFileSync(configPath, "utf-8"));
+    if (!isRecord(parsed)) {
+      return undefined;
+    }
+    const schema = parsed.schema;
+    return typeof schema === "string" && schema.trim().length > 0
+      ? schema.trim()
+      : undefined;
+  } catch {
     return undefined;
   }
-
-  const schema = (parsed as Record<string, unknown>).schema;
-  if (schema === "github-tracked" || schema === "gitlab-tracked") {
-    return schema;
-  }
-
-  return undefined;
 }
 
-function getManifestManagedFiles(manifestPath: string): string[] {
-  const parsed = parseMaybeYamlOrJson(manifestPath) as InstallManifest | null;
-  if (!parsed || typeof parsed !== "object") {
+function getManifestManagedFiles(manifest: InstallManifest | undefined): string[] {
+  if (!manifest) {
     return [];
   }
 
   const managedFiles = new Set<string>();
-
-  for (const entry of parsed.managedFiles ?? []) {
+  for (const entry of manifest.managedFiles ?? []) {
     if (typeof entry === "string") {
       managedFiles.add(normalizeRelativePath(entry));
       continue;
     }
-
-    if (entry && typeof entry === "object" && typeof entry.path === "string") {
+    if (typeof entry.path === "string") {
       managedFiles.add(normalizeRelativePath(entry.path));
     }
   }
-
-  for (const key of Object.keys(parsed.files ?? {})) {
+  for (const key of Object.keys(manifest.files ?? {})) {
     managedFiles.add(normalizeRelativePath(key));
   }
-
   return Array.from(managedFiles).sort();
 }
 
@@ -186,20 +444,25 @@ function findLegacyManagedFiles(targetDir: string, schema?: SchemaType): string[
 export function classifyTargetState(targetDir: string): TargetState {
   const configPath = resolve(targetDir, "openspec/config.yaml");
   const hasConfig = existsSync(configPath);
-  const manifestPath = getManifestPath(targetDir);
-  const hasManifest = Boolean(manifestPath);
+  const manifestRead = readInstallManifest(targetDir);
+  const hasManifest = manifestRead.status !== "missing";
   const schema = readSchemaFromConfig(configPath);
-  const manifestManagedFiles = manifestPath ? getManifestManagedFiles(manifestPath) : [];
+  const manifestManagedFiles = getManifestManagedFiles(manifestRead.manifest);
   const managedFiles = findLegacyManagedFiles(targetDir, schema);
 
-  if (hasConfig && manifestPath && manifestManagedFiles.length > 0) {
+  if (
+    hasConfig
+    && manifestRead.status === "valid"
+    && manifestManagedFiles.length > 0
+  ) {
     return {
       kind: "managed-update",
       hasConfig,
       hasManifest,
       configPath,
-      manifestPath,
+      manifestPath: manifestRead.manifestPath,
       managedFiles: manifestManagedFiles,
+      manifestRead,
     };
   }
 
@@ -209,8 +472,9 @@ export function classifyTargetState(targetDir: string): TargetState {
       hasConfig,
       hasManifest,
       configPath,
-      manifestPath,
+      manifestPath: manifestRead.manifestPath,
       managedFiles: manifestManagedFiles,
+      manifestRead,
     };
   }
 
@@ -221,6 +485,7 @@ export function classifyTargetState(targetDir: string): TargetState {
       hasManifest,
       configPath,
       managedFiles,
+      manifestRead,
     };
   }
 
@@ -231,6 +496,7 @@ export function classifyTargetState(targetDir: string): TargetState {
       hasManifest,
       configPath,
       managedFiles,
+      manifestRead,
     };
   }
 
@@ -240,6 +506,7 @@ export function classifyTargetState(targetDir: string): TargetState {
     hasManifest,
     configPath,
     managedFiles: [],
+    manifestRead,
   };
 }
 
@@ -260,8 +527,7 @@ export function patchInstallerConfig(
   input: InstallerConfigPatchInput
 ): string {
   const parsed = yaml.load(existingYaml);
-  const existing =
-    parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+  const existing = isRecord(parsed) ? parsed : {};
 
   const next: Record<string, unknown> = {
     ...existing,
@@ -276,10 +542,214 @@ export function patchInstallerConfig(
     next.installer = input.installer;
   }
 
+  if (input.trackingProvider !== undefined) {
+    const existingCorgi = isRecord(existing.corgi) ? existing.corgi : {};
+    const existingTracking = isRecord(existingCorgi.tracking)
+      ? existingCorgi.tracking
+      : {};
+    next.corgi = {
+      ...existingCorgi,
+      tracking: {
+        ...existingTracking,
+        provider: input.trackingProvider,
+      },
+    };
+  }
+
   return yaml.dump(next, {
     lineWidth: -1,
     noRefs: true,
   });
+}
+
+export function createMigrationSummary(
+  fromManifestVersion: number | null = null
+): MigrationSummary {
+  return {
+    fromManifestVersion,
+    repaired: [],
+    updated: [],
+    removed: [],
+    preserved: [],
+    conflicts: [],
+    backups: [],
+  };
+}
+
+export function matchesLegacyAssetSignature(
+  targetDir: string,
+  entry: LegacyProjectAssetCatalogEntry
+): boolean {
+  const filePath = resolve(targetDir, entry.path);
+  if (!existsSync(filePath) || !isSafeRelativePath(entry.path)) {
+    return false;
+  }
+  try {
+    if (!lstatSync(filePath).isFile()) {
+      return false;
+    }
+    const content = readFileSync(filePath, "utf-8").toLowerCase();
+    return entry.signatures.every((signature) =>
+      content.includes(signature.toLowerCase())
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function classifyManagedProjectFiles(
+  input: ClassifyManagedProjectFilesInput
+): ManagedProjectFileClassification[] {
+  const classifications: ManagedProjectFileClassification[] = [];
+  const expectedPaths = new Set<string>();
+  const duplicatePaths = new Set<string>();
+
+  for (const expected of input.expectedFiles) {
+    const path = normalizeRelativePath(expected.path);
+    if (expectedPaths.has(path)) {
+      duplicatePaths.add(path);
+    }
+    expectedPaths.add(path);
+  }
+
+  for (const expected of input.expectedFiles) {
+    const path = normalizeRelativePath(expected.path);
+    const installedSha256 = input.manifest?.files?.[path]?.sha256;
+    if (!isSafeRelativePath(path)) {
+      classifications.push({
+        path,
+        state: "ambiguous",
+        installedSha256,
+        reason: "managed path is not a safe project-relative path",
+      });
+      continue;
+    }
+    if (duplicatePaths.has(path)) {
+      classifications.push({
+        path,
+        state: "ambiguous",
+        installedSha256,
+        reason: "managed path is declared more than once",
+      });
+      duplicatePaths.delete(path);
+      continue;
+    }
+
+    let expectedSha256 = expected.sha256;
+    if (!expectedSha256 && expected.sourcePath) {
+      try {
+        expectedSha256 = sha256File(expected.sourcePath);
+      } catch {
+        // Reported as ambiguous below.
+      }
+    }
+    if (!expectedSha256 || !isSha256(expectedSha256)) {
+      classifications.push({
+        path,
+        state: "ambiguous",
+        installedSha256,
+        reason: "expected asset hash is unavailable or invalid",
+      });
+      continue;
+    }
+
+    const targetPath = resolve(input.targetDir, path);
+    if (!existsSync(targetPath)) {
+      classifications.push({
+        path,
+        state: "missing",
+        expectedSha256,
+        installedSha256,
+        reason: "managed project file is missing",
+      });
+      continue;
+    }
+
+    let currentSha256: string;
+    try {
+      if (!lstatSync(targetPath).isFile()) {
+        throw new Error("not a regular file");
+      }
+      currentSha256 = sha256File(targetPath);
+    } catch {
+      classifications.push({
+        path,
+        state: "ambiguous",
+        expectedSha256,
+        installedSha256,
+        reason: "managed path cannot be read as a regular file",
+      });
+      continue;
+    }
+
+    if (currentSha256 === expectedSha256) {
+      classifications.push({
+        path,
+        state: "current",
+        currentSha256,
+        expectedSha256,
+        installedSha256,
+        reason: "project file matches the bundled asset",
+      });
+      continue;
+    }
+
+    if (!installedSha256 || !isSha256(installedSha256)) {
+      classifications.push({
+        path,
+        state: "ambiguous",
+        currentSha256,
+        expectedSha256,
+        installedSha256,
+        reason: "no trustworthy installed hash distinguishes an update from a local edit",
+      });
+      continue;
+    }
+
+    classifications.push({
+      path,
+      state: currentSha256 === installedSha256 ? "outdated" : "locally-modified",
+      currentSha256,
+      expectedSha256,
+      installedSha256,
+      reason: currentSha256 === installedSha256
+        ? "project file matches the prior install but the bundled asset changed"
+        : "project file differs from both the prior install and the bundled asset",
+    });
+  }
+
+  const candidates = input.obsoleteCandidates ?? LEGACY_PROJECT_ASSET_CATALOG;
+  for (const candidate of candidates) {
+    const path = normalizeRelativePath(candidate.path);
+    if (expectedPaths.has(path) || !existsSync(resolve(input.targetDir, path))) {
+      continue;
+    }
+    classifications.push({
+      path,
+      state: matchesLegacyAssetSignature(input.targetDir, candidate)
+        ? "obsolete"
+        : "ambiguous",
+      currentSha256: safeSha256File(resolve(input.targetDir, path)),
+      installedSha256: input.manifest?.files?.[path]?.sha256,
+      reason: matchesLegacyAssetSignature(input.targetDir, candidate)
+        ? "known legacy path and Corgi signature both match"
+        : "legacy path exists but its contents do not prove Corgi ownership",
+    });
+  }
+
+  return classifications.sort((left, right) => left.path.localeCompare(right.path));
+}
+
+function safeSha256File(filePath: string): string | undefined {
+  try {
+    return lstatSync(filePath).isFile() ? sha256File(filePath) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function isSha256(value: string): boolean {
+  return /^[a-f0-9]{64}$/i.test(value);
 }
 
 export function sha256File(filePath: string): string {

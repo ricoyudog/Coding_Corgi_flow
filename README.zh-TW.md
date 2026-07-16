@@ -85,6 +85,16 @@ corgispec bootstrap --target /path/to/your-project --schema github-tracked
 
 `next` 是預發布頻道，目前指向 `3.0.0-rc.2`。若要可重現的安裝，請使用 `npm install -g corgispec@3.0.0-rc.2` 鎖定版本。未加版本的 `corgispec` 與 `latest` tag 仍維持穩定版 `2.4.3`，不會安裝此 RC。
 
+可使用 `--platform <platforms>`（claude、opencode、codex；預設全部）與 `--scope <scope>`（global、local、both；預設 both）。`local` 管理專案 commands、schema、config、manifest 與已存在的 hooks；`global` 管理所選平台的 user-level skills，以及 Claude Code/OpenCode 的 user commands；`both` 會先一起 preflight，再更新兩個範圍。指定 `--platform` 時，只偵測及修復列出的平台。
+
+#### 受管理更新與自動修復
+
+`corgispec bootstrap --mode auto` 與 `--mode update` 會在寫入前偵測所選範圍內完整的 Corgi-managed surface：更新過期的 project commands/schema/config/manifest、同步 user-level skills 與 Claude Code/OpenCode commands、補回遺失的 managed file，並遷移 Corgi 先前安裝的 hooks。完全沒有 Corgi hooks 的專案仍保持 hookless；請使用 `corgispec hooks generate --platform <name>` 明確啟用。
+
+可驗證為 Corgi 產生的 legacy asset 會自動升級。若 managed file 有本地修改、無法解析，或 ownership 不明確，bootstrap 會先備份再停止，不會覆寫。專案備份位於 `openspec/.corgi-backups/<timestamp>/project/`；user-level 備份位於 `~/.corgispec/backups/<timestamp>/<platform>/`。
+
+Hook 遷移會保護各平台自訂內容：Claude Code 保留 permissions、其他 settings 與非 Corgi hooks；OpenCode 合併可辨識的舊 Corgi plugin，保留無關 plugin；Codex 將 legacy hook config 遷移成 TOML 與 Node `.cjs` wrappers，同時保留 MCP、approval、features 與非 Corgi hook 設定。更新後，`corgispec doctor --path <project>` 會分別驗證 Claude Code、OpenCode 與 Codex，避免其中一個平台正常就掩蓋其他平台的舊 hooks。
+
 **B. Claude Code / Codex Plugin**
 
 ```text
@@ -291,7 +301,7 @@ Claude Code 與 Codex 提供可 awaited 的 lifecycle hook，因此 `stop-check`
 ✓ Issue tracker 可連線
 ```
 
-Hooks 是 **opt-in** — 現有專案不需要 hooks 也能正常運作。執行 `corgispec hooks generate --platform <name>` 開始使用。
+Hooks 是 **opt-in** — 現有專案不需要 hooks 也能正常運作。執行 `corgispec hooks generate --platform <name>` 開始使用。一旦已有 Corgi hooks，`corgispec bootstrap --mode auto|update` 就會偵測並安全遷移所選平台；它不會在 hookless 專案自動啟用 hooks。
 
 ---
 
@@ -592,7 +602,7 @@ Installer 支援四種模式：
 /corgi-install --mode update --path /path/to/your-project
 ```
 
-若偵測到本地修改，installer 會印出 diff、停止更新、要求手動解決 — 絕不悄悄覆寫你的變更。
+完整的 CLI 更新可執行 `corgispec bootstrap --target /path/to/your-project --mode update`。Bootstrap 會先 preflight 所選的全部 managed surface、補回遺失檔案、升級可辨識的 legacy asset，並更新已存在的 hook installation。若偵測到本地修改、無效的 structured config，或 ownership 不明確，它會建立對應的 project 或 user-level 備份並停止，等待手動處理 — 絕不悄悄覆寫你的變更。
 
 ### 僅驗證
 
@@ -604,7 +614,7 @@ Installer 支援四種模式：
 
 ### Legacy 遷移
 
-若 managed file 存在但沒有 install manifest，installer 判定為 legacy，會建立備份並要求確認後才遷移。
+Bootstrap 能辨識 legacy manifest 與已知的 Corgi-generated file。具有可驗證 Corgi signature 的 asset 會自動遷移到目前的 manifest 與 generated format；未知或模糊的 asset 會先備份並停止更新，不會被刪除或取代。
 
 ---
 

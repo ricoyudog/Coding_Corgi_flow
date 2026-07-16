@@ -104,7 +104,7 @@ function showPlatformListing(): void {
 
 // ─── Claude Code Config ──────────────────────────────────────────────────
 
-function buildClaudeConfig(
+export function buildClaudeConfig(
   binaryPath: string
 ): Record<string, unknown> {
   const binaryCommand = binaryPath === "npx corgispec"
@@ -260,12 +260,12 @@ function generateClaudeOutput(
 function generateOpenCodeOutput(
   opts: GenerateOptions
 ): void {
-  const tsCode = buildOpenCodeDeepPlugin();
+  const tsCode = buildOpenCodeDeepPlugin(resolveRunningCliEntry());
   writeOutput(tsCode, opts.output, opts.force);
 }
 
-function buildOpenCodeDeepPlugin(): string {
-  const cliEntryJson = JSON.stringify(resolveRunningCliEntry());
+export function buildOpenCodeDeepPlugin(cliEntry: string): string {
+  const cliEntryJson = JSON.stringify(cliEntry);
   return `import type { Plugin } from "@opencode-ai/plugin";
 import { spawnSync } from "node:child_process";
 
@@ -503,7 +503,7 @@ export const CorgiSpecDeep: Plugin = async ({ client, directory }) => {
 
 // ─── Codex Config ────────────────────────────────────────────────────────
 
-const HOOK_EVENTS = [
+export const HOOK_EVENTS = [
   {
     event: "SessionStart",
     subcommand: "session-start",
@@ -541,7 +541,7 @@ const HOOK_EVENTS = [
   },
 ] as const;
 
-function buildCodexToml(): string {
+export function buildCodexToml(): string {
   const lines: string[] = ["[features]", "hooks = true", ""];
 
   for (const hook of HOOK_EVENTS) {
@@ -570,10 +570,11 @@ function buildCodexToml(): string {
   return lines.join("\n");
 }
 
-function buildNodeWrapper(
-  subcommand: string
+export function buildNodeWrapper(
+  subcommand: string,
+  cliEntry: string,
 ): string {
-  const cliEntryJson = JSON.stringify(resolveRunningCliEntry());
+  const cliEntryJson = JSON.stringify(cliEntry);
   return `#!/usr/bin/env node
 "use strict";
 const { spawnSync } = require("node:child_process");
@@ -605,6 +606,7 @@ process.stdin.on("end", () => {
 function generateCodexOutput(
   opts: GenerateOptions
 ): void {
+  const cliEntry = resolveRunningCliEntry();
   if (!opts.output) {
     const toml = buildCodexToml();
     console.log("=== .codex/config.toml ===");
@@ -613,7 +615,7 @@ function generateCodexOutput(
     for (const hook of HOOK_EVENTS) {
       const scriptName = `corgispec_${hook.subcommand.replace(/-/g, "_")}`;
       console.log(`=== .codex/hooks/${scriptName}.cjs ===`);
-      process.stdout.write(buildNodeWrapper(hook.subcommand));
+      process.stdout.write(buildNodeWrapper(hook.subcommand, cliEntry));
       console.log("");
     }
     return;
@@ -639,7 +641,7 @@ function generateCodexOutput(
   for (const hook of HOOK_EVENTS) {
     const scriptName = `corgispec_${hook.subcommand.replace(/-/g, "_")}`;
     const scriptPath = resolve(hooksDir, `${scriptName}.cjs`);
-    const code = buildNodeWrapper(hook.subcommand);
+    const code = buildNodeWrapper(hook.subcommand, cliEntry);
     writeFileSync(scriptPath, code);
     console.log(`Wrote ${scriptPath}`);
   }

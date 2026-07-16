@@ -28,7 +28,7 @@ export function createBootstrapCommand(): Command {
   const cmd = new Command("bootstrap");
 
   cmd
-    .description("Bootstrap Corgi assets and user-level skills into a project")
+    .description("Detect, install, and safely migrate managed Corgi assets")
     .option("--target <path>", "Target project directory", ".")
     .option("--schema <schema>", "OpenSpec schema to use (built-in or custom)")
     .option("--mode <mode>", "Bootstrap mode (auto, fresh, update, legacy, verify)", "auto")
@@ -51,8 +51,8 @@ export function createBootstrapCommand(): Command {
       let scopeInput = opts.scope;
       if (isInteractive && scopeInput === undefined) {
         scopeInput = await promptInput(
-          "Install scope? (global, local, both) [global]:",
-          "global"
+          "Install scope? (global, local, both) [both]:",
+          "both"
         );
       }
 

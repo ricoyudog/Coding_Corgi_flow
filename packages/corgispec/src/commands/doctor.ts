@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { resolve, relative } from "node:path";
+import { delimiter, resolve, relative } from "node:path";
 import {
   existsSync,
   accessSync,
@@ -16,7 +16,7 @@ import {
   resolveTrackingProvider,
 } from "../lib/config.js";
 import { detectPlatforms, type PlatformInfo } from "../lib/platform.js";
-import { detectHookConfig } from "../lib/hooks.js";
+import { inspectHookInstallations, type HookPlatform } from "../lib/hook-install.js";
 import { discoverSkills, validateSkill, type DiscoveredSkill } from "../lib/skills.js";
 import { getBundledSkillsDir } from "./install.js";
 import {
@@ -60,7 +60,7 @@ export function createDoctorCommand(): Command {
       results.push(...checkPlatforms());
 
       // 6. Hook configuration
-      results.push(checkHooks(cwd));
+      results.push(...checkHooks(cwd));
 
       // 7. Active schema validation through OpenSpec itself
       results.push(await checkSchema(cwd));
@@ -370,23 +370,53 @@ async function checkSchema(cwd: string): Promise<CheckResult> {
   }
 }
 
-function checkHooks(cwd: string): CheckResult {
-  const hookStatus = detectHookConfig(cwd);
-
-  if (hookStatus.configured) {
+function checkHooks(cwd: string): CheckResult[] {
+  const inspection = inspectHookInstallations({
+    root: cwd,
+    binaryPath: resolveDoctorBinaryPath(),
+    cliEntry: process.argv[1] ? resolve(process.argv[1]) : "corgispec",
+  });
+  return (["claude", "opencode", "codex"] as HookPlatform[]).map((platform) => {
+    const status = inspection.platforms[platform];
+    const name = `Hooks (${platform})`;
+    if (status.state === "hookless") {
+      return {
+        name,
+        passed: true,
+        message: "not configured (opt-in preserved)",
+        suggestion: `Run \`corgispec hooks generate --platform ${platform}\` to enable hooks.`,
+      };
+    }
+    if (status.state === "current" || status.state === "configured") {
+      return {
+        name,
+        passed: true,
+        message: `current Corgi hook format (${status.ownedPaths.length} owned file(s))`,
+      };
+    }
+    const details = status.conflicts.length > 0
+      ? status.conflicts.map((conflict) => conflict.reason).join("; ")
+      : `${status.actions.length} migration action(s) pending`;
     return {
-      name: "Hooks",
-      passed: true,
-      message: `configured for ${hookStatus.platform} (${hookStatus.events.join(", ")})`,
+      name,
+      passed: false,
+      message: `${status.state}: ${details}`,
+      suggestion: `Run \`corgispec bootstrap --target ${JSON.stringify(cwd)} --mode update --scope local --platform ${platform}\`.`,
     };
-  }
+  });
+}
 
-  return {
-    name: "Hooks",
-    passed: true,
-    message: "not configured",
-    suggestion: "Run `corgispec hooks generate --platform <name>` to enable hooks.",
-  };
+function resolveDoctorBinaryPath(): string {
+  const names = process.platform === "win32"
+    ? ["corgispec.cmd", "corgispec.exe", "corgispec.bat", "corgispec"]
+    : ["corgispec"];
+  for (const directory of (process.env["PATH"] ?? "").split(delimiter).filter(Boolean)) {
+    for (const name of names) {
+      const candidate = resolve(directory, name);
+      if (existsSync(candidate)) return candidate;
+    }
+  }
+  return "npx corgispec";
 }
 
 function printResults(results: CheckResult[]): void {

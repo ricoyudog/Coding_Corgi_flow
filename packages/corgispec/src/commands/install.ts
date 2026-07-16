@@ -37,7 +37,6 @@ export function installSkillsTo(
   options: { quiet?: boolean } = {},
 ): string[] {
   const installed: string[] = [];
-  const tierDirs = ["atoms", "molecules", "compounds"];
 
   if (!existsSync(sourceDir)) {
     return installed;
@@ -62,26 +61,41 @@ export function installSkillsTo(
     installed.push(name);
   }
 
-  // Scan tier subdirectories
-  for (const tier of tierDirs) {
-    const tierPath = resolve(sourceDir, tier);
-    if (!existsSync(tierPath)) continue;
-    const entries = readdirSync(tierPath, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      installEntry(resolve(tierPath, entry.name), entry.name);
-    }
-  }
-
-  // Scan root for flat skills (backward compat)
-  const entries = readdirSync(sourceDir, { withFileTypes: true });
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    if (tierDirs.includes(entry.name)) continue;
-    installEntry(resolve(sourceDir, entry.name), entry.name);
+  for (const entry of listBundledSkillEntries(sourceDir)) {
+    installEntry(entry.source, entry.name);
   }
 
   return installed;
+}
+
+export interface BundledSkillEntry {
+  name: string;
+  source: string;
+}
+
+/** Enumerate the package-owned skill destinations without mutating them. */
+export function listBundledSkillEntries(sourceDir: string): BundledSkillEntry[] {
+  const result: BundledSkillEntry[] = [];
+  const tierDirs = ["atoms", "molecules", "compounds"];
+  if (!existsSync(sourceDir)) return result;
+
+  for (const tier of tierDirs) {
+    const tierPath = resolve(sourceDir, tier);
+    if (!existsSync(tierPath)) continue;
+    for (const entry of readdirSync(tierPath, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        result.push({ name: entry.name, source: resolve(tierPath, entry.name) });
+      }
+    }
+  }
+
+  for (const entry of readdirSync(sourceDir, { withFileTypes: true })) {
+    if (entry.isDirectory() && !tierDirs.includes(entry.name)) {
+      result.push({ name: entry.name, source: resolve(sourceDir, entry.name) });
+    }
+  }
+
+  return result.sort((left, right) => left.name.localeCompare(right.name));
 }
 
 export function createInstallCommand(): Command {

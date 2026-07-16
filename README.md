@@ -84,10 +84,10 @@ corgispec doctor --path /path/to/your-project
 
 `next` is the prerelease channel and currently resolves to `3.0.0-rc.2`. For a reproducible install, pin it with `npm install -g corgispec@3.0.0-rc.2`. The unqualified `corgispec` package and the `latest` tag remain on stable `2.4.3`; they do not install this RC.
 
-Options: `--platform <platforms>` (claude, opencode, codex; default: all), `--scope <scope>` (global, local, both; default: global). When TTY is detected and flags are not provided, interactive prompts ask for platform and scope.
+Options: `--platform <platforms>` (claude, opencode, codex; default: all), `--scope <scope>` (global, local, both; default: both). When TTY is detected and flags are not provided, interactive prompts ask for platform and scope. `local` manages project commands, schema, config, manifest, and any existing hooks; `global` manages user-level skills for the selected platforms plus Claude Code and OpenCode user commands; `both` preflights and updates both surfaces as one operation. Supplying `--platform` restricts detection and repair to exactly those platforms.
 
 ```bash
-# Basic (all platforms, global scope)
+# Basic (all platforms, both scopes)
 corgispec bootstrap --target /path/to/your-project --schema github-tracked
 
 # Specific platforms
@@ -99,6 +99,14 @@ corgispec bootstrap --target /path/to/your-project --scope local --schema github
 # Interactive mode
 corgispec bootstrap --target /path/to/your-project
 ```
+
+#### Managed updates and automatic repair
+
+`corgispec bootstrap --mode auto` and `--mode update` detect the complete Corgi-managed surface within the selected scope before writing. They update outdated project commands/schema/config/manifest, synchronize user-level skills and Claude Code/OpenCode commands, restore missing managed files, and migrate hooks that Corgi previously installed. A project with no Corgi hooks stays hookless; use `corgispec hooks generate --platform <name>` to opt in.
+
+Known Corgi-generated legacy assets are upgraded automatically. If a managed file was locally modified, cannot be parsed, or has ambiguous ownership, bootstrap preserves a backup and stops instead of overwriting it. Project backups go to `openspec/.corgi-backups/<timestamp>/project/`; user-level backups go to `~/.corgispec/backups/<timestamp>/<platform>/`.
+
+Hook migration is platform-safe: Claude Code keeps permissions, custom settings, and non-Corgi hooks; OpenCode consolidates recognized legacy Corgi plugins while preserving unrelated plugins; Codex migrates legacy hook config to TOML plus Node `.cjs` wrappers while preserving MCP, approval, feature, and non-Corgi hook settings. After an update, `corgispec doctor --path <project>` verifies Claude Code, OpenCode, and Codex independently, so a healthy platform cannot hide stale hooks on another platform.
 
 **B. Claude Code / Codex Plugin**
 
@@ -306,7 +314,7 @@ Every molecule skill includes a **context gate** — a structured pre-execution 
 ✓ Issue tracker reachable
 ```
 
-Hooks are **opt-in** — existing projects work without them. Run `corgispec hooks generate --platform <name>` to get started.
+Hooks are **opt-in** — existing projects work without them. Run `corgispec hooks generate --platform <name>` to get started. Once Corgi hooks exist, `corgispec bootstrap --mode auto|update` detects and safely migrates them for the selected platforms; it never enables hooks in a hookless project.
 
 ---
 
@@ -608,7 +616,7 @@ The project already has `openspec/.corgi-install.json`:
 /corgi-install --mode update --path /path/to/your-project
 ```
 
-If local modifications are detected, the installer prints a diff, stops, and asks for manual resolution — it never silently overwrites your changes.
+For an end-to-end CLI update, run `corgispec bootstrap --target /path/to/your-project --mode update`. Bootstrap preflights every selected managed surface, restores missing files, upgrades recognized legacy assets, and updates an existing hook installation. If local modifications, invalid structured configuration, or ambiguous ownership are detected, it creates the appropriate project or user-level backup and stops for manual resolution — it never silently overwrites your changes.
 
 ### Verify-Only
 
@@ -620,7 +628,7 @@ Health check without mutations:
 
 ### Legacy Migration
 
-If managed files exist but no install manifest, the installer classifies it as legacy, creates backups, and asks for confirmation before migrating.
+Bootstrap recognizes legacy manifests and known Corgi-generated files. Assets with a verifiable Corgi signature migrate automatically to the current manifest and generated format; unknown or ambiguous assets are backed up and stop the update rather than being deleted or replaced.
 
 ---
 

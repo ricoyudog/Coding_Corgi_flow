@@ -1,6 +1,9 @@
 import {
+  accessSync,
+  constants,
   cpSync,
   existsSync,
+  lstatSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
@@ -8,25 +11,32 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
-import { basename, dirname, resolve } from "node:path";
+import { homedir, tmpdir } from "node:os";
+import { basename, delimiter, dirname, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
 import { initializeOpenSpec } from "../commands/init.js";
-import { getBundledSkillsDir, installSkillsTo } from "../commands/install.js";
-import type { Platform } from "./platform.js";
-import { getSkillDir } from "./platform.js";
-import type { SchemaType } from "./config.js";
+import type { CommandPlatform, Platform } from "./platform.js";
+import type { SchemaType, TrackingProvider } from "./config.js";
 import { loadConfigFromDir } from "./config.js";
 import {
+  CANONICAL_INSTALL_MANIFEST_PATH,
+  LEGACY_INSTALL_MANIFEST_PATHS,
+  LEGACY_PROJECT_ASSET_CATALOG,
+  LEGACY_PROJECT_SKILL_PREFIXES,
+  classifyManagedProjectFiles,
   classifyTargetState,
+  createMigrationSummary,
   getManagedProjectFiles,
   patchInstallerConfig,
   relativeManagedFiles,
   sha256File,
   type BootstrapMode,
   type InstallManifest,
+  type InstallManifestHookMetadata,
+  type ManagedProjectFileClassification,
+  type MigrationSummary,
 } from "./install-assets.js";
 import { initializeMemoryStructure } from "./memory-init.js";
 import { type BootstrapCheck, writeInstallManifest, writeInstallReport } from "./bootstrap-report.js";
@@ -36,6 +46,22 @@ import {
 } from "./openspec-runtime.js";
 import { resolveTrackingProvider } from "./config.js";
 import { createOpenSpecAdapter } from "./openspec-adapter.js";
+import {
+  BootstrapFileTransaction,
+  createPersistentBackup,
+  type BackupEntry,
+} from "./bootstrap-transaction.js";
+import {
+  applyUserAssetPlan,
+  planUserAssets,
+  type UserAssetPlan,
+} from "./user-assets.js";
+import {
+  applyHookMigrationPlan,
+  planHookMigration,
+  type HookMigrationPlan,
+  type HookPlatform,
+} from "./hook-install.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -47,7 +73,13 @@ export interface BootstrapOptions {
   noMemory: boolean;
   json: boolean;
   assetsRoot?: string;
-  userSkillDirs?: Record<Platform, string>;
+  userSkillDirs?: Partial<Record<Platform, string>>;
+  userCommandDirs?: Partial<Record<CommandPlatform, string>>;
+  /** Test/embedding override for ~/.corgispec reports and backups. */
+  userStateDir?: string;
+  packageVersion?: string;
+  binaryPath?: string;
+  cliEntry?: string;
   platforms?: string[];
   scope?: string;
 }
@@ -60,6 +92,7 @@ export interface BootstrapResult {
   reportPath: string;
   manifestPath?: string;
   message: string;
+  migration: MigrationSummary;
 }
 
 interface BootstrapContext {
@@ -76,18 +109,27 @@ interface BootstrapContext {
   manifestPath?: string;
   prerequisitesPassed: boolean;
   quiet: boolean;
+  packageVersion: string;
+  migration: MigrationSummary;
+  reportOverride?: string;
 }
 
 const REQUIRED_PROJECT_ASSET_DIRS = ["commands", "schemas", "skills", "memory-init"] as const;
 
 export async function runBootstrap(opts: BootstrapOptions): Promise<BootstrapResult> {
   const target = resolve(opts.target);
-  const { platforms, scope } = opts;
+  const platforms = selectedPlatforms(opts.platforms);
+  const scope = normalizeScope(opts.scope);
+  const localScope = scope === "local" || scope === "both";
+  const globalScope = scope === "global" || scope === "both";
   const state = classifyTargetState(target);
   const mode = resolveBootstrapMode(opts.mode, state.kind);
   const assetsRoot = resolveAssetsRoot(opts.assetsRoot);
   const timestamp = new Date().toISOString();
-  const schema = opts.schema ?? detectSchema(target) ?? "github-tracked";
+  const schema = opts.schema ?? safelyDetectSchema(target) ?? state.manifestRead.manifest?.schema ?? "github-tracked";
+  const packageVersion = opts.packageVersion ?? resolvePackageVersion(assetsRoot);
+  const userStateDir = resolve(opts.userStateDir ?? resolve(homedir(), ".corgispec"));
+  const userCommandDirs = opts.userCommandDirs ?? deriveUserCommandDirs(opts.userSkillDirs);
 
   const context: BootstrapContext = {
     assetsRoot,
@@ -108,10 +150,15 @@ export async function runBootstrap(opts: BootstrapOptions): Promise<BootstrapRes
     managedFiles: [],
     prerequisitesPassed: false,
     quiet: opts.json,
+    packageVersion,
+    migration: createMigrationSummary(state.manifestRead.sourceVersion ?? null),
+    reportOverride: localScope
+      ? undefined
+      : resolve(userStateDir, "install-report.md"),
   };
 
   try {
-    if (mode === "verify") {
+    if (mode === "verify" && localScope) {
       const verificationError = verifyManagedBootstrapState(target, state);
       if (verificationError) {
         context.checks.push({
@@ -123,10 +170,16 @@ export async function runBootstrap(opts: BootstrapOptions): Promise<BootstrapRes
       }
     }
 
-    await runPrerequisiteChecks(context, target, schema);
+    if (localScope) {
+      await runPrerequisiteChecks(context, target, schema);
+    } else {
+      runGlobalPrerequisiteChecks(context, target);
+    }
     context.prerequisitesPassed = true;
 
-    const explicitModeMismatch = getExplicitModeMismatch(opts.mode, state.kind);
+    const explicitModeMismatch = localScope
+      ? getExplicitModeMismatch(opts.mode, state.kind)
+      : null;
     if (explicitModeMismatch) {
       context.checks.push({
         name: "Managed files",
@@ -136,8 +189,12 @@ export async function runBootstrap(opts: BootstrapOptions): Promise<BootstrapRes
       return finalize(context, target, "stopped", explicitModeMismatch);
     }
 
-    if (state.kind === "inconsistent") {
-      return finalize(context, target, "stopped", "Target project is in an inconsistent bootstrap state.");
+    if (localScope && state.kind === "inconsistent") {
+      const conflictPaths = [state.configPath, state.manifestPath, ...state.manifestRead.legacyPaths]
+        .filter((entry): entry is string => Boolean(entry));
+      context.migration.conflicts.push(...conflictPaths.map((entry) => projectLabel(target, entry)));
+      backupProjectPaths(target, conflictPaths, context);
+      return finalize(context, target, "stopped", "Target project is in an inconsistent bootstrap state; its configuration was backed up without mutation.");
     }
 
     if (mode === "verify") {
@@ -149,21 +206,111 @@ export async function runBootstrap(opts: BootstrapOptions): Promise<BootstrapRes
       return finalize(context, target, "success", "Bootstrap verification completed without mutations.");
     }
 
-    if (state.kind === "init-needed") {
-      initializeOpenSpec({
-        target,
-        schema,
-        bundledSchemasDir: resolve(assetsRoot, "schemas"),
-      });
-      context.actions.push("initialized openspec project structure");
+    const effectiveSchema = safelyDetectSchema(target) ?? schema;
+    context.schema = effectiveSchema;
+    const previousManifest = state.manifestRead.status === "valid"
+      ? state.manifestRead.manifest
+      : undefined;
+    const sourceFiles = localScope
+      ? getSelectedManagedProjectFiles(effectiveSchema, assetsRoot, platforms)
+      : [];
+    const expectedFiles = sourceFiles.map((sourcePath) => ({
+      path: projectRelativePathFromAsset(assetsRoot, effectiveSchema, sourcePath),
+      sourcePath,
+    }));
+    let projectPlan = localScope
+      ? classifyManagedProjectFiles({
+          targetDir: target,
+          expectedFiles,
+          manifest: previousManifest,
+          obsoleteCandidates: LEGACY_PROJECT_ASSET_CATALOG,
+        })
+      : [];
+    if (localScope) {
+      projectPlan.push(...classifyLegacyProjectSkillTrees(target));
+      projectPlan.sort((left, right) => left.path.localeCompare(right.path));
+    }
+    if (state.kind === "legacy") {
+      const expected = new Set(expectedFiles.map((entry) => entry.path));
+      projectPlan = projectPlan.map((entry) =>
+        expected.has(entry.path) && entry.state === "ambiguous"
+          ? { ...entry, state: "outdated", reason: "legacy Corgi path will be replaced after explicit approval" }
+          : entry
+      );
     }
 
-    const effectiveSchema = detectSchema(target) ?? schema;
-    context.schema = effectiveSchema;
-    const overwriteFiles = getOverwriteTargets(target, effectiveSchema, assetsRoot);
+    const userPlan = globalScope
+      ? planUserAssets({
+          assetsRoot,
+          platforms,
+          userSkillDirs: opts.userSkillDirs,
+          userCommandDirs,
+        })
+      : emptyUserAssetPlan();
+    const hookPlan = localScope
+      ? planHookMigration({
+          root: target,
+          platforms,
+          binaryPath: opts.binaryPath ?? resolveBootstrapBinaryPath(),
+          cliEntry: opts.cliEntry ?? resolveRunningCliEntry(),
+        })
+      : emptyHookPlan(target);
+
+    if (localScope) {
+      try {
+        preflightPatchedConfig(target, effectiveSchema, context.timestamp);
+      } catch (error) {
+        const configPath = resolve(target, "openspec/config.yaml");
+        context.migration.conflicts.push("openspec/config.yaml");
+        backupProjectPaths(target, [configPath], context);
+        context.checks.push({
+          name: "Managed config",
+          status: "FAIL",
+          detail: error instanceof Error ? error.message : String(error),
+        });
+        return finalize(context, target, "stopped", "Bootstrap stopped because openspec/config.yaml could not be migrated safely.");
+      }
+    }
+    recordMigrationPlan(context, target, projectPlan, userPlan, hookPlan);
+    preflightWritableTargets([
+      ...(localScope ? expectedFiles.map((entry) => resolve(target, entry.path)) : []),
+      ...(localScope ? [
+        resolve(target, "openspec/config.yaml"),
+        resolve(target, CANONICAL_INSTALL_MANIFEST_PATH),
+        context.reportOverride ?? resolve(target, "openspec/.corgi-install-report.md"),
+        ...hookPlan.touchedPaths,
+      ] : []),
+      ...userPlan.actions.map((entry) => entry.target),
+      ...(globalScope ? [context.reportOverride ?? resolve(userStateDir, "install-report.md")] : []),
+    ]);
+    context.checks.push({
+      name: "Write permissions",
+      status: "PASS",
+      detail: "All selected managed targets passed writable-parent preflight.",
+    });
+
+    const projectConflicts = projectPlan
+      .filter((entry) => entry.state === "locally-modified" || entry.state === "ambiguous")
+      .map((entry) => resolve(target, entry.path));
+    const allProjectConflicts = [...projectConflicts, ...hookPlan.conflicts.map((entry) => entry.path)];
+    const allUserConflicts = userPlan.actions.filter((entry) => entry.status === "ambiguous");
+    if (allProjectConflicts.length > 0 || allUserConflicts.length > 0) {
+      backupProjectPaths(target, allProjectConflicts, context);
+      backupUserAssets(allUserConflicts, userStateDir, context);
+      context.checks.push({
+        name: "Managed files",
+        status: "FAIL",
+        detail: `Conflicts detected: ${context.migration.conflicts.join(", ")}`,
+      });
+      return finalize(context, target, "stopped", "Bootstrap stopped because local modifications or ambiguous Corgi assets were backed up.");
+    }
 
     if (state.kind === "legacy") {
-      createLegacyBackup(target, overwriteFiles, context);
+      const overwriteFiles = [
+        ...expectedFiles.map((entry) => resolve(target, entry.path)),
+        ...hookPlan.touchedPaths,
+      ];
+      backupProjectPaths(target, overwriteFiles, context, true);
       if (!opts.yes) {
         context.checks.push({
           name: "Managed files",
@@ -179,55 +326,94 @@ export async function runBootstrap(opts: BootstrapOptions): Promise<BootstrapRes
       }
     }
 
-    if (state.kind === "managed-update") {
-      const localModifications = detectManagedFileModifications(target, state.manifestPath);
-      if (localModifications.length > 0) {
+    backupUserAssets(
+      userPlan.actions.filter((entry) => entry.status === "outdated" || entry.status === "obsolete"),
+      userStateDir,
+      context,
+    );
+
+    const transaction = new BootstrapFileTransaction("bootstrap");
+    transaction.capture(getTransactionPaths({
+      target,
+      localScope,
+      userPlan,
+      hookPlan,
+      projectPlan,
+      reportPath: context.reportOverride ?? resolve(target, "openspec/.corgi-install-report.md"),
+    }));
+    try {
+      if (globalScope) {
+        const applied = applyUserAssetPlan(userPlan, {
+          assetsRoot,
+          platforms,
+          userSkillDirs: opts.userSkillDirs,
+          userCommandDirs,
+          quiet: context.quiet,
+        });
+        context.actions.push(`synchronized ${applied.installedSkills} user-level skills and ${applied.installedCommands} commands`);
+      }
+
+      if (localScope) {
+        if (state.kind === "init-needed") {
+          initializeOpenSpec({
+            target,
+            schema: effectiveSchema,
+            bundledSchemasDir: resolve(assetsRoot, "schemas"),
+          });
+          context.actions.push("initialized openspec project structure");
+        }
+
+        context.managedFiles = syncManagedProjectFiles(target, sourceFiles, effectiveSchema, assetsRoot, context);
+        removeObsoleteProjectAssets(target, projectPlan, context);
+        const hooks = applyHookMigrationPlan(hookPlan);
+        if (hooks.written.length > 0 || hooks.removed.length > 0) {
+          context.actions.push(`migrated existing hooks (${hooks.written.length} written, ${hooks.removed.length} removed)`);
+        }
+        updateConfigSchema(target, effectiveSchema, context.timestamp);
+
+        if (!opts.noMemory) {
+          const memory = initializeMemoryStructure({ targetDir: target, assetsRoot });
+          if (memory.createdFiles.length > 0 || memory.injectedSessionMemoryProtocol) {
+            context.actions.push("initialized project memory files");
+          }
+        }
+
+        context.managedFiles = mergePreservedManagedFiles(target, context.managedFiles, previousManifest, expectedFiles);
+        context.manifestPath = writeInstallManifest({
+          targetDir: target,
+          sourceRepo: context.sourceRepo,
+          packageVersion: context.packageVersion,
+          schema: effectiveSchema,
+          isolation: readIsolation(target),
+          installedAt: previousManifest?.installedAt,
+          updatedAt: context.timestamp,
+          files: context.managedFiles,
+          hooks: buildManifestHookMetadata(target, hookPlan, previousManifest, platforms),
+          migration: context.migration,
+          previousManifest: state.manifestRead,
+        });
+        context.actions.push("wrote install manifest v2");
         context.checks.push({
           name: "Managed files",
-          status: "FAIL",
-          detail: `Local modifications detected: ${localModifications.join(", ")}`,
+          status: "PASS",
+          detail: `${context.managedFiles.length}/${context.managedFiles.length} project-local files synced`,
         });
-        return finalize(context, target, "stopped", "Managed update stopped because tracked files have local modifications.");
+      } else {
+        context.checks.push({
+          name: "User-level assets",
+          status: "PASS",
+          detail: `Synchronized requested platforms without modifying project-local assets.`,
+        });
       }
+
+      const result = finalize(context, target, "success", "Bootstrap completed successfully.");
+      transaction.dispose();
+      return result;
+    } catch (error) {
+      transaction.rollback();
+      transaction.dispose();
+      throw error;
     }
-
-    if (scope !== "local") {
-      installUserSkills(context, assetsRoot, opts.userSkillDirs, platforms);
-    }
-
-    if (scope !== "global") {
-      context.managedFiles = syncManagedProjectFiles(target, effectiveSchema, assetsRoot, context);
-    }
-
-    updateConfigSchema(target, effectiveSchema, context.timestamp);
-
-    if (!opts.noMemory) {
-      const memory = initializeMemoryStructure({
-        targetDir: target,
-        assetsRoot,
-      });
-      if (memory.createdFiles.length > 0 || memory.injectedSessionMemoryProtocol) {
-        context.actions.push("initialized project memory files");
-      }
-    }
-
-    context.manifestPath = writeInstallManifest({
-      targetDir: target,
-      sourceRepo: context.sourceRepo,
-      schema: effectiveSchema,
-      isolation: readIsolation(target),
-      updatedAt: context.timestamp,
-      files: context.managedFiles,
-    });
-    context.actions.push("wrote install manifest");
-
-    context.checks.push({
-      name: "Managed files",
-      status: "PASS",
-      detail: `${context.managedFiles.length}/${context.managedFiles.length} project-local files synced`,
-    });
-
-    return finalize(context, target, "success", "Bootstrap completed successfully.");
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     context.checks.push({
@@ -237,6 +423,364 @@ export async function runBootstrap(opts: BootstrapOptions): Promise<BootstrapRes
     });
     return finalize(context, target, "failed", detail);
   }
+}
+
+function normalizeScope(scope: string | undefined): "global" | "local" | "both" {
+  if (scope === undefined) return "both";
+  if (scope === "global" || scope === "local" || scope === "both") return scope;
+  throw new Error(`Unsupported bootstrap scope '${scope}'.`);
+}
+
+function selectedPlatforms(platforms: string[] | undefined): HookPlatform[] {
+  const supported: HookPlatform[] = ["claude", "opencode", "codex"];
+  if (platforms === undefined) return supported;
+  const invalid = platforms.filter((platform) => !supported.includes(platform as HookPlatform));
+  if (invalid.length > 0) {
+    throw new Error(`Unsupported bootstrap platform(s): ${invalid.join(", ")}`);
+  }
+  return supported.filter((platform) => platforms.includes(platform));
+}
+
+function resolvePackageVersion(assetsRoot: string): string {
+  const packagePath = resolve(dirname(assetsRoot), "package.json");
+  try {
+    const parsed = JSON.parse(readFileSync(packagePath, "utf8")) as { version?: unknown };
+    if (typeof parsed.version === "string" && parsed.version.length > 0) {
+      return parsed.version;
+    }
+  } catch {
+    // Development embeddings can provide packageVersion explicitly.
+  }
+  return "0.0.0-development";
+}
+
+function resolveRunningCliEntry(): string {
+  return process.argv[1] ? resolve(process.argv[1]) : "corgispec";
+}
+
+function resolveBootstrapBinaryPath(): string {
+  const names = process.platform === "win32"
+    ? ["corgispec.cmd", "corgispec.exe", "corgispec.bat", "corgispec"]
+    : ["corgispec"];
+  for (const directory of (process.env["PATH"] ?? "").split(delimiter).filter(Boolean)) {
+    for (const name of names) {
+      const candidate = resolve(directory, name);
+      if (existsSync(candidate)) return candidate;
+    }
+  }
+  return "npx corgispec";
+}
+
+function deriveUserCommandDirs(
+  skillDirs: Partial<Record<Platform, string>> | undefined,
+): Partial<Record<CommandPlatform, string>> | undefined {
+  if (!skillDirs) return undefined;
+  const derived: Partial<Record<CommandPlatform, string>> = {};
+  if (skillDirs.claude) derived.claude = resolve(dirname(skillDirs.claude), "claude-commands");
+  if (skillDirs.opencode) derived.opencode = resolve(dirname(skillDirs.opencode), "opencode-commands");
+  return derived;
+}
+
+function runGlobalPrerequisiteChecks(context: BootstrapContext, target: string): void {
+  ensureProjectAssets(context.assetsRoot, context);
+  if (!existsSync(target)) {
+    throw new Error(`Target directory does not exist: ${target}`);
+  }
+  context.checks.push({
+    name: "Global scope",
+    status: "PASS",
+    detail: "Project-local schema, config, manifest, and hooks are outside global scope.",
+  });
+}
+
+function preflightWritableTargets(paths: string[]): void {
+  for (const requestedPath of new Set(paths.map((path) => resolve(path)))) {
+    let candidate = existsSync(requestedPath) ? requestedPath : dirname(requestedPath);
+    while (!existsSync(candidate)) {
+      const parent = dirname(candidate);
+      if (parent === candidate) break;
+      candidate = parent;
+    }
+    accessSync(candidate, constants.W_OK);
+    const parent = dirname(requestedPath);
+    if (existsSync(parent)) accessSync(parent, constants.W_OK);
+  }
+}
+
+function getSelectedManagedProjectFiles(
+  schema: SchemaType,
+  assetsRoot: string,
+  platforms: readonly HookPlatform[],
+): string[] {
+  const claudeRoot = resolve(assetsRoot, "commands/claude/corgi");
+  const opencodeRoot = resolve(assetsRoot, "commands/opencode");
+  const schemaRoot = resolve(assetsRoot, "schemas", schema);
+  return getManagedProjectFiles(schema, assetsRoot).filter((source) =>
+    source.startsWith(schemaRoot)
+    || (platforms.includes("claude") && source.startsWith(claudeRoot))
+    || (platforms.includes("opencode") && source.startsWith(opencodeRoot))
+  );
+}
+
+function emptyUserAssetPlan(): UserAssetPlan {
+  return { actions: [], conflicts: [] };
+}
+
+function emptyHookPlan(target: string): HookMigrationPlan {
+  return planHookMigration({ root: target, platforms: [] });
+}
+
+function preflightPatchedConfig(target: string, schema: SchemaType, timestamp: string): void {
+  const configPath = resolve(target, "openspec/config.yaml");
+  const existing = existsSync(configPath) ? readFileSync(configPath, "utf8") : "";
+  patchInstallerConfig(existing, {
+    schema,
+    installer: { version: 2, managed_at: timestamp },
+    isolation: readIsolation(target),
+    trackingProvider: trackingProviderFor(target, schema),
+  });
+}
+
+function trackingProviderFor(target: string, schema: SchemaType): TrackingProvider {
+  try {
+    return resolveTrackingProvider(loadConfigFromDir(target)).provider;
+  } catch {
+    return schema === "github-tracked"
+      ? "github"
+      : schema === "gitlab-tracked"
+        ? "gitlab"
+        : "none";
+  }
+}
+
+function recordMigrationPlan(
+  context: BootstrapContext,
+  target: string,
+  projectPlan: ManagedProjectFileClassification[],
+  userPlan: UserAssetPlan,
+  hookPlan: HookMigrationPlan,
+): void {
+  for (const item of projectPlan) {
+    const label = item.path;
+    if (item.state === "current") context.migration.preserved.push(label);
+    if (item.state === "missing") context.migration.repaired.push(label);
+    if (item.state === "outdated") context.migration.updated.push(label);
+    if (item.state === "obsolete") context.migration.removed.push(label);
+    if (item.state === "locally-modified" || item.state === "ambiguous") {
+      context.migration.conflicts.push(label);
+    }
+  }
+  for (const item of userPlan.actions) {
+    const label = `user:${item.platform}:${item.kind}:${item.name}`;
+    if (item.status === "current") context.migration.preserved.push(label);
+    if (item.status === "missing") context.migration.repaired.push(label);
+    if (item.status === "outdated") context.migration.updated.push(label);
+    if (item.status === "obsolete") context.migration.removed.push(label);
+    if (item.status === "ambiguous") context.migration.conflicts.push(label);
+  }
+  for (const platform of ["claude", "opencode", "codex"] as const) {
+    const inspection = hookPlan.platforms[platform];
+    if (!inspection.enabled) {
+      context.migration.preserved.push(`hooks:${platform}:not-installed`);
+    }
+  }
+  for (const action of hookPlan.actions) {
+    const label = `hooks:${action.platform}:${projectLabel(target, action.path)}`;
+    if (action.status === "missing") context.migration.repaired.push(label);
+    if (action.status === "outdated") context.migration.updated.push(label);
+    if (action.status === "obsolete") context.migration.removed.push(label);
+  }
+  for (const conflict of hookPlan.conflicts) {
+    context.migration.conflicts.push(`hooks:${conflict.platform}:${projectLabel(target, conflict.path)}`);
+  }
+}
+
+function projectLabel(target: string, path: string): string {
+  const label = relative(target, path).replace(/\\/g, "/");
+  return label.startsWith("../") ? path.replace(/\\/g, "/") : label;
+}
+
+function backupProjectPaths(
+  target: string,
+  paths: Array<string | undefined>,
+  context: BootstrapContext,
+  legacy = false,
+): void {
+  const entries: BackupEntry[] = [];
+  for (const path of paths) {
+    if (!path || !existsSync(path)) continue;
+    const relativePath = projectLabel(target, path);
+    if (relativePath.startsWith("../") || relativePath === path.replace(/\\/g, "/")) continue;
+    entries.push({ source: path, relativePath });
+  }
+  if (entries.length === 0) return;
+  const backupRoot = resolve(
+    target,
+    "openspec/.corgi-backups",
+    safeTimestamp(context.timestamp),
+    "project",
+  );
+  const written = createPersistentBackup(backupRoot, entries);
+  context.migration.backups.push(...written);
+  context.actions.push(`${legacy ? "created legacy backup" : "backed up conflicting project assets"} at ${backupRoot}`);
+}
+
+function backupUserAssets(
+  actions: UserAssetPlan["actions"],
+  userStateDir: string,
+  context: BootstrapContext,
+): void {
+  for (const platform of ["claude", "opencode", "codex"] as const) {
+    const entries = actions
+      .filter((action) => action.platform === platform && existsSync(action.target))
+      .map((action) => ({
+        source: action.target,
+        relativePath: `${action.kind === "skill" ? "skills" : "commands"}/${action.name}`,
+      }));
+    if (entries.length === 0) continue;
+    const backupRoot = resolve(userStateDir, "backups", safeTimestamp(context.timestamp), platform);
+    const written = createPersistentBackup(backupRoot, entries);
+    context.migration.backups.push(...written);
+    context.actions.push(`backed up ${platform} user assets at ${backupRoot}`);
+  }
+}
+
+function safeTimestamp(timestamp: string): string {
+  return timestamp.replace(/[:.]/g, "-");
+}
+
+function getTransactionPaths(input: {
+  target: string;
+  localScope: boolean;
+  userPlan: UserAssetPlan;
+  hookPlan: HookMigrationPlan;
+  projectPlan: ManagedProjectFileClassification[];
+  reportPath: string;
+}): string[] {
+  const paths = [input.reportPath, ...input.userPlan.actions.map((action) => action.target)];
+  if (input.localScope) {
+    paths.push(
+      resolve(input.target, "openspec"),
+      resolve(input.target, ".opencode/commands"),
+      resolve(input.target, ".claude/commands/corgi"),
+      resolve(input.target, "memory"),
+      resolve(input.target, "wiki"),
+      ...input.hookPlan.touchedPaths,
+      ...input.projectPlan
+        .filter((entry) => entry.state === "obsolete")
+        .map((entry) => resolve(input.target, entry.path)),
+    );
+  }
+  return paths;
+}
+
+function classifyLegacyProjectSkillTrees(target: string): ManagedProjectFileClassification[] {
+  const classifications: ManagedProjectFileClassification[] = [];
+  for (const prefix of LEGACY_PROJECT_SKILL_PREFIXES) {
+    const prefixPath = resolve(target, prefix);
+    const parent = dirname(prefixPath);
+    const namePrefix = basename(prefixPath);
+    if (!existsSync(parent)) continue;
+    for (const entry of readdirSync(parent, { withFileTypes: true })) {
+      if (!entry.name.startsWith(namePrefix)) continue;
+      const path = resolve(parent, entry.name);
+      const relativePath = projectLabel(target, path);
+      let owned = false;
+      try {
+        if (entry.isDirectory() && lstatSync(path).isDirectory()) {
+          const skillPath = resolve(path, "SKILL.md");
+          if (existsSync(skillPath)) {
+            const content = readFileSync(skillPath, "utf8");
+            owned = /^name:\s*["']?openspec-[a-z0-9-]+["']?\s*$/mu.test(content)
+              && /(?:OpenSpec|Corgi)/u.test(content);
+          }
+        }
+      } catch {
+        owned = false;
+      }
+      classifications.push({
+        path: relativePath,
+        state: owned ? "obsolete" : "ambiguous",
+        reason: owned
+          ? "known legacy project skill prefix and Corgi/OpenSpec signature both match"
+          : "legacy project skill path exists but ownership is ambiguous",
+      });
+    }
+  }
+  return classifications;
+}
+
+function removeObsoleteProjectAssets(
+  target: string,
+  plan: ManagedProjectFileClassification[],
+  context: BootstrapContext,
+): void {
+  const removed: string[] = [];
+  for (const item of plan) {
+    if (item.state !== "obsolete") continue;
+    const path = resolve(target, item.path);
+    rmSync(path, { recursive: true, force: true });
+    removed.push(item.path);
+  }
+  if (removed.length > 0) context.actions.push(`removed ${removed.length} obsolete Corgi assets`);
+}
+
+function mergePreservedManagedFiles(
+  target: string,
+  written: string[],
+  previous: InstallManifest | undefined,
+  selected: Array<{ path: string }>,
+): string[] {
+  const selectedPaths = new Set(selected.map((entry) => entry.path));
+  const obsoletePaths = new Set([
+    CANONICAL_INSTALL_MANIFEST_PATH,
+    ...LEGACY_INSTALL_MANIFEST_PATHS,
+    ...LEGACY_PROJECT_ASSET_CATALOG.map((entry) => entry.path),
+  ]);
+  const files = new Set(written);
+  for (const relativePath of Object.keys(previous?.files ?? {})) {
+    if (
+      selectedPaths.has(relativePath)
+      || obsoletePaths.has(relativePath)
+      || LEGACY_PROJECT_SKILL_PREFIXES.some((prefix) => relativePath.startsWith(prefix))
+    ) continue;
+    const path = resolve(target, relativePath);
+    if (existsSync(path)) files.add(path);
+  }
+  return [...files].sort();
+}
+
+function buildManifestHookMetadata(
+  target: string,
+  hookPlan: HookMigrationPlan,
+  previous: InstallManifest | undefined,
+  selected: readonly HookPlatform[],
+): Partial<Record<HookPlatform, InstallManifestHookMetadata>> {
+  const metadata: Partial<Record<HookPlatform, InstallManifestHookMetadata>> = {
+    ...(previous?.hooks ?? {}),
+  };
+  const formats: Record<HookPlatform, string> = {
+    claude: "claude-settings-v2",
+    opencode: "opencode-plugin-v2",
+    codex: "codex-config-toml-v2",
+  };
+  for (const platform of selected) {
+    const inspection = hookPlan.platforms[platform];
+    if (!inspection.enabled) {
+      delete metadata[platform];
+      continue;
+    }
+    const files = new Set([
+      ...inspection.ownedPaths,
+      ...inspection.actions.filter((action) => action.kind === "write").map((action) => action.path),
+    ]);
+    metadata[platform] = {
+      owned: true,
+      format: formats[platform],
+      files: [...files].filter(existsSync).map((path) => projectLabel(target, path)).sort(),
+    };
+  }
+  return metadata;
 }
 
 function resolveAssetsRoot(assetsRoot?: string): string {
@@ -475,49 +1019,13 @@ function checkCliAvailability(command: "gh" | "glab"): { ok: boolean; detail: st
   };
 }
 
-function installUserSkills(
-  context: BootstrapContext,
-  assetsRoot: string,
-  userSkillDirs?: Record<Platform, string>,
-  platforms?: string[]
-): void {
-  const sourceDir = getBundledSkillsDirFromAssets(assetsRoot);
-  const allPlatforms: Platform[] = ["claude", "opencode", "codex"];
-  const targetPlatforms = platforms
-    ? allPlatforms.filter((p) => platforms.includes(p))
-    : allPlatforms;
-  let installedCount = 0;
-
-  for (const platform of targetPlatforms) {
-    const targetDir = userSkillDirs?.[platform] ?? getSkillDir(platform);
-    installedCount += installSkillsTo(sourceDir, targetDir, false, {
-      quiet: context.quiet,
-    }).length;
-  }
-
-  context.actions.push(`installed ${installedCount} user-level skills`);
-  context.checks.push({
-    name: "User-level skills",
-    status: "PASS",
-    detail: `Installed bundled skills across ${targetPlatforms.length} platform targets.`,
-  });
-}
-
-function getBundledSkillsDirFromAssets(assetsRoot: string): string {
-  const skillsRoot = resolve(assetsRoot, "skills");
-  if (!existsSync(skillsRoot)) {
-    return getBundledSkillsDir();
-  }
-  return skillsRoot;
-}
-
 function syncManagedProjectFiles(
   target: string,
+  sourceFiles: string[],
   schema: SchemaType,
   assetsRoot: string,
   context: BootstrapContext
 ): string[] {
-  const sourceFiles = getManagedProjectFiles(schema, assetsRoot);
   const written: string[] = [];
 
   for (const sourceFile of sourceFiles) {
@@ -535,12 +1043,6 @@ function syncManagedProjectFiles(
     detail: `Copied bundled schema assets for ${schema}.`,
   });
   return written;
-}
-
-function getOverwriteTargets(target: string, schema: SchemaType, assetsRoot: string): string[] {
-  return getManagedProjectFiles(schema, assetsRoot).map((sourceFile) =>
-    resolve(target, projectRelativePathFromAsset(assetsRoot, schema, sourceFile))
-  );
 }
 
 function projectRelativePathFromAsset(assetsRoot: string, schema: SchemaType, sourceFile: string): string {
@@ -561,31 +1063,6 @@ function projectRelativePathFromAsset(assetsRoot: string, schema: SchemaType, so
   throw new Error(`Unsupported managed asset path: ${sourceFile}`);
 }
 
-function detectManagedFileModifications(
-  target: string,
-  manifestPath: string | undefined
-): string[] {
-  if (!manifestPath || !existsSync(manifestPath)) {
-    return [];
-  }
-
-  const manifest = JSON.parse(readFileSync(manifestPath, "utf-8")) as InstallManifest;
-  const modified: string[] = [];
-  for (const [relativePath, entry] of Object.entries(manifest.files ?? {})) {
-    const targetFile = resolve(target, relativePath);
-    if (!existsSync(targetFile)) {
-      modified.push(relativePath);
-      continue;
-    }
-
-    const currentHash = sha256File(targetFile);
-    if (entry.sha256 && currentHash !== entry.sha256) {
-      modified.push(relativePath);
-    }
-  }
-  return modified;
-}
-
 function verifyManagedBootstrapState(
   target: string,
   state: ReturnType<typeof classifyTargetState>,
@@ -594,11 +1071,9 @@ function verifyManagedBootstrapState(
     return "Verify mode requires a managed bootstrap state with config, manifest, and managed file hashes.";
   }
 
-  let manifest: InstallManifest;
-  try {
-    manifest = JSON.parse(readFileSync(state.manifestPath, "utf-8")) as InstallManifest;
-  } catch (error) {
-    return `Managed bootstrap manifest is unreadable: ${error instanceof Error ? error.message : String(error)}`;
+  const manifest = state.manifestRead.manifest;
+  if (state.manifestRead.status !== "valid" || !manifest) {
+    return `Managed bootstrap manifest is unreadable: ${state.manifestRead.errors.join("; ")}`;
   }
 
   const entries = Object.entries(manifest.files ?? {});
@@ -635,29 +1110,17 @@ function verifyManagedBootstrapState(
   return null;
 }
 
-function createLegacyBackup(target: string, managedFiles: string[], context: BootstrapContext): void {
-  const backupRoot = resolve(target, "openspec/.corgi-backups", context.timestamp.replace(/[:.]/g, "-"));
-  for (const source of managedFiles) {
-    if (!existsSync(source)) {
-      continue;
-    }
-    const destination = resolve(backupRoot, relativeManagedFiles(target, [source])[0]);
-    mkdirSync(dirname(destination), { recursive: true });
-    cpSync(source, destination);
-  }
-  context.actions.push(`created legacy backup at ${backupRoot}`);
-}
-
 function updateConfigSchema(target: string, schema: SchemaType, timestamp: string): void {
   const configPath = resolve(target, "openspec/config.yaml");
   const existing = existsSync(configPath) ? readFileSync(configPath, "utf-8") : "";
   const patched = patchInstallerConfig(existing, {
     schema,
     installer: {
-      version: 1,
+      version: 2,
       managed_at: timestamp,
     },
     isolation: readIsolation(target),
+    trackingProvider: trackingProviderFor(target, schema),
   });
   writeFileSync(configPath, patched);
 }
@@ -666,9 +1129,16 @@ function readIsolation(target: string): { mode: "none" | "worktree"; root?: stri
   try {
     const config = loadConfigFromDir(target);
     return config.isolation ?? { mode: "none" };
-  } catch (err: unknown) {
-    console.error(`[bootstrap] Failed to read isolation config: ${err instanceof Error ? err.message : String(err)}`);
+  } catch {
     return { mode: "none" };
+  }
+}
+
+function safelyDetectSchema(target: string): SchemaType | undefined {
+  try {
+    return detectSchema(target);
+  } catch {
+    return undefined;
   }
 }
 
@@ -731,16 +1201,19 @@ function finalize(
     && context.prerequisitesPassed
     && existsSync(target);
   const reportPath = shouldWriteReport
-    ? writeInstallReport({
+      ? writeInstallReport({
         targetDir: target,
         sourceRepo: context.sourceRepo,
+        packageVersion: context.packageVersion,
         mode: context.reportMode,
         timestamp: context.timestamp,
         checks: context.checks,
         actions: context.actions,
         overall: status === "success" ? "PASS" : "FAIL",
+        migration: context.migration,
+        reportPath: context.reportOverride,
       })
-    : resolve(target, "openspec/.corgi-install-report.md");
+    : context.reportOverride ?? resolve(target, "openspec/.corgi-install-report.md");
 
   return {
     status,
@@ -750,5 +1223,6 @@ function finalize(
     reportPath,
     manifestPath: context.manifestPath,
     message,
+    migration: context.migration,
   };
 }

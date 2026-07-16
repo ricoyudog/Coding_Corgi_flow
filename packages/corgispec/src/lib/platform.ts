@@ -6,6 +6,7 @@ import { homedir } from "node:os";
  * Supported AI coding platforms.
  */
 export type Platform = "claude" | "opencode" | "codex";
+export type CommandPlatform = Exclude<Platform, "codex">;
 
 /**
  * Platform detection result.
@@ -25,6 +26,11 @@ const PLATFORM_DIRS: Record<Platform, string> = {
   claude: resolve(homedir(), ".claude/skills"),
   opencode: resolve(homedir(), ".config/opencode/skill"),
   codex: resolve(homedir(), ".codex/skills"),
+};
+
+const COMMAND_DIRS: Record<CommandPlatform, string> = {
+  claude: resolve(homedir(), ".claude/commands/corgi"),
+  opencode: resolve(homedir(), ".config/opencode/commands"),
 };
 
 /**
@@ -71,4 +77,13 @@ export function getSkillDir(platform: Platform): string {
  */
 export function getAllSkillDirs(): Record<Platform, string> {
   return { ...PLATFORM_DIRS };
+}
+
+/** User-level slash-command locations for platforms that support them. */
+export function getCommandDir(platform: CommandPlatform): string {
+  return COMMAND_DIRS[platform];
+}
+
+export function getAllCommandDirs(): Record<CommandPlatform, string> {
+  return { ...COMMAND_DIRS };
 }
