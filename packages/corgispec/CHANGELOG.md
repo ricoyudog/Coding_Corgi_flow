@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-rc.6] - 2026-07-16
+
+### Fixed
+
+- Propose workflows are terminal planning-only handoffs again: strict readiness confirms artifact integrity but does not authorize implementation, and an original request phrased as a fix or build does not permit the agent to continue into apply or loop.
+- GitHub, GitLab, and trackerless propose skills plus their OpenCode and Claude command wrappers now preserve `HEAD`, prohibit package installation and commits throughout propose, end the current turn after reporting, and require a later explicit apply or loop request. Codex receives the same canonical skill contract from the packaged assets.
+
+### Tests
+
+- Added provider parity, command-wrapper boundary, mirrored skill, bundled asset, and installable package assertions for the propose/apply handoff.
+- Exercised the packed candidate through separate propose and apply invocations in OpenCode, Claude Code, and Codex fixtures without creating remote tracker state.
+
 ## [3.0.0-rc.5] - 2026-07-16
 
 ### Fixed

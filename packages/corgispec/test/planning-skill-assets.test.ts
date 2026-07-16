@@ -26,6 +26,8 @@ const CLAUDE_SKILLS = resolve(REPO_ROOT, ".claude/skills");
 
 const SKILLS = [
   { slug: "corgispec-ready", tier: "atoms" },
+  { slug: "corgispec-propose", tier: "molecules" },
+  { slug: "corgispec-gh-propose", tier: "molecules" },
   { slug: "corgispec-update", tier: "molecules" },
   { slug: "corgispec-converge", tier: "molecules" },
 ] as const;
@@ -161,6 +163,12 @@ describe("planning workflow guardrails", () => {
   const ready = read(
     resolve(OPENCODE_SKILLS, "atoms/corgispec-ready/SKILL.md")
   );
+  const propose = read(
+    resolve(OPENCODE_SKILLS, "molecules/corgispec-propose/SKILL.md")
+  );
+  const ghPropose = read(
+    resolve(OPENCODE_SKILLS, "molecules/corgispec-gh-propose/SKILL.md")
+  );
   const update = read(
     resolve(OPENCODE_SKILLS, "molecules/corgispec-update/SKILL.md")
   );
@@ -173,6 +181,29 @@ describe("planning workflow guardrails", () => {
     expect(ready).toContain("artifactPaths.<id>.existingOutputPaths");
     expect(ready).toContain("Keep deterministic checks separate from semantic findings");
     expect(ready).toContain("State explicitly that the review made no file changes");
+  });
+
+  it("keeps every propose provider planning-only until a later explicit apply or loop request", () => {
+    const sharedBoundary = [
+      "visible planning checklist",
+      "Throughout propose, keep `HEAD` unchanged.",
+      "Do not install packages, create commits, push branches, open implementation pull requests, or publish at any point.",
+      "Worktree setup must not commit housekeeping changes.",
+      "Propose is a planning-only workflow and is terminal for the current turn.",
+      "A strict `ready` result confirms planning integrity; it is not user approval to implement.",
+      "supplies planning intent only and does not authorize implementation after propose.",
+      "After reporting, end the current turn.",
+      "Implementation may begin only after a later explicit user request",
+    ];
+
+    for (const markdown of [propose, ghPropose]) {
+      for (const contract of sharedBoundary) expect(markdown).toContain(contract);
+      expect(markdown).toContain("Do not invoke apply, loop, implementation, review, archive, commit, push, or publish actions.");
+    }
+    expect(propose).toContain("`$corgispec-apply-change <change>`");
+    expect(ghPropose).toContain("`$corgispec-gh-apply <change>`");
+    expect(propose).toContain("`$corgispec-loop <change>`");
+    expect(ghPropose).toContain("`$corgispec-loop <change>`");
   });
 
   it("blocks active v1 runs and constrains update writes to authoritative artifacts", () => {
@@ -213,6 +244,19 @@ describe("planning workflow guardrails", () => {
   });
 
   it("routes both platform wrappers to the matching skill", () => {
+    const openCodePropose = read(resolve(REPO_ROOT, ".opencode/commands/corgi-propose.md"));
+    const claudePropose = read(resolve(REPO_ROOT, ".claude/commands/corgi/propose.md"));
+    for (const wrapper of [openCodePropose, claudePropose]) {
+      expect(wrapper).toContain("Throughout propose, keep `HEAD` unchanged.");
+      expect(wrapper).toContain("Do not install packages, create commits, push branches, open implementation pull requests, or publish at any point.");
+      expect(wrapper).toContain("Propose is a planning-only workflow and is terminal for the current turn.");
+      expect(wrapper).toContain("it is not user approval to implement");
+      expect(wrapper).toContain("After reporting, end the current turn.");
+      expect(wrapper).toContain("Implementation may begin only after a later explicit user request");
+    }
+    expect(openCodePropose).toContain("`/corgi-apply <change>`");
+    expect(claudePropose).toContain("`/corgi:apply <change>`");
+
     expect(read(resolve(REPO_ROOT, ".opencode/commands/corgi-ready.md"))).toContain(
       "**corgispec-ready**"
     );
@@ -272,8 +316,10 @@ describe("bundled planning assets", () => {
 
   it("bundles both OpenCode and Claude command wrappers", () => {
     const pairs = [
+      ["commands/opencode/corgi-propose.md", ".opencode/commands/corgi-propose.md"],
       ["commands/opencode/corgi-ready.md", ".opencode/commands/corgi-ready.md"],
       ["commands/opencode/corgi-update.md", ".opencode/commands/corgi-update.md"],
+      ["commands/claude/corgi/propose.md", ".claude/commands/corgi/propose.md"],
       ["commands/claude/corgi/ready.md", ".claude/commands/corgi/ready.md"],
       ["commands/claude/corgi/update.md", ".claude/commands/corgi/update.md"],
       ["commands/opencode/corgi-converge.md", ".opencode/commands/corgi-converge.md"],

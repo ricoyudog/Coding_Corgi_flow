@@ -29,6 +29,8 @@ Build the OpenSpec artifact graph first, then layer GitHub tracking on the compl
 
 ## Create planning artifacts
 
+Before writing the first artifact, create and maintain a visible planning checklist with the host's available planning or TODO mechanism when one is available and permitted. Do not hard-code a platform-specific tool name.
+
 1. Iterate over CLI-reported ready artifacts until every implementation prerequisite is complete.
 2. For each artifact, run `corgispec instructions "<artifact-id>" --change "<change>" --json`.
 3. Read only its returned `contextFiles`, dependency paths, and `artifactPaths`.
@@ -50,6 +52,14 @@ Build the OpenSpec artifact graph first, then layer GitHub tracking on the compl
 
 - Write `.worktree.yaml` under `changeRoot` when isolation is active and verify it with `git worktree list`.
 - Run `corgispec ready "<change>" --strict --json` and require ready.
-- Report created artifact IDs and paths, GitHub issue URLs or the skip reason, `changeRoot`, and worktree.
+- Report created artifact IDs and paths, GitHub issue URLs or the skip reason, `changeRoot`, worktree, and the matching platform command the user may invoke later for apply or loop. For Codex, explicitly report `$corgispec-gh-apply <change>` or `$corgispec-loop <change>`.
 
-Do not implement code, infer artifact roles from names, write outside `changeRoot`, or route by schema.
+## Terminal handoff boundary
+
+- Do not infer artifact roles from names, write outside `changeRoot`, or route by schema.
+- Throughout propose, keep `HEAD` unchanged. Do not install packages, create commits, push branches, open implementation pull requests, or publish at any point. Worktree setup must not commit housekeeping changes.
+- Propose is a planning-only workflow and is terminal for the current turn.
+- A strict `ready` result confirms planning integrity; it is not user approval to implement.
+- An original request phrased as "fix", "implement", or "build" supplies planning intent only and does not authorize implementation after propose.
+- After reporting, end the current turn. Do not invoke apply, loop, implementation, review, archive, commit, push, or publish actions.
+- Implementation may begin only after a later explicit user request for the matching apply or loop workflow.
