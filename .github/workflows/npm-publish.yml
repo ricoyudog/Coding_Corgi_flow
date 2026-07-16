@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Exact existing RC tag to publish (for example, v3.0.0-rc.3)
+        description: Exact existing RC tag to publish (for example, v3.0.0-rc.4)
         required: true
         type: string
 
