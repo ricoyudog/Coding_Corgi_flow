@@ -264,11 +264,18 @@ function generateOpenCodeOutput(
   writeOutput(tsCode, opts.output, opts.force);
 }
 
-export function buildOpenCodeDeepPlugin(cliEntry: string): string {
+export function buildOpenCodeDeepPlugin(
+  cliEntry: string,
+  nodeEntry: string = process.execPath,
+): string {
+  // OpenCode plugins run inside the standalone OpenCode executable, where
+  // process.execPath is not Node. Capture the generator/bootstrap Node runtime.
+  const nodeEntryJson = JSON.stringify(nodeEntry);
   const cliEntryJson = JSON.stringify(cliEntry);
   return `import type { Plugin } from "@opencode-ai/plugin";
 import { spawnSync } from "node:child_process";
 
+const NODE_ENTRY = ${nodeEntryJson};
 const CLI_ENTRY = ${cliEntryJson};
 
 function runHook(
@@ -276,7 +283,7 @@ function runHook(
   options: { input?: string; timeout: number; passthrough?: boolean },
 ): string {
   const result = spawnSync(
-    process.execPath,
+    NODE_ENTRY,
     [CLI_ENTRY, "hook", subcommand],
     {
       input: options.input,

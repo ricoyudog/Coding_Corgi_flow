@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-rc.3] - 2026-07-16
+
+### Fixed
+
+- Generated OpenCode plugins now capture the Node executable while CorgiSpec generates the plugin. OpenCode's standalone runtime exposes `opencode.exe` as `process.execPath`; using that host path as Node caused idle `loop-check` calls to print OpenCode help, exit with code 1, and inject a false CorgiSpec continuation prompt.
+- Idle checks with no active Run Contract once again complete silently, while active loop decisions, hook output forwarding, session isolation, and `session.promptAsync` continuation remain unchanged.
+
+### Tests
+
+- Added a regression harness that replaces the plugin host's runtime `process.execPath` with a nonexistent OpenCode executable and verifies hooks still run through the captured Node path.
+
 ## [3.0.0-rc.2] - 2026-07-16
 
 ### Changed

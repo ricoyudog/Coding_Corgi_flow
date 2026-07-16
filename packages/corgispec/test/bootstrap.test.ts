@@ -8,6 +8,9 @@ import { runBootstrap } from "../src/lib/bootstrap.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = resolve(__dirname, "..");
+const PACKAGE_VERSION = (JSON.parse(
+  readFileSync(resolve(PACKAGE_ROOT, "package.json"), "utf8"),
+) as { version: string }).version;
 const CLI = resolve(PACKAGE_ROOT, "dist/corgispec.js");
 const ASSETS_ROOT = resolve(PACKAGE_ROOT, "assets");
 const TEST_ROOT = resolve(tmpdir(), `corgispec-bootstrap-${Date.now()}`);
@@ -892,7 +895,7 @@ describe("bootstrap library", () => {
     expect(existsSync(resolve(targetDir, missing))).toBe(true);
     const migrated = JSON.parse(readFileSync(manifestPath, "utf8")) as Record<string, unknown>;
     expect(migrated.version).toBe(2);
-    expect(migrated.packageVersion).toBe("3.0.0-rc.2");
+    expect(migrated.packageVersion).toBe(PACKAGE_VERSION);
     expect(migrated.installedAt).toBe(installedAt);
   });
 
