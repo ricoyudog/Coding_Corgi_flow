@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-rc.2] - 2026-07-16
+
+### Changed
+
+- Hook enforcement is now scoped to active Corgi invocations instead of applying worktree-write and Task Group Stop guards to unrelated sessions. Claude Code uses skill-scoped lifecycle hooks, OpenCode tracks activation per session and resets it on each user message, and Codex omits generic write/stop enforcement where no documented skill lifecycle signal exists.
+- `stop-check` now permits the required checkpoint stop after a completed Task Group when the next group is untouched, while continuing to block a stop when the current group is partially completed.
+
+### Fixed
+
+- Normal Claude Code, OpenCode, and Codex sessions can write in the main checkout without being redirected to a Corgi worktree merely because project hooks are installed.
+- Concurrent OpenCode sessions no longer share Corgi hook activation state, and a later ordinary prompt no longer inherits enforcement from an earlier Corgi command or skill invocation.
+
 ## [3.0.0-rc.1] - 2026-07-16
 
 ### Breaking
