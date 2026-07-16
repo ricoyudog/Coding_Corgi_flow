@@ -1170,14 +1170,26 @@ export class LoopStoreV2 {
     const base = this.paths(changeName);
     let entries: Dirent[];
     try {
+      await this.assertSafeExisting(base.runs);
+      const metadata = await this.fs.lstat(base.runs);
+      if (!metadata.isDirectory()) {
+        throw new LoopStoreCorruptionError(
+          `Runs path must be a real directory: ${base.runs}`,
+        );
+      }
       entries = await this.fs.readdir(base.runs, { withFileTypes: true });
     } catch (error) {
       if (isMissing(error)) return [];
       throw error;
     }
-    const runEntries = entries
-      .filter((entry) => entry.isDirectory() && !entry.isSymbolicLink() && !entry.name.startsWith("."))
-      .sort((a, b) => compareCodeUnits(a.name, b.name));
+    const visibleEntries = entries.filter((entry) => !entry.name.startsWith("."));
+    const unsafe = visibleEntries.find((entry) => entry.isSymbolicLink() || !entry.isDirectory());
+    if (unsafe) {
+      throw new LoopStoreCorruptionError(
+        `Run entry '${unsafe.name}' must be a real directory`,
+      );
+    }
+    const runEntries = visibleEntries.sort((a, b) => compareCodeUnits(a.name, b.name));
     const portableNames = new Map<string, string>();
     for (const entry of runEntries) {
       validateSegment(entry.name, "run id");

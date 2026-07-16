@@ -83,7 +83,7 @@ corgispec doctor --path /path/to/your-project
 corgispec bootstrap --target /path/to/your-project --schema github-tracked
 ```
 
-`next` 是預發布頻道，目前指向 `3.0.0-rc.4`。若要可重現的安裝，請使用 `npm install -g corgispec@3.0.0-rc.4` 鎖定版本。未加版本的 `corgispec` 與 `latest` tag 仍維持穩定版 `2.4.3`，不會安裝此 RC。
+`next` 是預發布頻道，目前指向 `3.0.0-rc.5`。若要可重現的安裝，請使用 `npm install -g corgispec@3.0.0-rc.5` 鎖定版本。未加版本的 `corgispec` 與 `latest` tag 仍維持穩定版 `2.4.3`，不會安裝此 RC。
 
 可使用 `--platform <platforms>`（claude、opencode、codex；預設全部）與 `--scope <scope>`（global、local、both；預設 both）。`local` 管理專案 commands、schema、config、manifest 與已存在的 hooks；`global` 管理所選平台的 user-level skills，以及 Claude Code/OpenCode 的 user commands；`both` 會先一起 preflight，再更新兩個範圍。指定 `--platform` 時，只偵測及修復列出的平台。
 
@@ -495,7 +495,7 @@ rules:
 
 ### 從 CorgiSpec 2.x 遷移
 
-1. 升級至 Node >=20.19.0 與 OpenSpec >=1.6.0 <2.0.0，再安裝 `corgispec@next`（目前為 `3.0.0-rc.4`），或精確鎖定 `corgispec@3.0.0-rc.4`。未加版本的 package 仍透過 `latest` 取得穩定版 `2.4.3`。
+1. 升級至 Node >=20.19.0 與 OpenSpec >=1.6.0 <2.0.0，再安裝 `corgispec@next`（目前為 `3.0.0-rc.5`），或精確鎖定 `corgispec@3.0.0-rc.5`。未加版本的 package 仍透過 `latest` 取得穩定版 `2.4.3`。
 2. 保留既有 schema 名稱，但明確寫出原先推斷的 tracker：
 
    ```yaml

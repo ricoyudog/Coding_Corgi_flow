@@ -1352,6 +1352,44 @@ describe("LoopStoreV2 path and legacy guards", () => {
     );
   });
 
+  it.skipIf(process.platform === "win32")(
+    "rejects a symlinked canonical run discovered without a current pointer",
+    async () => {
+      const projectRoot = root();
+      const outside = root();
+      const runs = resolve(projectRoot, ".corgi/loop/change-a/runs");
+      mkdirSync(runs, { recursive: true });
+      symlinkSync(outside, resolve(runs, "run-a"), "dir");
+
+      await expect(new LoopStoreV2({ projectRoot }).peek("change-a"))
+        .rejects.toBeInstanceOf(LoopStoreCorruptionError);
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "rejects a symlinked canonical runs directory",
+    async () => {
+      const projectRoot = root();
+      const outside = root();
+      const changeRoot = resolve(projectRoot, ".corgi/loop/change-a");
+      mkdirSync(changeRoot, { recursive: true });
+      symlinkSync(outside, resolve(changeRoot, "runs"), "dir");
+
+      await expect(new LoopStoreV2({ projectRoot }).peek("change-a"))
+        .rejects.toBeInstanceOf(LoopStorePathError);
+    },
+  );
+
+  it("rejects a non-directory canonical run entry", async () => {
+    const projectRoot = root();
+    const runs = resolve(projectRoot, ".corgi/loop/change-a/runs");
+    mkdirSync(runs, { recursive: true });
+    writeFileSync(resolve(runs, "run-a"), "not a run directory", "utf8");
+
+    await expect(new LoopStoreV2({ projectRoot }).peek("change-a"))
+      .rejects.toBeInstanceOf(LoopStoreCorruptionError);
+  });
+
   it.skipIf(process.platform === "win32")("rejects symlinked canonical event and attempt leaves", async () => {
     const projectRoot = root();
     const outside = root();

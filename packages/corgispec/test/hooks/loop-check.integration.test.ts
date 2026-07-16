@@ -1,5 +1,13 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -160,6 +168,188 @@ describe("Run Contract v2 loop-check hook", () => {
     });
   });
 
+  it.each(["claude", "opencode"] as const)(
+    "ignores an inactive %s legacy run whose planning change no longer exists",
+    (platform) => {
+      const root = project(`inactive-legacy-${platform}`);
+      const statePath = legacy(root, platform, "archived-change", {
+        schemaVersion: 1,
+        changeName: "archived-change",
+        active: false,
+        sessionId: "legacy-session",
+      });
+      const before = readFileSync(statePath);
+
+      const result = runHook(root, { session_id: "unrelated-session" });
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stderr).toBe("");
+      expect(result.stdout).toMatchObject({
+        schemaVersion: 2,
+        decision: "proceed",
+        status: "idle",
+      });
+      expect(readFileSync(statePath)).toEqual(before);
+      expect(existsSync(resolve(root, ".corgi/loop"))).toBe(false);
+    },
+  );
+
+  it("ignores multiple inactive legacy changes", () => {
+    const root = project("multiple-inactive-legacy");
+    const watched = [
+      legacy(root, "claude", "archived-a", {
+        changeName: "archived-a",
+        active: false,
+      }),
+      legacy(root, "opencode", "archived-b", {
+        changeName: "archived-b",
+        active: false,
+      }),
+    ];
+    const before = watched.map((path) => readFileSync(path));
+
+    const result = runHook(root, { session_id: "unrelated-session" });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toMatchObject({ decision: "proceed", status: "idle" });
+    watched.forEach((path, index) => expect(readFileSync(path)).toEqual(before[index]));
+    expect(existsSync(resolve(root, ".corgi/loop"))).toBe(false);
+  });
+
+  it("fails closed for ambiguous inactive legacy state on both platforms", () => {
+    const root = project("ambiguous-inactive-legacy");
+    const watched = [
+      legacy(root, "claude", "ambiguous-change", {
+        changeName: "ambiguous-change",
+        active: false,
+      }),
+      legacy(root, "opencode", "ambiguous-change", {
+        changeName: "ambiguous-change",
+        active: false,
+      }),
+    ];
+    const before = watched.map((path) => readFileSync(path));
+
+    const result = runHook(root, { session_id: "unrelated-session" });
+
+    expect(result.exitCode).toBe(2);
+    expect(result.stdout).toMatchObject({
+      decision: "proceed",
+      status: "contract_error",
+      changeName: "ambiguous-change",
+    });
+    watched.forEach((path, index) => expect(readFileSync(path)).toEqual(before[index]));
+    expect(existsSync(resolve(root, ".corgi/loop"))).toBe(false);
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "does not let inactive legacy state mask a symlinked canonical run",
+    () => {
+      const root = project("inactive-legacy-canonical-symlink");
+      const outside = project("inactive-legacy-canonical-symlink-outside");
+      legacy(root, "opencode", "change-a", {
+        changeName: "change-a",
+        active: false,
+      });
+      const runs = resolve(root, ".corgi/loop/change-a/runs");
+      mkdirSync(runs, { recursive: true });
+      symlinkSync(outside, resolve(runs, "run-a"), "dir");
+
+      const result = runHook(root, { session_id: "unrelated-session" });
+
+      expect(result.exitCode).toBe(2);
+      expect(result.stdout).toMatchObject({
+        decision: "proceed",
+        status: "contract_error",
+      });
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "does not let inactive legacy state mask a symlinked canonical runs directory",
+    () => {
+      const root = project("inactive-legacy-canonical-runs-symlink");
+      const outside = project("inactive-legacy-canonical-runs-symlink-outside");
+      legacy(root, "opencode", "change-a", {
+        changeName: "change-a",
+        active: false,
+      });
+      const changeRoot = resolve(root, ".corgi/loop/change-a");
+      mkdirSync(changeRoot, { recursive: true });
+      symlinkSync(outside, resolve(changeRoot, "runs"), "dir");
+
+      const result = runHook(root, { session_id: "unrelated-session" });
+
+      expect(result.exitCode).toBe(2);
+      expect(result.stdout).toMatchObject({
+        decision: "proceed",
+        status: "contract_error",
+      });
+    },
+  );
+
+  it("ignores inactive legacy state while selecting an active canonical run", async () => {
+    const root = project("inactive-legacy-active-canonical");
+    const legacyPath = legacy(root, "opencode", "archived-change", {
+      changeName: "archived-change",
+      active: false,
+    });
+    const legacyBefore = readFileSync(legacyPath);
+    await seed(root, "change-a", "run-a", "session-a");
+
+    const result = runHook(root, { session_id: "session-a" });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toMatchObject({
+      decision: "block",
+      status: "active",
+      changeName: "change-a",
+      runId: "run-a",
+    });
+    expect(readFileSync(legacyPath)).toEqual(legacyBefore);
+  });
+
+  it("fails closed for an active legacy run whose planning change is missing", () => {
+    const root = project("active-legacy-missing-change");
+    const statePath = legacy(root, "opencode", "missing-active-change", {
+      changeName: "missing-active-change",
+      active: true,
+      sessionId: "legacy-session",
+    });
+    const before = readFileSync(statePath);
+
+    const result = runHook(root, { session_id: "legacy-session" });
+
+    expect(result.exitCode).toBe(2);
+    expect(result.stdout).toMatchObject({
+      decision: "proceed",
+      status: "contract_error",
+      changeName: "missing-active-change",
+    });
+    expect(readFileSync(statePath)).toEqual(before);
+    expect(existsSync(resolve(root, ".corgi/loop"))).toBe(false);
+  });
+
+  it.each([
+    ["corrupt", "{bad"],
+    ["future", JSON.stringify({ schemaVersion: 99, changeName: "unsafe-change", active: false })],
+  ])("fails closed for %s legacy state", (_label, content) => {
+    const root = project(`unsafe-legacy-${_label}`);
+    const statePath = legacy(root, "opencode", "unsafe-change", content);
+    const before = readFileSync(statePath);
+
+    const result = runHook(root, { session_id: "unrelated-session" });
+
+    expect(result.exitCode).toBe(2);
+    expect(result.stdout).toMatchObject({
+      decision: "proceed",
+      status: "contract_error",
+      changeName: "unsafe-change",
+    });
+    expect(readFileSync(statePath)).toEqual(before);
+    expect(existsSync(resolve(root, ".corgi/loop"))).toBe(false);
+  });
+
   it("returns pure JSON and exit 2 for malformed hook stdin", () => {
     const root = project("bad-stdin");
     const result = spawnSync(
@@ -186,6 +376,19 @@ function project(label: string): string {
   mkdirSync(resolve(root, "openspec"), { recursive: true });
   writeFileSync(resolve(root, "openspec/config.yaml"), "schema: test\n");
   return root;
+}
+
+function legacy(
+  root: string,
+  platform: "claude" | "opencode",
+  changeName: string,
+  state: Record<string, unknown> | string,
+): string {
+  const directory = resolve(root, `.${platform}/corgi-loop/${changeName}`);
+  const path = resolve(directory, "state.json");
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(path, typeof state === "string" ? state : JSON.stringify(state), "utf8");
+  return path;
 }
 
 async function seed(

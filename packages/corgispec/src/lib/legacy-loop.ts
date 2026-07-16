@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { lstatSync, readFileSync } from "node:fs";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 
 export interface LegacyLoopStateSummary {
   path: string;
@@ -34,7 +34,12 @@ export function inspectLegacyLoop(
       changeName,
       "state.json",
     );
-    if (!existsSync(path)) continue;
+    const pathStatus = regularFileWithoutSymlink(projectRoot, path);
+    if (pathStatus === "missing") continue;
+    if (pathStatus === "unsafe") {
+      result.corruptPaths.push(path);
+      continue;
+    }
 
     let value: unknown;
     try {
@@ -66,4 +71,32 @@ export function inspectLegacyLoop(
   }
 
   return result;
+}
+
+function regularFileWithoutSymlink(
+  projectRoot: string,
+  path: string,
+): "safe" | "missing" | "unsafe" {
+  const rel = relative(projectRoot, path);
+  if (!rel || isAbsolute(rel) || rel.split(sep).includes("..")) return "unsafe";
+
+  const parts = rel.split(sep);
+  let cursor = projectRoot;
+  for (const [index, part] of parts.entries()) {
+    cursor = resolve(cursor, part);
+    let stats;
+    try {
+      stats = lstatSync(cursor);
+    } catch (error) {
+      if (error && typeof error === "object" && "code" in error
+        && (error as NodeJS.ErrnoException).code === "ENOENT") {
+        return "missing";
+      }
+      return "unsafe";
+    }
+    if (stats.isSymbolicLink()) return "unsafe";
+    const leaf = index === parts.length - 1;
+    if (leaf ? !stats.isFile() : !stats.isDirectory()) return "unsafe";
+  }
+  return "safe";
 }
