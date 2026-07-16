@@ -82,7 +82,7 @@ npm install -g corgispec@next
 corgispec doctor --path /path/to/your-project
 ```
 
-`next` is the prerelease channel and currently resolves to `3.0.0-rc.5`. For a reproducible install, pin it with `npm install -g corgispec@3.0.0-rc.5`. The unqualified `corgispec` package and the `latest` tag remain on stable `2.4.3`; they do not install this RC.
+`next` is the prerelease channel and currently resolves to `3.0.0-rc.6`. For a reproducible install, pin it with `npm install -g corgispec@3.0.0-rc.6`. The unqualified `corgispec` package and the `latest` tag remain on stable `2.4.3`; they do not install this RC.
 
 Options: `--platform <platforms>` (claude, opencode, codex; default: all), `--scope <scope>` (global, local, both; default: both). When TTY is detected and flags are not provided, interactive prompts ask for platform and scope. `local` manages project commands, schema, config, manifest, and any existing hooks; `global` manages user-level skills for the selected platforms plus Claude Code and OpenCode user commands; `both` preflights and updates both surfaces as one operation. Supplying `--platform` restricts detection and repair to exactly those platforms.
 
@@ -147,7 +147,7 @@ Fetch and follow instructions from https://raw.githubusercontent.com/ricoyudog/C
 /corgi:propose Add user authentication with JWT and refresh tokens
 ```
 
-Then: `apply` → `verify` → `review` → `human-qa` → `archive`. One Task Group at a time.
+Review and explicitly approve the planning package after `propose` returns. Propose stops at that handoff; only a later explicit `apply` or `loop` invocation may begin implementation. Then continue with `verify` → `review` → `human-qa` → `archive`, one Task Group at a time.
 
 ---
 
@@ -155,7 +155,7 @@ Then: `apply` → `verify` → `review` → `human-qa` → `archive`. One Task G
 
 | Command              | What it does                                                                                                       |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `/corgi-propose`     | Generate planning artifacts (proposal, specs, design, tasks) + create issues                                       |
+| `/corgi-propose`     | Generate planning artifacts and issues, then stop for explicit review before implementation                       |
 | `/corgi-update`      | Reconcile existing planning artifacts, with one confirmed artifact-scoped diff at a time                           |
 | `/corgi-ready`       | Check deterministic planning integrity before apply or loop                                                        |
 | `/corgi-apply`       | Execute one Task Group, sync closeout, pause for review                                                            |
@@ -508,7 +508,7 @@ rules:
 
 ### Migrating from CorgiSpec 2.x
 
-1. Upgrade to Node >=20.19.0 and OpenSpec >=1.6.0 <2.0.0, then install `corgispec@next` (currently `3.0.0-rc.5`) or pin `corgispec@3.0.0-rc.5` exactly. The unqualified package remains stable `2.4.3` via `latest`.
+1. Upgrade to Node >=20.19.0 and OpenSpec >=1.6.0 <2.0.0, then install `corgispec@next` (currently `3.0.0-rc.6`) or pin `corgispec@3.0.0-rc.6` exactly. The unqualified package remains stable `2.4.3` via `latest`.
 2. Keep your existing schema name, but make the inferred tracker explicit:
 
    ```yaml
