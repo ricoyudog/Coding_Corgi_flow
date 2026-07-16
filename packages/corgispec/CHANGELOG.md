@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-rc.5] - 2026-07-16
+
+### Fixed
+
+- `hook loop-check` now treats exactly one valid inactive legacy v1 run as historical state and returns `proceed` / `idle` without requiring an archived OpenSpec change to remain present or migrating the legacy files.
+- Active, ambiguous, corrupt, future-schema, symlinked, and non-regular legacy state continues to fail closed. Canonical run discovery now rejects visible non-directory or symlink entries instead of silently hiding canonical corruption behind inactive legacy state.
+
+### Tests
+
+- Added Claude and OpenCode inactive-legacy fixtures, missing-change coverage, multiple historical changes, cross-platform ambiguity, active/corrupt/future failure cases, canonical precedence, path-safety checks, and a real-project regression gate against New_symphony's unchanged legacy state.
+
 ## [3.0.0-rc.4] - 2026-07-16
 
 ### Added
