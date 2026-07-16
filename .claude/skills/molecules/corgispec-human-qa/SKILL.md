@@ -1,6 +1,12 @@
 ---
 name: corgispec-human-qa
 description: Human QA gate between review and archive — classifies change, routes to QA atoms, assembles evidence report.
+hooks:
+  PreToolUse:
+    - matcher: "Edit|Write"
+      hooks:
+        - type: command
+          command: "corgispec hook pre-write"
 license: MIT
 compatibility: Requires corgispec CLI.
 metadata:

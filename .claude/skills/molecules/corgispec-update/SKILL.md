@@ -1,6 +1,12 @@
 ---
 name: corgispec-update
 description: Reconcile an existing CorgiSpec planning package after intent, requirements, scenarios, design, or task sequencing changes. Use when the user asks to update or realign an existing change while preserving implementation boundaries, task completion truth, OpenSpec 1.6 artifact paths, and strict readiness.
+hooks:
+  PreToolUse:
+    - matcher: "Edit|Write"
+      hooks:
+        - type: command
+          command: "corgispec hook pre-write"
 ---
 
 # Reconcile existing planning

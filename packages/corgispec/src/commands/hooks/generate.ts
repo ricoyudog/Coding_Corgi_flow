@@ -126,16 +126,6 @@ function buildClaudeConfig(
       ],
       PreToolUse: [
         {
-          matcher: "Edit|Write",
-          hooks: [
-            {
-              type: "command",
-              command: `${binaryCommand} hook pre-write`,
-              timeout: 15,
-            },
-          ],
-        },
-        {
           matcher: "Bash",
           hooks: [
             {
@@ -160,15 +150,6 @@ function buildClaudeConfig(
         },
       ],
       Stop: [
-        {
-          hooks: [
-            {
-              type: "command",
-              command: `${binaryCommand} hook stop-check`,
-              timeout: 15,
-            },
-          ],
-        },
         {
           hooks: [
             {
@@ -325,6 +306,33 @@ function buildStdinPayload(tool: string, args: Record<string, unknown>): string 
   });
 }
 
+const WRITE_COMMANDS = new Set([
+  "corgi-apply",
+  "corgi-propose",
+  "corgi-update",
+  "corgi-converge",
+  "corgi-archive",
+  "corgi-human-qa",
+  "corgi-loop",
+]);
+const STOP_COMMANDS = new Set(["corgi-apply"]);
+const WRITE_SKILLS = new Set([
+  "corgispec-apply-change",
+  "corgispec-gh-apply",
+  "corgispec-propose",
+  "corgispec-gh-propose",
+  "corgispec-update",
+  "corgispec-converge",
+  "corgispec-archive-change",
+  "corgispec-gh-archive",
+  "corgispec-human-qa",
+  "corgispec-loop",
+]);
+const STOP_SKILLS = new Set([
+  "corgispec-apply-change",
+  "corgispec-gh-apply",
+]);
+
 function buildStopPayload(event: unknown): string {
   const record = event && typeof event === "object" ? event as Record<string, any> : {};
   const properties = record.properties && typeof record.properties === "object"
@@ -341,6 +349,15 @@ function buildStopPayload(event: unknown): string {
 
 export const CorgiSpecDeep: Plugin = async ({ client, directory }) => {
   const continuationPending = new Set<string>();
+  const activationBySession = new Map<string, { write: boolean; stop: boolean }>();
+  const activate = (sessionId: string, write: boolean, stop: boolean): void => {
+    if (!sessionId) return;
+    const current = activationBySession.get(sessionId) ?? { write: false, stop: false };
+    activationBySession.set(sessionId, {
+      write: current.write || write,
+      stop: current.stop || stop,
+    });
+  };
   const requestContinuation = (sessionId: string, text: string): void => {
     if (!sessionId || continuationPending.has(sessionId)) return;
     continuationPending.add(sessionId);
@@ -375,6 +392,17 @@ export const CorgiSpecDeep: Plugin = async ({ client, directory }) => {
     ].filter(Boolean).join("\\n");
   };
   return {
+    "chat.message": async (input, _output) => {
+      activationBySession.delete(input.sessionID);
+    },
+    "command.execute.before": async (input, _output) => {
+      const command = input.command.replace(/^\\/+/, "");
+      activate(
+        input.sessionID,
+        WRITE_COMMANDS.has(command),
+        STOP_COMMANDS.has(command),
+      );
+    },
     "experimental.chat.system.transform": async (_input, output) => {
       try {
         const ctx = runHook("session-start", { timeout: 10_000 });
@@ -387,8 +415,19 @@ export const CorgiSpecDeep: Plugin = async ({ client, directory }) => {
       }
     },
     "tool.execute.before": async (input, output) => {
+      if (input.tool === "skill" && typeof output.args.name === "string") {
+        const skill = output.args.name;
+        activate(
+          input.sessionID,
+          WRITE_SKILLS.has(skill),
+          STOP_SKILLS.has(skill),
+        );
+      }
       const payload = buildStdinPayload(input.tool, output.args);
-      if (input.tool === "write" || input.tool === "edit") {
+      if (
+        (input.tool === "write" || input.tool === "edit")
+        && activationBySession.get(input.sessionID)?.write === true
+      ) {
         runHook("pre-write", { input: payload, timeout: 5_000, passthrough: true });
       }
       if (input.tool === "bash") {
@@ -409,13 +448,15 @@ export const CorgiSpecDeep: Plugin = async ({ client, directory }) => {
       if (event.type === "session.idle") {
         const payload = buildStopPayload(event);
         const sessionId = String(JSON.parse(payload).session_id ?? "");
-        try {
-          runHook("stop-check", { input: payload, timeout: 10_000, passthrough: true });
-        } catch (error) {
-          // OpenCode's event hook is fire-and-forget, so throwing cannot block
-          // session.idle. Use its supported async prompt API to re-enter.
-          requestContinuation(sessionId, hookFailureMessage("stop-check", error));
-          return;
+        if (activationBySession.get(sessionId)?.stop === true) {
+          try {
+            runHook("stop-check", { input: payload, timeout: 10_000, passthrough: true });
+          } catch (error) {
+            // OpenCode's event hook is fire-and-forget, so throwing cannot block
+            // session.idle. Use its supported async prompt API to re-enter.
+            requestContinuation(sessionId, hookFailureMessage("stop-check", error));
+            return;
+          }
         }
         try {
           const loopResult = runHook("loop-check", {
@@ -440,6 +481,12 @@ export const CorgiSpecDeep: Plugin = async ({ client, directory }) => {
         } catch (error) {
           requestContinuation(sessionId, hookFailureMessage("loop-check", error));
         }
+      }
+      if (event.type === "session.deleted") {
+        const payload = buildStopPayload(event);
+        const sessionId = String(JSON.parse(payload).session_id ?? "");
+        activationBySession.delete(sessionId);
+        continuationPending.delete(sessionId);
       }
       if (event.type === "session.compacted") {
         try {
@@ -466,13 +513,6 @@ const HOOK_EVENTS = [
   },
   {
     event: "PreToolUse",
-    subcommand: "pre-write",
-    matcher: "^(Edit|Write|apply_patch)$",
-    timeout: 15,
-    async: false,
-  },
-  {
-    event: "PreToolUse",
     subcommand: "pre-bash",
     matcher: "^Bash$",
     timeout: 10,
@@ -484,13 +524,6 @@ const HOOK_EVENTS = [
     matcher: "^(Edit|Write|apply_patch)$",
     timeout: 30,
     async: true,
-  },
-  {
-    event: "Stop",
-    subcommand: "stop-check",
-    matcher: null,
-    timeout: 15,
-    async: false,
   },
   {
     event: "Stop",

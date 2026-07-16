@@ -1,6 +1,16 @@
 ---
 name: corgispec-apply-change
 description: Implement exactly one pending Task Group from a CorgiSpec change and optionally synchronize GitLab progress. Use when applying a change whose normalized tracking provider is GitLab or none.
+hooks:
+  PreToolUse:
+    - matcher: "Edit|Write"
+      hooks:
+        - type: command
+          command: "corgispec hook pre-write"
+  Stop:
+    - hooks:
+        - type: command
+          command: "corgispec hook stop-check"
 ---
 
 # Apply one Task Group

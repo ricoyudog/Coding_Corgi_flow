@@ -1,6 +1,12 @@
 ---
 name: corgispec-loop
 description: Execute or resume a CorgiSpec Run Contract v2 one Task Group at a time through the canonical corgispec loop CLI. Use when starting, continuing, fixing, committing, recovering, or finalizing an implementation run; never write loop state or evidence artifacts directly.
+hooks:
+  PreToolUse:
+    - matcher: "Edit|Write"
+      hooks:
+        - type: command
+          command: "corgispec hook pre-write"
 ---
 
 # CorgiSpec Loop

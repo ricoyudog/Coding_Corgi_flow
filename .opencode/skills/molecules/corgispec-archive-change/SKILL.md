@@ -1,6 +1,12 @@
 ---
 name: corgispec-archive-change
 description: Validate and archive a completed CorgiSpec change, extract durable knowledge, and optionally close GitLab tracking. Use when archiving a change whose normalized tracking provider is GitLab or none.
+hooks:
+  PreToolUse:
+    - matcher: "Edit|Write"
+      hooks:
+        - type: command
+          command: "corgispec hook pre-write"
 ---
 
 # Archive a change

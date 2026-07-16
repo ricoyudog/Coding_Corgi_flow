@@ -1,6 +1,12 @@
 ---
 name: corgispec-converge
 description: Compare fresh CorgiSpec planning, implementation, Git, and run evidence and close only implementation gaps through the canonical converge CLI. Use after implementation or review when deciding whether a change is converged, planning needs update, or a new append-only Task Group is required.
+hooks:
+  PreToolUse:
+    - matcher: "Edit|Write"
+      hooks:
+        - type: command
+          command: "corgispec hook pre-write"
 ---
 
 # CorgiSpec Converge

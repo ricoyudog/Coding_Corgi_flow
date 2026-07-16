@@ -1,6 +1,12 @@
 ---
 name: corgispec-gh-propose
 description: Create or complete a CorgiSpec planning package and synchronize one GitHub parent issue plus Task Group child issues. Use when proposing a change whose normalized tracking provider is GitHub.
+hooks:
+  PreToolUse:
+    - matcher: "Edit|Write"
+      hooks:
+        - type: command
+          command: "corgispec hook pre-write"
 ---
 
 # Propose a GitHub-tracked change

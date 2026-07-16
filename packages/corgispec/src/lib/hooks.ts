@@ -485,6 +485,10 @@ export function checkTaskGroupPostconditions(
 ): string[] | null {
   const current = summary?.currentGroup;
   if (!current) return null;
+  // A completely untouched group is the expected successor immediately after
+  // a one-group checkpoint. Only a group with work already in progress must
+  // be completed before the session may stop.
+  if (current.completedTasks === 0) return null;
   const incompleteTasks = current.tasks.filter((task) => !task.done);
   if (incompleteTasks.length > 0) {
     return [
