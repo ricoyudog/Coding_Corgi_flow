@@ -11,6 +11,7 @@ import {
   isHooksDisabled,
   readStdinJson,
 } from "../../lib/hooks.js";
+import { inspectLegacyLoop } from "../../lib/legacy-loop.js";
 import { isActiveLoopPhaseV2, type LoopStateV2 } from "../../lib/run-contract-v2.js";
 
 export interface HookLoopCheckDependenciesV2 {
@@ -201,6 +202,24 @@ async function inspectCanonicalChange(
       },
     };
   }
+
+  const legacy = inspectLegacyLoop(projectRoot, changeName);
+  const safelyInactive = legacy.runs.length === 1
+    && legacy.runs.every((run) => !run.active)
+    && legacy.corruptPaths.length === 0
+    && legacy.unsupportedPaths.length === 0;
+  if (safelyInactive) {
+    return {
+      exitCode: 0,
+      output: {
+        schemaVersion: 2,
+        operation: "inspect",
+        status: "ok",
+        changeName,
+      },
+    };
+  }
+
   return await executeLoopV2({
     operation: "inspect",
     projectRoot,
