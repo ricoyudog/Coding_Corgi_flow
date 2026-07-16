@@ -82,7 +82,7 @@ npm install -g corgispec@next
 corgispec doctor --path /path/to/your-project
 ```
 
-`next` is the prerelease channel and currently resolves to `3.0.0-rc.2`. For a reproducible install, pin it with `npm install -g corgispec@3.0.0-rc.2`. The unqualified `corgispec` package and the `latest` tag remain on stable `2.4.3`; they do not install this RC.
+`next` is the prerelease channel and currently resolves to `3.0.0-rc.3`. For a reproducible install, pin it with `npm install -g corgispec@3.0.0-rc.3`. The unqualified `corgispec` package and the `latest` tag remain on stable `2.4.3`; they do not install this RC.
 
 Options: `--platform <platforms>` (claude, opencode, codex; default: all), `--scope <scope>` (global, local, both; default: global). When TTY is detected and flags are not provided, interactive prompts ask for platform and scope.
 
@@ -500,7 +500,7 @@ rules:
 
 ### Migrating from CorgiSpec 2.x
 
-1. Upgrade to Node >=20.19.0 and OpenSpec >=1.6.0 <2.0.0, then install `corgispec@next` (currently `3.0.0-rc.2`) or pin `corgispec@3.0.0-rc.2` exactly. The unqualified package remains stable `2.4.3` via `latest`.
+1. Upgrade to Node >=20.19.0 and OpenSpec >=1.6.0 <2.0.0, then install `corgispec@next` (currently `3.0.0-rc.3`) or pin `corgispec@3.0.0-rc.3` exactly. The unqualified package remains stable `2.4.3` via `latest`.
 2. Keep your existing schema name, but make the inferred tracker explicit:
 
    ```yaml
