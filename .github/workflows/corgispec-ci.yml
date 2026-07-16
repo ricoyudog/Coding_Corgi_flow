@@ -103,6 +103,6 @@ jobs:
       - run: mkdir -p release && npm pack --pack-destination release
       - uses: actions/upload-artifact@v4
         with:
-          name: corgispec-3.0.0-rc.1
-          path: packages/corgispec/release/corgispec-3.0.0-rc.1.tgz
+          name: corgispec-3.0.0-rc-tarball
+          path: packages/corgispec/release/corgispec-*.tgz
           if-no-files-found: error

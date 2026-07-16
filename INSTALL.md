@@ -5,7 +5,7 @@ Use this file as the entry point when an LLM agent installs or upgrades CorgiSpe
 ## Runtime requirements
 
 - Node.js >=20.19.0
-- `corgispec@3.0.0-rc.1`
+- `corgispec@3.0.0-rc.2`
 - `@fission-ai/openspec` >=1.6.0 <2.0.0
 
 OpenSpec 1.3–1.5 are unsupported; do not continue with a compatibility fallback.
@@ -18,7 +18,7 @@ openspec --version
 corgispec --version
 ```
 
-`next` is the npm prerelease channel and currently resolves to `corgispec@3.0.0-rc.1`. Use `npm install -g corgispec@3.0.0-rc.1` when an exact, reproducible version is required. Do not use the unqualified package name for this upgrade: `corgispec` and `corgispec@latest` remain on stable `2.4.3`.
+`next` is the npm prerelease channel and currently resolves to `corgispec@3.0.0-rc.2`. Use `npm install -g corgispec@3.0.0-rc.2` when an exact, reproducible version is required. Do not use the unqualified package name for this upgrade: `corgispec` and `corgispec@latest` remain on stable `2.4.3`.
 
 ## Fresh bootstrap
 
@@ -109,7 +109,7 @@ npm run release:check
 npm pack
 ```
 
-The release check rebuilds bundled assets, builds and typechecks the package, runs the complete test and coverage gates, creates a temporary npm tarball, installs it into a temporary project, and smoke-tests the packaged CLI and asset checksums. The optional final `npm pack` writes `corgispec-3.0.0-rc.1.tgz` for release verification or offline installation; normal consumers install the prerelease from npm with `corgispec@next`.
+The release check rebuilds bundled assets, builds and typechecks the package, runs the complete test and coverage gates, creates a temporary npm tarball, installs it into a temporary project, and smoke-tests the packaged CLI and asset checksums. The optional final `npm pack` writes `corgispec-3.0.0-rc.2.tgz` for release verification or offline installation; normal consumers install the prerelease from npm with `corgispec@next`.
 
 ## Rules
 

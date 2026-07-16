@@ -11,6 +11,7 @@ import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import yaml from "js-yaml";
 import {
   discoverSkills,
   validateSkill,
@@ -29,6 +30,28 @@ const SKILLS = [
   { slug: "corgispec-converge", tier: "molecules" },
 ] as const;
 
+const WORKFLOW_HOOK_SKILLS = [
+  { slug: "corgispec-apply-change", tier: "molecules", stop: true },
+  { slug: "corgispec-gh-apply", tier: "molecules", stop: true },
+  { slug: "corgispec-propose", tier: "molecules", stop: false },
+  { slug: "corgispec-gh-propose", tier: "molecules", stop: false },
+  { slug: "corgispec-update", tier: "molecules", stop: false },
+  { slug: "corgispec-converge", tier: "molecules", stop: false },
+  { slug: "corgispec-archive-change", tier: "molecules", stop: false },
+  { slug: "corgispec-gh-archive", tier: "molecules", stop: false },
+  { slug: "corgispec-human-qa", tier: "molecules", stop: false },
+  { slug: "corgispec-loop", tier: "compounds", stop: false },
+] as const;
+
+const PRE_WRITE_HOOK = [{
+  matcher: "Edit|Write",
+  hooks: [{ type: "command", command: "corgispec hook pre-write" }],
+}];
+
+const STOP_HOOK = [{
+  hooks: [{ type: "command", command: "corgispec hook stop-check" }],
+}];
+
 function listFiles(root: string, current = root): string[] {
   return readdirSync(current, { withFileTypes: true })
     .flatMap((entry) => {
@@ -40,6 +63,13 @@ function listFiles(root: string, current = root): string[] {
 
 function read(path: string): string {
   return readFileSync(path, "utf-8");
+}
+
+function readFrontmatter(path: string): Record<string, any> {
+  const markdown = read(path);
+  const match = markdown.match(/^---\n([\s\S]*?)\n---/);
+  expect(match, `${path} should contain YAML frontmatter`).not.toBeNull();
+  return yaml.load(match![1]!) as Record<string, any>;
 }
 
 describe("planning skill metadata", () => {
@@ -57,10 +87,11 @@ describe("planning skill metadata", () => {
       const markdown = read(resolve(OPENCODE_SKILLS, tier, slug, "SKILL.md"));
       const frontmatter = markdown.match(/^---\n([\s\S]*?)\n---/);
       expect(frontmatter).not.toBeNull();
-      expect(frontmatter![1]!.match(/^\w[\w-]*:/gm)).toEqual([
-        "name:",
-        "description:",
-      ]);
+      expect(frontmatter![1]!.match(/^\w[\w-]*:/gm)).toEqual(
+        slug === "corgispec-ready"
+          ? ["name:", "description:"]
+          : ["name:", "description:", "hooks:"],
+      );
       expect(markdown.split("\n").length).toBeLessThan(500);
     });
   }
@@ -79,6 +110,35 @@ describe("planning skill metadata", () => {
     expect(ready.meta.installation.targets).toEqual(["opencode", "claude", "codex"]);
     expect(update.meta.installation.targets).toEqual(["opencode", "claude", "codex"]);
     expect(converge.meta.installation.targets).toEqual(["opencode", "claude", "codex"]);
+  });
+});
+
+describe("workflow skill hook frontmatter", () => {
+  for (const { slug, tier, stop } of WORKFLOW_HOOK_SKILLS) {
+    it(`${slug} scopes write and stop enforcement to its active lifecycle`, () => {
+      const canonical = resolve(OPENCODE_SKILLS, tier, slug, "SKILL.md");
+      const mirror = resolve(CLAUDE_SKILLS, tier, slug, "SKILL.md");
+
+      expect(read(mirror)).toBe(read(canonical));
+      expect(readFrontmatter(canonical).hooks).toEqual(
+        stop
+          ? { PreToolUse: PRE_WRITE_HOOK, Stop: STOP_HOOK }
+          : { PreToolUse: PRE_WRITE_HOOK },
+      );
+    });
+  }
+
+  it("does not attach workflow enforcement hooks to unrelated skills", () => {
+    const hookedSkills = listFiles(OPENCODE_SKILLS)
+      .filter((path) => path.endsWith("/SKILL.md"))
+      .map((path) => readFrontmatter(resolve(OPENCODE_SKILLS, path)))
+      .filter((frontmatter) => frontmatter.hooks !== undefined)
+      .map((frontmatter) => frontmatter.name)
+      .sort();
+
+    expect(hookedSkills).toEqual(
+      WORKFLOW_HOOK_SKILLS.map(({ slug }) => slug).sort(),
+    );
   });
 });
 

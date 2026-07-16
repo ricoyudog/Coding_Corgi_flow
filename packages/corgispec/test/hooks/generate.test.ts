@@ -74,6 +74,12 @@ describe("hooks generate", () => {
         entry.hooks.map((hook: any) => hook.command)
       );
       expect(stopCommands.some((command: string) => command.includes("hook loop-check"))).toBe(true);
+      expect(stopCommands.some((command: string) => command.includes("hook stop-check"))).toBe(false);
+      const preToolCommands = parsed.hooks.PreToolUse.flatMap((entry: any) =>
+        entry.hooks.map((hook: any) => hook.command)
+      );
+      expect(preToolCommands.some((command: string) => command.includes("hook pre-write"))).toBe(false);
+      expect(preToolCommands.some((command: string) => command.includes("hook pre-bash"))).toBe(true);
     });
 
     it("passes Stop hook stdin, stdout, stderr, session, and exit code through Claude command config", () => {
@@ -227,12 +233,15 @@ process.stdin.on("end", () => {
       expect(output.trimStart()).not.toMatch(/^{/);
     });
 
-    it("plugin output includes PreToolUse handlers", () => {
+    it("plugin output includes session-scoped write enforcement and global Bash protection", () => {
       const output = execSync(`node ${CLI} hooks generate --platform opencode`, {
         encoding: "utf-8",
       });
 
       expect(output).toContain("tool.execute.before");
+      expect(output).toContain('"chat.message"');
+      expect(output).toContain('"command.execute.before"');
+      expect(output).toContain("activationBySession");
       expect(output).toContain('runHook("pre-write"');
       expect(output).toContain('runHook("pre-bash"');
     });
@@ -253,6 +262,148 @@ process.stdin.on("end", () => {
       expect(output).toContain("spawnSync(\n    process.execPath");
       expect(output).not.toMatch(/BINARY_COMMAND|\.cmd[^\n]*hook/iu);
       expect(output).not.toContain("shell: true");
+    });
+
+    it("isolates command and skill activation by session and resets it on each prompt", () => {
+      const fakeBin = resolve(tempDir, "opencode-activation-bin");
+      const fakeCorgispec = resolve(fakeBin, "fake-corgispec.cjs");
+      const pluginPath = resolve(tempDir, "corgispec-activation.mjs");
+      const harnessPath = resolve(tempDir, "run-opencode-activation.mjs");
+      const logPath = resolve(tempDir, "hook-activation.jsonl");
+      mkdirSync(fakeBin, { recursive: true });
+      writeFileSync(fakeCorgispec, `#!/usr/bin/env node
+const { appendFileSync } = require("node:fs");
+let input = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", (chunk) => { input += chunk; });
+process.stdin.on("end", () => {
+  const subcommand = process.argv.at(-1);
+  appendFileSync(process.env.FAKE_HOOK_LOG, JSON.stringify({ subcommand, input }) + "\\n");
+  if (subcommand === "loop-check") {
+    process.stdout.write(JSON.stringify({ decision: "proceed" }));
+  }
+});
+`);
+      chmodSync(fakeCorgispec, 0o755);
+      const generatedSource = execSync(`node ${CLI} hooks generate --platform opencode`, {
+        encoding: "utf8",
+      });
+      const source = generatedSource.replace(
+        /^const CLI_ENTRY = .*;$/mu,
+        `const CLI_ENTRY = ${JSON.stringify(fakeCorgispec)};`,
+      );
+      writeFileSync(pluginPath, transpileModule(source, {
+        compilerOptions: { module: ModuleKind.ESNext, target: ScriptTarget.ES2022 },
+      }).outputText);
+      writeFileSync(harnessPath, `import { CorgiSpecDeep } from ${JSON.stringify(pathToFileURL(pluginPath).href)};
+const hooks = await CorgiSpecDeep({
+  directory: "/workspace",
+  client: { session: { promptAsync: async () => ({ data: undefined, error: undefined }) } },
+});
+const message = (sessionID) => hooks["chat.message"](
+  { sessionID },
+  { message: {}, parts: [] },
+);
+const command = (sessionID, name) => hooks["command.execute.before"](
+  { command: name, sessionID, arguments: "" },
+  { parts: [] },
+);
+const tool = (sessionID, name, args = {}) => hooks["tool.execute.before"](
+  { tool: name, sessionID, callID: sessionID + "-call" },
+  { args },
+);
+const idle = (sessionID) => hooks.event({
+  event: { type: "session.idle", properties: { sessionID } },
+});
+
+for (const name of ${JSON.stringify([
+  "corgi-apply",
+  "corgi-propose",
+  "corgi-update",
+  "corgi-converge",
+  "corgi-archive",
+  "corgi-human-qa",
+  "corgi-loop",
+])}) {
+  const sessionID = "command-" + name;
+  await message(sessionID);
+  await command(sessionID, name);
+  await tool(sessionID, "write", { filePath: "/workspace/command.ts" });
+  await idle(sessionID);
+}
+
+for (const name of ${JSON.stringify([
+  "corgispec-apply-change",
+  "corgispec-gh-apply",
+  "corgispec-propose",
+  "corgispec-gh-propose",
+  "corgispec-update",
+  "corgispec-converge",
+  "corgispec-archive-change",
+  "corgispec-gh-archive",
+  "corgispec-human-qa",
+  "corgispec-loop",
+])}) {
+  const sessionID = "skill-" + name;
+  await message(sessionID);
+  await tool(sessionID, "skill", { name });
+  await tool(sessionID, "edit", { filePath: "/workspace/skill.ts" });
+  await idle(sessionID);
+}
+
+await message("normal-session");
+await tool("normal-session", "write", { filePath: "/workspace/normal.ts" });
+await idle("normal-session");
+
+await message("reset-session");
+await tool("reset-session", "skill", { name: "corgispec-apply-change" });
+await tool("reset-session", "write", { filePath: "/workspace/active.ts" });
+await message("reset-session");
+await tool("reset-session", "write", { filePath: "/workspace/reset.ts" });
+await idle("reset-session");
+
+await message("concurrent-a");
+await message("concurrent-b");
+await tool("concurrent-a", "skill", { name: "corgispec-propose" });
+await command("concurrent-b", "/corgi-apply");
+await tool("concurrent-a", "write", { filePath: "/workspace/a-before-reset.ts" });
+await tool("concurrent-b", "write", { filePath: "/workspace/b-before-reset.ts" });
+await message("concurrent-a");
+await tool("concurrent-a", "write", { filePath: "/workspace/a-after-reset.ts" });
+await tool("concurrent-b", "write", { filePath: "/workspace/b-after-reset.ts" });
+await idle("concurrent-a");
+await idle("concurrent-b");
+`);
+
+      const result = spawnSync(process.execPath, [harnessPath], {
+        encoding: "utf8",
+        env: { ...process.env, FAKE_HOOK_LOG: logPath },
+      });
+      expect(result.status, result.stderr || result.stdout).toBe(0);
+      const records = readFileSync(logPath, "utf8")
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line) as { subcommand: string; input: string });
+      const preWrites = records.filter((record) => record.subcommand === "pre-write");
+      const stopChecks = records.filter((record) => record.subcommand === "stop-check");
+      const loopChecks = records.filter((record) => record.subcommand === "loop-check");
+      const writtenPaths = preWrites.map((record) =>
+        JSON.parse(record.input).tool_input.file_path as string
+      );
+
+      expect(preWrites).toHaveLength(21);
+      expect(writtenPaths).not.toContain("/workspace/normal.ts");
+      expect(writtenPaths).not.toContain("/workspace/reset.ts");
+      expect(writtenPaths).not.toContain("/workspace/a-after-reset.ts");
+      expect(writtenPaths).toContain("/workspace/b-after-reset.ts");
+      expect(stopChecks).toHaveLength(4);
+      expect(stopChecks.map((record) => JSON.parse(record.input).session_id).sort()).toEqual([
+        "command-corgi-apply",
+        "concurrent-b",
+        "skill-corgispec-apply-change",
+        "skill-corgispec-gh-apply",
+      ]);
+      expect(loopChecks).toHaveLength(21);
     });
 
     it("re-enters OpenCode from a fire-and-forget idle event while preserving hook output", () => {
@@ -321,6 +472,10 @@ const hooks = await CorgiSpecDeep({
     },
   },
 });
+await hooks["command.execute.before"](
+  { command: "corgi-apply", sessionID: "opencode-session", arguments: "" },
+  { parts: [] },
+);
 void hooks.event({ event: { type: "session.idle", properties: { sessionID: "opencode-session" } } });
 await new Promise((settle) => setTimeout(settle, 0));
 process.stdout.write("\\nPROMPTS:" + JSON.stringify(prompts));
@@ -445,15 +600,17 @@ process.stdout.write("\\nPROMPTS:" + JSON.stringify(prompts));
 
       expect(existsSync(resolve(outputDir, "config.toml"))).toBe(true);
       expect(existsSync(resolve(outputDir, "hooks/corgispec_session_start.cjs"))).toBe(true);
-      expect(existsSync(resolve(outputDir, "hooks/corgispec_pre_write.cjs"))).toBe(true);
+      expect(existsSync(resolve(outputDir, "hooks/corgispec_pre_write.cjs"))).toBe(false);
       expect(existsSync(resolve(outputDir, "hooks/corgispec_pre_bash.cjs"))).toBe(true);
       expect(existsSync(resolve(outputDir, "hooks/corgispec_post_write.cjs"))).toBe(true);
-      expect(existsSync(resolve(outputDir, "hooks/corgispec_stop_check.cjs"))).toBe(true);
+      expect(existsSync(resolve(outputDir, "hooks/corgispec_stop_check.cjs"))).toBe(false);
       expect(existsSync(resolve(outputDir, "hooks/corgispec_loop_check.cjs"))).toBe(true);
       expect(existsSync(resolve(outputDir, "hooks/corgispec_post_compact.cjs"))).toBe(true);
 
       const toml = readFileSync(resolve(outputDir, "config.toml"), "utf-8");
       expect(toml).toContain("hooks = true");
+      expect(toml).not.toContain("pre-write");
+      expect(toml).not.toContain("stop-check");
 
       const wrapper = readFileSync(resolve(outputDir, "hooks/corgispec_pre_bash.cjs"), "utf-8");
       expect(wrapper).toContain("hook");

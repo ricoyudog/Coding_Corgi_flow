@@ -5,6 +5,10 @@ export default defineConfig({
     root: ".",
     include: ["test/**/*.test.ts"],
     environment: "node",
+    // Asset-copy and real CLI process suites can exceed Vitest's 5s default
+    // under concurrent WSL/Windows I/O. Child-process tests already enforce
+    // their own 20s execution timeout, so align the outer test boundary.
+    testTimeout: 20_000,
     coverage: {
       provider: "v8",
       include: ["src/**/*.ts"],

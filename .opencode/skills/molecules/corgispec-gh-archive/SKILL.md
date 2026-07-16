@@ -1,6 +1,12 @@
 ---
 name: corgispec-gh-archive
 description: Validate and archive a completed CorgiSpec change, extract durable knowledge, and close GitHub tracking. Use when archiving a change whose normalized tracking provider is GitHub.
+hooks:
+  PreToolUse:
+    - matcher: "Edit|Write"
+      hooks:
+        - type: command
+          command: "corgispec hook pre-write"
 ---
 
 # Archive a GitHub-tracked change

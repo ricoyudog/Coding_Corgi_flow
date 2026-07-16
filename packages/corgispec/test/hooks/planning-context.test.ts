@@ -506,6 +506,14 @@ describe("hook utility contracts", () => {
       ...incomplete,
       currentGroup: { ...incomplete.currentGroup!, tasks: incomplete.currentGroup!.tasks.map((task) => ({ ...task, done: true })) },
     })).toBeNull();
+    expect(checkTaskGroupPostconditions({
+      ...incomplete,
+      currentGroup: {
+        ...incomplete.currentGroup!,
+        completedTasks: 0,
+        tasks: incomplete.currentGroup!.tasks.map((task) => ({ ...task, done: false })),
+      },
+    })).toBeNull();
     expect(checkTaskGroupPostconditions(null)).toBeNull();
   });
 

@@ -1,6 +1,16 @@
 ---
 name: corgispec-gh-apply
 description: Implement exactly one pending Task Group from a CorgiSpec change and synchronize GitHub progress. Use when applying a change whose normalized tracking provider is GitHub.
+hooks:
+  PreToolUse:
+    - matcher: "Edit|Write"
+      hooks:
+        - type: command
+          command: "corgispec hook pre-write"
+  Stop:
+    - hooks:
+        - type: command
+          command: "corgispec hook stop-check"
 ---
 
 # Apply one GitHub-tracked Task Group

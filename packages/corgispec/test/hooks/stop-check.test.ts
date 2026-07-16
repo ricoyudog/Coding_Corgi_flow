@@ -80,7 +80,37 @@ describe("hook stop-check", () => {
     expect(output).toBe("");
   });
 
-  it("exits 2 when tasks are incomplete", () => {
+  it("exits 0 after a completed group when the next group is untouched", () => {
+    const change = setupFakeChange({
+      projectRoot: tempDir,
+      changeName: "checkpoint-change",
+      taskContent: [
+        "## 1. Setup",
+        "",
+        "- [x] 1.1 Completed checkpoint task",
+        "",
+        "## 2. Delivery",
+        "",
+        "- [ ] 2.1 Untouched next task",
+        "- [ ] 2.2 Another untouched task",
+        "",
+      ].join("\n"),
+    });
+    openspec.writeData({
+      listRoot: change.planningRoot,
+      statuses: { "checkpoint-change": change.status },
+    });
+
+    const output = execSync(`node ${CLI} hook stop-check --path ${tempDir}`, {
+      encoding: "utf-8",
+      input: JSON.stringify({}),
+      env: openspec.env,
+    });
+
+    expect(output).toBe("");
+  });
+
+  it("exits 2 when the current group is partially complete", () => {
     const change = setupFakeChange({
       projectRoot: tempDir,
       changeName: "wip-change",

@@ -1,6 +1,12 @@
 ---
 name: corgispec-propose
 description: Create or complete a CorgiSpec planning package and optionally synchronize GitLab issues. Use when proposing a new change or finishing an existing change whose normalized tracking provider is GitLab or none.
+hooks:
+  PreToolUse:
+    - matcher: "Edit|Write"
+      hooks:
+        - type: command
+          command: "corgispec hook pre-write"
 ---
 
 # Propose a change
