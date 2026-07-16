@@ -246,7 +246,7 @@ process.stdin.on("end", () => {
       expect(output).toContain('runHook("pre-bash"');
     });
 
-    it("passes session stdin through loop-check and routes idle failures through promptAsync", () => {
+    it("captures Node for hook execution and routes idle failures through promptAsync", () => {
       const output = execSync(`node ${CLI} hooks generate --platform opencode`, {
         encoding: "utf-8",
       });
@@ -259,7 +259,9 @@ process.stdin.on("end", () => {
       expect(output).toContain("result.stderr");
       expect(output).toContain("result.status !== 0");
       expect(output).toContain("client.session.promptAsync");
-      expect(output).toContain("spawnSync(\n    process.execPath");
+      expect(output).toContain(`const NODE_ENTRY = ${JSON.stringify(process.execPath)};`);
+      expect(output).toContain("spawnSync(\n    NODE_ENTRY");
+      expect(output).not.toContain("spawnSync(\n    process.execPath");
       expect(output).not.toMatch(/BINARY_COMMAND|\.cmd[^\n]*hook/iu);
       expect(output).not.toContain("shell: true");
     });
@@ -471,6 +473,10 @@ const hooks = await CorgiSpecDeep({
       },
     },
   },
+});
+Object.defineProperty(process, "execPath", {
+  configurable: true,
+  value: "/definitely-not-the-node-runtime/opencode.exe",
 });
 await hooks["command.execute.before"](
   { command: "corgi-apply", sessionID: "opencode-session", arguments: "" },

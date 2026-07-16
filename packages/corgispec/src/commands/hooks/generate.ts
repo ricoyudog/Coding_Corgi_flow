@@ -265,10 +265,14 @@ function generateOpenCodeOutput(
 }
 
 function buildOpenCodeDeepPlugin(): string {
+  // OpenCode plugins run inside the standalone OpenCode executable, where
+  // process.execPath is not Node. Capture the generator's Node runtime now.
+  const nodeEntryJson = JSON.stringify(process.execPath);
   const cliEntryJson = JSON.stringify(resolveRunningCliEntry());
   return `import type { Plugin } from "@opencode-ai/plugin";
 import { spawnSync } from "node:child_process";
 
+const NODE_ENTRY = ${nodeEntryJson};
 const CLI_ENTRY = ${cliEntryJson};
 
 function runHook(
@@ -276,7 +280,7 @@ function runHook(
   options: { input?: string; timeout: number; passthrough?: boolean },
 ): string {
   const result = spawnSync(
-    process.execPath,
+    NODE_ENTRY,
     [CLI_ENTRY, "hook", subcommand],
     {
       input: options.input,
