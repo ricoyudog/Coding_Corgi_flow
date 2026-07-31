@@ -2,7 +2,7 @@
   "slug": "corgispec-gh-propose",
   "tier": "molecule",
   "version": "1.0.0",
-  "description": "Generate planning artifacts and create tracked GitHub issues",
+  "description": "Generate planning artifacts and create one tracked GitHub Issue",
   "depends_on": [],
   "platform": "github",
   "tags": [

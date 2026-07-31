@@ -2,13 +2,15 @@
 
 Use this procedure only after the human gate.
 
-Do not change labels, close issues, update parent progress, or append repair tasks until the user explicitly chooses approve or reject.
+Do not change labels, update the managed dashboard, close the Issue, or append repair tasks until the user explicitly chooses approve or reject.
 
 ## Approve, advance the group
 
-Post approval note to the child issue:
+Post the approval note to the single Issue with a Group-specific heading:
 ```bash
-glab issue note <child_iid> --message "✅ Review passed.
+glab issue note <issue_iid> --message "## Review Decision: Group N
+
+✅ Review passed.
 
 <Review Summary>"
 ```
@@ -23,34 +25,27 @@ git push
 - If `isolation.mode: worktree`, run git commands inside the worktree directory.
 - **If commit or push fails: STOP. Report the error to the user. Do NOT proceed with label changes.**
 
-Verify the child issue's current label before changing it:
+Verify the Issue's current label and managed dashboard before changing either:
 ```bash
-glab issue view <child_iid> --output json | jq -r '.labels[]'
+glab issue view <issue_iid> --output json | jq -r '.labels[]'
 ```
 Confirm `workflow::review` is present. If not, STOP and report:
 "⚠️ Expected label `workflow::review` but found: \<actual labels\>. Aborting label change."
 
-Move the child issue to done (do NOT close — closing removes issues from board columns):
-```bash
-glab issue update <child_iid> --unlabel "workflow::review" --label "workflow::done"
-```
+Require exactly one ordered dashboard marker pair. Rebuild its checkboxes from the authoritative task artifact, set this group's Status to `done`, and update both task completion and approved-group progress while preserving all description content outside the markers.
 
-Update the parent issue:
-- Set this group's Status to `done` in the Task Groups table
-- Update the `**Progress:**` line (example: `2/3 groups completed`)
-```bash
-glab issue update <parent_iid> --description "$UPDATED_PARENT_BODY"
-```
+- If another group is pending, move the Issue from `workflow::review` to `workflow::todo`.
+- If this was the final group, retain `workflow::review` so Human QA and archive remain visible before `workflow::done`.
 
 ## Reject, enter repair
 
 Proceed to the repair flow in `references/repair-flow.md`.
 
-This is the only path that can append fix tasks or reset workflow state to `workflow::in-progress`.
+This is the only path that can append fix tasks or reset the single Issue and dashboard row to `workflow::in-progress`.
 
 ## Discuss
 
 - Enter free-form conversation with the user
 - Answer questions about the implementation, provide context
 - After discussion concludes, re-ask: **approve** or **reject**
-- Do not change issue labels or parent progress during discussion
+- Do not change Issue labels or managed dashboard progress during discussion

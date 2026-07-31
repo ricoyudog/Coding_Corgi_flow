@@ -21,12 +21,12 @@ hooks:
 
 ## Archive and synchronize
 
-1. Read GitHub tracker state at `<changeRoot>/.github.yaml` before archival.
+1. Read GitHub tracker state at `<changeRoot>/.github.yaml` before archival. Require `issue.number`/`issue.url`; if legacy `parent` or `groups` keys exist, stop before archival or remote mutation with the manual single-issue conversion guidance.
 2. Present CLI blockers and overridable warnings. Never bypass a blocker.
 3. Execute only the archive action returned by the CLI; let OpenSpec choose and report the archived root.
 4. Verify the payload moved without overwriting a conflicting destination.
 5. Extract durable knowledge from returned artifact paths, implementation evidence, and Git history.
-6. Post the archive summary to GitHub, verify issue labels, mark completed children and the parent done, update progress, and close issues according to policy.
+6. Read the live single Issue, require exactly one ordered dashboard marker pair, verify every Group row is `done`, and preserve all content outside the markers. Refresh final task/group progress, post `## Archive Summary`, move the Issue to `done`, and apply the existing close/open policy to that one Issue.
 7. Remove the worktree only after all closeout steps succeed; keep the branch unless explicitly asked to delete it.
 
-Report old `changeRoot`, actual archived root, warnings, knowledge extraction, issue transitions, and worktree cleanup. Never hardcode planning/archive paths, route by schema, overwrite an archive, or archive unresolved blockers.
+Report old `changeRoot`, actual archived root, warnings, knowledge extraction, the single Issue transition, and worktree cleanup. Never hardcode planning/archive paths, route by schema, overwrite an archive, or archive unresolved blockers.

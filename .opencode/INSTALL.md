@@ -2,7 +2,7 @@ Use this file only as a dispatcher for project bootstrap.
 
 1. If the target project path is missing, ask for it first.
 2. Require Node.js >=20.19.0 and OpenSpec CLI >=1.6.0 <2.0.0. OpenSpec 1.3–1.5 are not a supported fallback.
-3. Install the prerelease with `npm install -g corgispec@next`; `next` currently resolves to `3.0.0-rc.6`. Use `npm install -g corgispec@3.0.0-rc.6` for an exact pin. The unqualified package and `latest` remain on stable `2.4.3`.
+3. Install the prerelease with `npm install -g corgispec@next`; `next` currently resolves to `3.0.0-rc.7`. Use `npm install -g corgispec@3.0.0-rc.7` for an exact pin. The unqualified package and `latest` remain on stable `2.4.3`.
 4. Install or upgrade OpenSpec separately with `npm install -g @fission-ai/openspec@^1.6.0`, then run `corgispec doctor --path /path/to/project` before bootstrap writes managed files.
 5. Run `corgispec bootstrap --target /path/to/project --mode auto`.
 6. If the user already provided a schema, include `--schema <schema>`.

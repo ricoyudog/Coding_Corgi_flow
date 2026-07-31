@@ -24,4 +24,4 @@
 
 ## GitLab Issue
 
-<!-- This section will be filled automatically by the propose skill with the parent issue link. -->
+<!-- This section will be filled automatically by the propose skill with the single Issue link. -->

@@ -4,7 +4,7 @@ Use this procedure during the review phase, after the group is selected and befo
 
 These checks gather evidence for the review report. They inform the user's decision, but they do not decide the outcome.
 
-Do not change labels, close issues, update parent progress, or append repair tasks here.
+Do not change labels, update the managed dashboard, close the Issue, or append repair tasks here.
 
 ## 0. Anti-Rationalization Guard (READ FIRST)
 
@@ -37,7 +37,7 @@ When in doubt between two levels, choose the HIGHER severity.
 
 ## 1. Code Quality Review
 
-- Read all files produced by this group (from the child issue Rich Summary's file table)
+- Read all files produced by this group from the same Issue's `Apply Checkpoint: Group N` comment or the actual diff
 - Check: code structure, obvious bugs or anti-patterns, naming and style consistency
 - Produce: a short comment per file with severity-tagged status
 
@@ -147,7 +147,7 @@ These are supplementary — the Architecture and Performance sections above prov
 ## 8. Post evidence to GitLab
 
 ```bash
-glab issue note <child_iid> --message "$REVIEW_REPORT"
+glab issue note <issue_iid> --message "$REVIEW_REPORT"
 ```
 
 If screenshots were taken, upload first to get URLs, then embed in the report.

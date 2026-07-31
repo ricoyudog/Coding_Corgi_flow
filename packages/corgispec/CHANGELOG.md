@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-rc.7] - 2026-07-31
+
+### Breaking
+
+- GitHub- and GitLab-tracked changes now use exactly one Issue per change. New `.github.yaml` and `.gitlab.yaml` files store a single `issue` object; the former `parent`/`groups` tracker format is rejected and must be converted manually. Existing remote child issues are never migrated or modified automatically.
+
+### Changed
+
+- The authoritative task artifact is mirrored into a managed Task Dashboard in the single Issue body. Apply and review refresh dashboard state, while verification, review evidence, Human QA, blockers, and archive summaries are appended as Group-scoped comments on that same Issue.
+
+### Migration
+
+- For an existing tracked change, keep the former parent as the one change Issue, rewrite `.github.yaml` as `issue: { number: <parent-number>, url: <parent-url> }` or `.gitlab.yaml` as `issue: { iid: <parent-iid>, url: <parent-url> }`, and manually close or retain the former child issues. CorgiSpec deliberately performs no automatic migration or remote child-Issue mutation.
+
+### Tests
+
+- Added single-Issue contract coverage for GitHub/GitLab lifecycle skills, workflow schemas and templates, public documentation, Claude mirrors, and bundled package assets.
+
 ## [3.0.0-rc.6] - 2026-07-16
 
 ### Fixed

@@ -165,9 +165,10 @@ Determine verdict based on accumulated results:
 
 ### Post-Report Actions
 
-1. If tracking file exists (`.gitlab.yaml` / `.github.yaml`):
-   - GitLab: `glab issue note <child_iid> --message "$VERIFY_REPORT"`
-   - GitHub: `gh issue comment <child_number> --body "$VERIFY_REPORT"`
+1. If tracking file exists (`.gitlab.yaml` / `.github.yaml`), require the new `issue` contract and prefix the report with `## Verify Report: Group N`:
+   - GitLab: `glab issue note <issue_iid> --message "$VERIFY_REPORT"`
+   - GitHub: `gh issue comment <issue_number> --body "$VERIFY_REPORT"`
+   - If legacy `parent` or `groups` keys exist, report the unsupported format and make no tracker call.
 2. If no tracking file: display the report in terminal only
 3. Print the next-steps guidance based on verdict
-4. NEVER change labels, close issues, or create new issues
+4. NEVER change labels, close the Issue, or create another Issue

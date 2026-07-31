@@ -35,6 +35,6 @@ Run a human QA session that guides the user through structured testing with evid
    - A `qa-report.md` exists with an explicit PASS/FAIL status
    - The status is clear and unambiguous
    - All routed atom evidence is present (screenshots, logs, or confirmation notes as applicable)
-   - If tracked: the report was posted to the child issue via the appropriate CLI
+   - If tracked: the report was posted to the single change Issue via the appropriate CLI
    - Next-steps guidance was printed for the user
    - If any postcondition fails, report which one and do not claim completion

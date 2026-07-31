@@ -27,9 +27,10 @@ Gather reproducible evidence without changing implementation, planning, or track
 
 ## Report
 
-- For `gitlab`, read `<changeRoot>/.gitlab.yaml` and post evidence with `glab`.
-- For `github`, read `<changeRoot>/.github.yaml` and post evidence with `gh`.
+- For `gitlab`, read `<changeRoot>/.gitlab.yaml`, require `issue.iid`/`issue.url`, and post `## Verify Report: Group N` to that Issue with `glab`.
+- For `github`, read `<changeRoot>/.github.yaml`, require `issue.number`/`issue.url`, and post `## Verify Report: Group N` to that Issue with `gh`.
+- If either tracker file contains legacy `parent` or `groups` keys, stop tracker posting and report the unsupported format plus the manual single-issue conversion. Do not post to or modify legacy issues.
 - For `none` or missing tracker state, report locally only.
-- Never change labels, close issues, add tasks, or implement fixes.
+- Never change the Issue body, labels, close state, tasks, or implementation.
 
 Report each group, commands/evidence, requirement coverage, verdict, tracker posting, `changeRoot`, and worktree.

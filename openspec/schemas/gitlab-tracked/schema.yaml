@@ -1,6 +1,6 @@
 name: gitlab-tracked
 version: 1
-description: GitLab-tracked workflow — proposal → specs → design → tasks, with parent/child issue tracking and Task Group checkpoints
+description: GitLab-tracked workflow — proposal → specs → design → tasks, with one Issue dashboard and Task Group checkpoints
 artifacts:
   - id: proposal
     generates: proposal.md
@@ -41,10 +41,11 @@ artifacts:
       This is the foundation - specs, design, and tasks all build on this.
 
 
-      After completing the proposal, GitLab issues will be automatically created
-      (if glab CLI is available): one parent issue (backlog) plus one child issue
-      per Task Group. Include a ## GitLab Issue section as a placeholder
-      — it will be filled by the propose skill with the parent issue link.
+      After completing the proposal, one GitLab Issue will be automatically
+      created (if glab CLI is available). Its managed Task Dashboard mirrors
+      every Task Group and checkbox from the authoritative task artifact.
+      Include a ## GitLab Issue section as a placeholder — it will be filled by
+      the propose skill with the single Issue link.
     requires: []
   - id: specs
     generates: specs/**/*.md
@@ -225,8 +226,8 @@ artifacts:
 
       IMPORTANT: Each ## numbered heading defines a Task Group.
       Task Groups are checkpoint units — the apply phase executes one group at a
-      time and pauses between groups. Each Task Group will become a separate
-      GitLab child issue for independent tracking and review.
+      time and pauses between groups. Every Task Group remains independently
+      reviewable and is mirrored inside the single GitLab Issue dashboard.
 
       Design groups to be:
       - Completable in a single session
@@ -280,7 +281,7 @@ apply:
   instruction: |
     Execute one Task Group at a time. After completing all tasks in a group:
     1. Mark all group tasks as [x] in tasks.md
-    2. Sync progress to the group's child GitLab issue (if tracked)
+    2. Sync progress to the change's single GitLab Issue dashboard (if tracked)
     3. Pause and report progress to the user
 
     Resume on next /apply invocation to execute the next group.

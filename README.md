@@ -46,7 +46,7 @@ Coding Corgi Flow is the **community extension** of [OpenSpec](https://github.co
 
 | Superpower | Why you need it |
 |---|---|
-| 📌 **Automatic Issue Tracking** | Parent + child issues on GitLab or GitHub, labels synced |
+| 📌 **Automatic Issue Tracking** | One GitLab or GitHub Issue per change, with a synced Task Dashboard |
 | 🛑 **Checkpoint-based Apply** | One Task Group at a time — never lose control of your AI |
 | ✅ **Automated Verify Gate** | Lint, build, tests, spec coverage — blocks review on failure |
 | 🔍 **5-Axis Review** | Architecture · Security · Performance · Quality · Completeness |
@@ -82,7 +82,7 @@ npm install -g corgispec@next
 corgispec doctor --path /path/to/your-project
 ```
 
-`next` is the prerelease channel and currently resolves to `3.0.0-rc.6`. For a reproducible install, pin it with `npm install -g corgispec@3.0.0-rc.6`. The unqualified `corgispec` package and the `latest` tag remain on stable `2.4.3`; they do not install this RC.
+`next` is the prerelease channel and currently resolves to `3.0.0-rc.7`. For a reproducible install, pin it with `npm install -g corgispec@3.0.0-rc.7`. The unqualified `corgispec` package and the `latest` tag remain on stable `2.4.3`; they do not install this RC.
 
 Options: `--platform <platforms>` (claude, opencode, codex; default: all), `--scope <scope>` (global, local, both; default: both). When TTY is detected and flags are not provided, interactive prompts ask for platform and scope. `local` manages project commands, schema, config, manifest, and any existing hooks; `global` manages user-level skills for the selected platforms plus Claude Code and OpenCode user commands; `both` preflights and updates both surfaces as one operation. Supplying `--platform` restricts detection and repair to exactly those platforms.
 
@@ -210,9 +210,7 @@ For `ready`, exit code `0` means ready, `1` means a planning blocker, and `2` me
     </td>
     <td width="50%">
       <b>📌 Automatic Issue Tracking</b><br/>
-      Parent + child issues on GitLab or GitHub, labels synced automatically.
-      <br/><br/>
-      <img src="docs/articles/images/issue_board_example.png" alt="Issue board" width="100%"/>
+      One GitLab or GitHub Issue per change. Its managed dashboard mirrors Task Groups and checkboxes; lifecycle evidence stays in comments.
     </td>
   </tr>
   <tr>
@@ -389,14 +387,14 @@ A schema defines the artifact pipeline. CorgiSpec accepts any OpenSpec schema na
 | **Proposal** | `proposal.md` | Motivation, scope, capabilities, impact |
 | **Specs** | `specs/<capability>/spec.md` | Formal WHEN/THEN scenarios (one per capability) |
 | **Design** | `design.md` | Technical decisions, architecture, risks, trade-offs |
-| **Tasks** | `tasks.md` | Numbered Task Groups with checkboxes — each becomes a child issue |
+| **Tasks** | `tasks.md` | Numbered Task Groups with checkboxes mirrored in one Issue dashboard |
 
 Pipeline: `proposal → specs → design → tasks → apply`
 
 Key decisions:
 - **Capability-driven specs** — one spec file per capability, traceable contracts
 - **Delta spec model** — ADDED/MODIFIED/REMOVED/RENAMED operations accumulate into canonical specs
-- **Task Groups as checkpoints** — each `## N. Group` = one child issue, one apply session, one review cycle
+- **Task Groups as checkpoints** — each `## N. Group` = one dashboard section, one apply session, one review cycle
 
 <details>
 <summary>Creating a custom schema</summary>
@@ -454,9 +452,9 @@ Set `schema: my-schema` in `config.yaml`.
 
 | Capability | Vanilla OpenSpec | Coding Corgi Flow |
 |---|---|---|
-| Issue tracking | None | Parent/child issues via `gh` or `glab` |
+| Issue tracking | None | One Issue per change via `gh` or `glab` |
 | Apply behavior | All tasks at once | Checkpoint-based: one group, pause, review |
-| Progress sync | Local checkboxes only | Rich summaries posted to issues |
+| Progress sync | Local checkboxes only | One managed dashboard plus lifecycle comments |
 | Workflow labels | None | `backlog → todo → in-progress → review → done` |
 | Review | None | 5-axis automated checks + verify gate + decision loop |
 | Human QA | None | Structured QA with 6 specialized atoms (smoke, UI, API, CLI, backend, exploratory) |
@@ -508,7 +506,7 @@ rules:
 
 ### Migrating from CorgiSpec 2.x
 
-1. Upgrade to Node >=20.19.0 and OpenSpec >=1.6.0 <2.0.0, then install `corgispec@next` (currently `3.0.0-rc.6`) or pin `corgispec@3.0.0-rc.6` exactly. The unqualified package remains stable `2.4.3` via `latest`.
+1. Upgrade to Node >=20.19.0 and OpenSpec >=1.6.0 <2.0.0, then install `corgispec@next` (currently `3.0.0-rc.7`) or pin `corgispec@3.0.0-rc.7` exactly. The unqualified package remains stable `2.4.3` via `latest`.
 2. Keep your existing schema name, but make the inferred tracker explicit:
 
    ```yaml

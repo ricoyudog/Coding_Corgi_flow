@@ -13,5 +13,5 @@ description: Investigate a CorgiSpec change, its planning context, implementatio
 4. Accept `trackingProvider: "gitlab"` or `"none"`. Route `"github"` to `corgispec-gh-explore`; never infer provider from `schemaName`.
 5. Read planning material only from returned concrete artifact paths and context files. Accept an external store root; never prepend the working directory or infer an artifact filename.
 6. Inspect relevant implementation, tests, Git history, and worktree state without editing them.
-7. When GitLab tracking is enabled, read tracker state at `<changeRoot>/.gitlab.yaml`, then query live issues for current labels and discussion. Treat remote state as current and local tracker state as identifiers.
+7. When GitLab tracking is enabled, read tracker state at `<changeRoot>/.gitlab.yaml` and require `issue.iid`/`issue.url`. If legacy `parent` or `groups` keys exist, report the unsupported format and manual single-issue conversion without querying or modifying legacy issues. Otherwise query that one live Issue for its labels, managed Task Dashboard, and discussion. Treat remote state as current and local tracker state as identifiers.
 8. Present findings, evidence paths, uncertainties, and possible next steps. Make no file, issue, label, branch, or worktree changes.

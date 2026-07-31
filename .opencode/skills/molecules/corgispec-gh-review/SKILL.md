@@ -17,16 +17,16 @@ Gather reproducible evidence and keep the final approve/reject decision human-co
 
 ## Gather evidence
 
-1. Read tracker state at `<changeRoot>/.github.yaml`, query live labels, and select the requested group or first group in review state.
+1. Read tracker state at `<changeRoot>/.github.yaml`. Require `issue.number`/`issue.url`; if legacy `parent` or `groups` keys exist, stop before any local or remote mutation with the documented manual-conversion guidance. Query the single live Issue and select the requested group or the first dashboard row in `review` while the Issue has label `review`.
 2. Confirm group completion through `taskArtifactId` and its CLI-returned concrete paths.
-3. Read implementation files from the apply checkpoint, tracker summary, or actual diff. Read planning evidence only from `contextFiles` and `artifactPaths`.
+3. Read implementation files from the same Issue's `Apply Checkpoint: Group N` comment or actual diff. Read planning evidence only from `contextFiles` and `artifactPaths`.
 4. Check code quality, behavior against every applicable planning requirement, tests, architecture, security, and performance. Use the security and performance checklists. Cite commands, outputs, concrete paths, and requirement text.
-5. Post the review report to the child issue without changing its state.
+5. Post `## Review Report: Group N` to the same Issue without changing its state.
 
 ## Apply the human decision
 
-- Approve: verify the review label, move the child to done, update the parent table/checklist/progress, and close the child when policy allows.
-- Reject: collect feedback, confirm a precise fix plan, append tasks only to the CLI-authorized task-artifact path, comment on the child, and move it back to in-progress.
+- Approve: verify the Issue label and managed dashboard markers, set the current row to `done`, and rebuild task/group progress from the authoritative task artifact. If groups remain, move the Issue from `review` to `todo`; after the final group, keep it in `review` for Human QA and archive. Post `## Review Decision: Group N` on the same Issue.
+- Reject: collect feedback, confirm a precise fix plan, append tasks only to the CLI-authorized task-artifact path, rebuild the managed dashboard with the new unchecked tasks, post `## Review Decision: Group N`, and move the same Issue from `review` to `in-progress` with the row set to `in-progress`.
 - Never implement the repair during review.
 
-Never hardcode planning paths or artifact names, route by schema, edit unrelated planning content, commit, push, archive, or publish. Report evidence, decision, tracker transitions, `changeRoot`, and worktree.
+Before editing the Issue body, require exactly one ordered dashboard marker pair and preserve everything outside it. Never hardcode planning paths or artifact names, route by schema, edit unrelated planning content, commit, push, archive, or publish. Report evidence, decision, tracker transitions, `changeRoot`, and worktree.

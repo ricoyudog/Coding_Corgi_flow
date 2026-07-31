@@ -15,7 +15,7 @@ hooks:
 
 # Apply one GitHub-tracked Task Group
 
-Execute one group, checkpoint it, synchronize its GitHub child issue, and stop.
+Execute one group, checkpoint it, synchronize the change's single GitHub issue, and stop.
 
 ## Resolve context
 
@@ -30,16 +30,16 @@ Execute one group, checkpoint it, synchronize its GitHub child issue, and stop.
 
 1. Use the apply response's `currentGroup`, task records, instruction, `contextFiles`, and concrete artifact paths.
 2. Read [references/checkpoint-flow.md](references/checkpoint-flow.md) and [references/delegation-strategy.md](references/delegation-strategy.md).
-3. Read GitHub tracker state at `<changeRoot>/.github.yaml`, match the group number, verify the child issue's current label, then move it from todo to in-progress.
+3. Read GitHub tracker state at `<changeRoot>/.github.yaml` and follow [references/issue-sync.md](references/issue-sync.md). Reject legacy `parent`/`groups` state before implementation, then verify and update the single issue's label and managed dashboard.
 4. Implement only the selected group's pending tasks. Delegate independent work without allowing delegates to change planning artifacts.
 5. Verify each task, then update its checkbox only in the CLI-returned concrete task-artifact path.
-6. Record actual modified files and evidence. On a blocker, stop and comment on the child issue.
+6. Record actual modified files and evidence. On a blocker, refresh the managed dashboard from the authoritative task artifact, stop, and comment on the same issue.
 
 ## Close out
 
 - Re-run `corgispec apply "<change>" --json` and verify the group is complete.
-- Update the child issue with objectives derived from returned context, completed tasks, modified files, and evidence; move it from in-progress to review.
-- Update parent progress and post a final-group note when applicable.
-- Report the checkpoint, issue URLs, `changeRoot`, and worktree, then stop after one group.
+- Refresh only the single issue's managed dashboard from the authoritative task artifact, set the completed group to review, post a `Group N` completion comment with objectives, completed tasks, modified files, and evidence, then move the issue from in-progress to review.
+- Post an all-groups-ready comment on the same issue when applicable.
+- Report the checkpoint, the single Issue URL, `changeRoot`, and worktree, then stop after one group.
 
 Never hardcode planning paths or artifact names, edit non-task planning content, route by schema, commit, push, review, archive, or publish.
