@@ -21,7 +21,7 @@ Human QA orchestrator. Classifies the change type, routes to appropriate QA atom
 
 - [ ] Change exists in `openspec/changes/<name>/`
 - [ ] Review has passed (verify gate output = passed)
-- [ ] If tracked: `.gitlab.yaml` or `.github.yaml` exists with issue numbers
+- [ ] If tracked: `.gitlab.yaml` or `.github.yaml` exists with one `issue` identifier and URL
 - [ ] If `isolation.mode` is `worktree`: worktree exists for this change
 - [ ] The application under test is runnable or deployable locally
 - [ ] At least one QA atom skill is available (qa-smoke is mandatory)
@@ -171,17 +171,19 @@ The report must include:
 
 Read the tracking file (`.gitlab.yaml` or `.github.yaml`).
 
+Require `issue.iid`/`issue.url` for GitLab or `issue.number`/`issue.url` for GitHub. If legacy `parent` or `groups` keys exist, stop tracker posting, report the unsupported format and manual conversion, and do not modify legacy issues.
+
 **GitLab:**
 ```bash
-glab issue note <parent_iid> --message "## QA Report Summary\n\nStatus: <PASSED|FAILED>\nAtoms executed: <list>\nBugs found: <count>\nFull report: openspec/changes/<name>/qa-report.md"
+glab issue note <issue_iid> --message "## QA Report Summary\n\nStatus: <PASSED|FAILED>\nAtoms executed: <list>\nBugs found: <count>\nFull report: openspec/changes/<name>/qa-report.md"
 ```
 
 **GitHub:**
 ```bash
-gh issue comment <parent_number> --body "## QA Report Summary\n\nStatus: <PASSED|FAILED>\nAtoms executed: <list>\nBugs found: <count>\nFull report: openspec/changes/<name>/qa-report.md"
+gh issue comment <issue_number> --body "## QA Report Summary\n\nStatus: <PASSED|FAILED>\nAtoms executed: <list>\nBugs found: <count>\nFull report: openspec/changes/<name>/qa-report.md"
 ```
 
-If not tracked, skip this step silently.
+If not tracked, skip this step silently. QA never changes the single Issue body, labels, or close state.
 
 ### 8. Gate output
 

@@ -1,4 +1,4 @@
-<!-- Task Groups (## headings) are checkpoint units. Each group becomes a child GitHub issue. Apply executes one group at a time. -->
+<!-- Task Groups (## headings) are checkpoint units mirrored in one GitHub Issue dashboard. Apply executes one group at a time. -->
 
 ## 1. <!-- Task Group Name -->
 

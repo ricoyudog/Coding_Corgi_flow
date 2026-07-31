@@ -11,5 +11,5 @@ description: Investigate a CorgiSpec change, its planning context, implementatio
 4. Require `trackingProvider: "github"`; never infer provider from `schemaName`.
 5. Read planning material only from returned concrete paths. Accept an external store root and never reconstruct a path or artifact role.
 6. Inspect relevant implementation, tests, Git history, and worktree state without editing them.
-7. Read tracker identifiers at `<changeRoot>/.github.yaml`, then query live issues for current labels and discussion.
+7. Read tracker state at `<changeRoot>/.github.yaml` and require `issue.number`/`issue.url`. If legacy `parent` or `groups` keys exist, report the unsupported format and manual single-issue conversion without querying or modifying legacy issues. Otherwise query that one live Issue for its label, managed Task Dashboard, and discussion.
 8. Present findings, evidence paths, uncertainties, and possible next steps. Make no file, issue, label, branch, or worktree changes.

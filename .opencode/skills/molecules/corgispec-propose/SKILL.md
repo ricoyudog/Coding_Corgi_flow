@@ -1,6 +1,6 @@
 ---
 name: corgispec-propose
-description: Create or complete a CorgiSpec planning package and optionally synchronize GitLab issues. Use when proposing a new change or finishing an existing change whose normalized tracking provider is GitLab or none.
+description: Create or complete a CorgiSpec planning package and optionally synchronize one GitLab Issue. Use when proposing a new change or finishing an existing change whose normalized tracking provider is GitLab or none.
 hooks:
   PreToolUse:
     - matcher: "Edit|Write"
@@ -59,7 +59,7 @@ Read [references/artifact-creation.md](references/artifact-creation.md), then re
 ## Terminal handoff boundary
 
 - Do not hardcode the planning home, change directory, artifact names, or artifact layout.
-- Do not create duplicate tracker issues when tracker state already exists under `changeRoot`.
+- Do not create a duplicate tracker Issue when tracker state already exists under `changeRoot`.
 - Do not write outside `changeRoot` except for the configured worktree and remote issue operations.
 - Throughout propose, keep `HEAD` unchanged. Do not install packages, create commits, push branches, open implementation pull requests, or publish at any point. Worktree setup must not commit housekeeping changes.
 - Propose is a planning-only workflow and is terminal for the current turn.

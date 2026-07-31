@@ -1,6 +1,6 @@
 {
   "name": "corgispec",
-  "version": "3.0.0-rc.6",
+  "version": "3.0.0-rc.7",
   "description": "Unified CLI for Corgi workflow — skill management, validation, and AI instruction generation",
   "type": "module",
   "bin": {

@@ -26,7 +26,7 @@ Archive through the CLI/upstream instruction and never construct an archive path
 
 ## Archive
 
-1. Before moving anything, read GitLab tracker state at `<changeRoot>/.gitlab.yaml` when enabled.
+1. Before moving anything, read GitLab tracker state at `<changeRoot>/.gitlab.yaml` when enabled. Require `issue.iid`/`issue.url`; if legacy `parent` or `groups` keys exist, stop before archival or remote mutation with the manual single-issue conversion guidance.
 2. Present incomplete-task, readiness, validation, and artifact-drift warnings. Require explicit confirmation when the CLI marks any warning as overridable; stop on a blocker.
 3. Execute only the archive action returned by `corgispec archive --json`. Let OpenSpec synchronize applicable deltas and choose the destination.
 4. Capture the actual archived root from CLI/upstream output. Verify the full change payload moved and no conflicting destination was overwritten.
@@ -34,7 +34,7 @@ Archive through the CLI/upstream instruction and never construct an archive path
 ## Close out
 
 - Extract durable session knowledge from returned planning artifacts, implementation evidence, and Git history without assuming an artifact name.
-- When GitLab tracking is enabled, post the archive summary, verify labels, move completed child/parent issues to done, and close them according to policy. Skip all tracker operations for provider none.
+- When GitLab tracking is enabled, read the live single Issue, require exactly one ordered dashboard marker pair, verify every Group row is `done`, and preserve all content outside the markers. Refresh final task/group progress, post `## Archive Summary`, move the Issue to `workflow::done`, and apply the existing close/open policy to that one Issue. Skip all tracker operations for provider none.
 - Remove the worktree only after archive and tracker closeout succeed; preserve its branch unless the user explicitly requests deletion.
 - Report old `changeRoot`, actual archived root, validation/warnings, knowledge extraction, tracker result, and worktree cleanup.
 

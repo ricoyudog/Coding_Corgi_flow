@@ -2,7 +2,7 @@
   "slug": "corgispec-propose",
   "tier": "molecule",
   "version": "1.0.0",
-  "description": "Generate planning artifacts and create tracked GitLab issues",
+  "description": "Generate planning artifacts and create one tracked GitLab Issue",
   "depends_on": [],
   "platform": "gitlab",
   "tags": [

@@ -46,7 +46,7 @@ Coding Corgi Flow 是 [OpenSpec](https://github.com/Fission-AI/OpenSpec)（由 [
 
 | 超能力 | 為什麼你需要 |
 |---|---|
-| 📌 **自動 Issue 追蹤** | GitLab 或 GitHub 上自動建立 parent/child issue，標籤同步 |
+| 📌 **自動 Issue 追蹤** | 每個 change 只建立一張 GitLab 或 GitHub Issue，Task Dashboard 自動同步 |
 | 🛑 **Checkpoint 式 Apply** | 一次一個 Task Group — 永遠不會讓 AI 失控 |
 | ✅ **自動驗證關卡** | Lint、build、tests、spec coverage — 未通過就阻擋 review |
 | 🔍 **五軸審查** | 架構 · 安全 · 效能 · 品質 · 完整度 |
@@ -83,7 +83,7 @@ corgispec doctor --path /path/to/your-project
 corgispec bootstrap --target /path/to/your-project --schema github-tracked
 ```
 
-`next` 是預發布頻道，目前指向 `3.0.0-rc.6`。若要可重現的安裝，請使用 `npm install -g corgispec@3.0.0-rc.6` 鎖定版本。未加版本的 `corgispec` 與 `latest` tag 仍維持穩定版 `2.4.3`，不會安裝此 RC。
+`next` 是預發布頻道，目前指向 `3.0.0-rc.7`。若要可重現的安裝，請使用 `npm install -g corgispec@3.0.0-rc.7` 鎖定版本。未加版本的 `corgispec` 與 `latest` tag 仍維持穩定版 `2.4.3`，不會安裝此 RC。
 
 可使用 `--platform <platforms>`（claude、opencode、codex；預設全部）與 `--scope <scope>`（global、local、both；預設 both）。`local` 管理專案 commands、schema、config、manifest 與已存在的 hooks；`global` 管理所選平台的 user-level skills，以及 Claude Code/OpenCode 的 user commands；`both` 會先一起 preflight，再更新兩個範圍。指定 `--platform` 時，只偵測及修復列出的平台。
 
@@ -197,9 +197,7 @@ corgispec converge add-auth --json
     </td>
     <td width="50%">
       <b>📌 自動 Issue 追蹤</b><br/>
-      GitLab 或 GitHub 上自動建立 parent + child issue，標籤同步。
-      <br/><br/>
-      <img src="docs/articles/images/issue_board_example.png" alt="Issue board" width="100%"/>
+      每個 change 只建立一張 GitLab 或 GitHub Issue；受管 dashboard 同步 Task Group 與 checkbox，生命週期證據保留在 comments。
     </td>
   </tr>
   <tr>
@@ -376,14 +374,14 @@ Schema 定義 artifact pipeline。CorgiSpec 接受任何 OpenSpec schema 名稱�
 | **提案** | `proposal.md` | 動機、範圍、能力項目、影響 |
 | **規格** | `specs/<capability>/spec.md` | 正式 WHEN/THEN 情境（每個 capability 一份） |
 | **設計** | `design.md` | 技術決策、架構、風險、取捨 |
-| **任務** | `tasks.md` | 附 checkbox 的編號 Task Group — 每個 group 變成 child issue |
+| **任務** | `tasks.md` | 附 checkbox 的編號 Task Group，同步到單一 Issue dashboard |
 
 流程：`proposal → specs → design → tasks → apply`
 
 關鍵設計：
 - **Capability 驅動規格** — 每個 capability 獨立 spec 檔案，可追溯
 - **Delta spec 模型** — ADDED/MODIFIED/REMOVED/RENAMED 操作，累積成 canonical spec
-- **Task Group 即 checkpoint** — 每個 `## N. Group` = 一個 child issue、一個 apply session、一個 review cycle
+- **Task Group 即 checkpoint** — 每個 `## N. Group` = 一個 dashboard 區段、一個 apply session、一個 review cycle
 
 <details>
 <summary>建立自訂 schema</summary>
@@ -441,9 +439,9 @@ apply:
 
 | 能力 | 原生 OpenSpec | Coding Corgi Flow |
 |---|---|---|
-| Issue 追蹤 | 無 | Parent/child issue，透過 `gh` 或 `glab` |
+| Issue 追蹤 | 無 | 每個 change 一張 Issue，透過 `gh` 或 `glab` |
 | Apply 行為 | 一次全部 | Checkpoint 式：一個 group、暫停、審查 |
-| 進度同步 | 僅本地 checkbox | 豐富摘要發佈到 issue |
+| 進度同步 | 僅本地 checkbox | 一個受管 dashboard 加生命週期 comments |
 | 工作流標籤 | 無 | `backlog → todo → in-progress → review → done` |
 | 審查 | 無 | 五軸自動檢查 + verify gate + 決策循環 |
 | 人工 QA | 無 | 結構化 QA，含 6 個專業 atom（smoke、UI、API、CLI、backend、exploratory） |
@@ -495,7 +493,7 @@ rules:
 
 ### 從 CorgiSpec 2.x 遷移
 
-1. 升級至 Node >=20.19.0 與 OpenSpec >=1.6.0 <2.0.0，再安裝 `corgispec@next`（目前為 `3.0.0-rc.6`），或精確鎖定 `corgispec@3.0.0-rc.6`。未加版本的 package 仍透過 `latest` 取得穩定版 `2.4.3`。
+1. 升級至 Node >=20.19.0 與 OpenSpec >=1.6.0 <2.0.0，再安裝 `corgispec@next`（目前為 `3.0.0-rc.7`），或精確鎖定 `corgispec@3.0.0-rc.7`。未加版本的 package 仍透過 `latest` 取得穩定版 `2.4.3`。
 2. 保留既有 schema 名稱，但明確寫出原先推斷的 tracker：
 
    ```yaml

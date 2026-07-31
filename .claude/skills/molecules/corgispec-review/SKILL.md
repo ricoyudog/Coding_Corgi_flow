@@ -19,18 +19,18 @@ Gather evidence first, then ask the human to approve or reject. Do not infer any
 
 ## Select and inspect
 
-1. When tracked, read `<changeRoot>/.gitlab.yaml`, query live child labels, and select the requested group or first group in review state. When untracked, select a completed group from status or ask when ambiguous.
+1. When tracked, read `<changeRoot>/.gitlab.yaml`. Require `issue.iid`/`issue.url`; if legacy `parent` or `groups` keys exist, stop before any local or remote mutation with the documented manual-conversion guidance. Query the single live Issue and select the requested group or first dashboard row in `review` while the Issue has label `workflow::review`. When untracked, select a completed group from status or ask when ambiguous.
 2. Use `taskArtifactId` and its concrete `artifactPaths` to verify every selected-group task is complete. Do not parse a guessed file.
-3. Read implementation files from the apply checkpoint/tracker summary or actual diff. Read planning evidence only from `contextFiles` and concrete `artifactPaths`.
+3. Read implementation files from the same Issue's `Apply Checkpoint: Group N` note or actual diff. Read planning evidence only from `contextFiles` and concrete `artifactPaths`.
 4. Read and execute [references/quality-checks.md](references/quality-checks.md), plus the security and performance checklists when applicable.
-5. Post the evidence report to the child issue when tracked; otherwise present it locally.
+5. Post `## Review Report: Group N` to the same Issue when tracked; otherwise present it locally.
 
 ## Human decision
 
 Read [references/review-decisions.md](references/review-decisions.md).
 
-- On approval, verify the current child state, move it to done, update parent progress, and report remaining groups. For untracked changes, record no remote state.
-- On rejection, read [references/repair-flow.md](references/repair-flow.md). Append confirmed fix tasks only to the concrete task-artifact path returned by the CLI, then reset the tracked child to in-progress when configured.
+- On approval, verify the single Issue state, set the current dashboard row to `done`, rebuild progress from the authoritative task artifact, and move `workflow::review` to `workflow::todo` only when groups remain. After the final group, retain `workflow::review` for Human QA and archive. For untracked changes, record no remote state.
+- On rejection, read [references/repair-flow.md](references/repair-flow.md). Append confirmed fix tasks only to the concrete task-artifact path returned by the CLI, rebuild the managed dashboard, then reset the same Issue and current row to in-progress when configured.
 - Never implement fixes during review.
 
 ## Guardrails
@@ -39,5 +39,6 @@ Read [references/review-decisions.md](references/review-decisions.md).
 - Never hardcode artifact roles, planning locations, or task filenames.
 - Never edit planning content except confirmed repair tasks in the authorized task artifact.
 - Never commit, push, archive, or publish.
+- Before editing the Issue description, require exactly one ordered dashboard marker pair and preserve everything outside it.
 
 Report the group, evidence, human decision, task-artifact edits, tracker result, `changeRoot`, and worktree.

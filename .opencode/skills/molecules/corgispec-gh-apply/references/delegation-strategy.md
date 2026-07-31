@@ -14,4 +14,4 @@ Give each delegate:
 
 Run independent tasks in parallel only when they do not share files or mutable state. Verify every result in the selected worktree. The main agent alone updates checkboxes at CLI-returned task-artifact paths after verification.
 
-For tracker closeout, pass the tracker-state path under `changeRoot`, issue identifiers, completed task IDs, actual modified files, and evidence. Require label precondition checks before every transition.
+For tracker closeout, pass the tracker-state path under `changeRoot`, the single Issue identifier, completed task IDs, actual modified files, and evidence. Require label precondition checks before every transition.
