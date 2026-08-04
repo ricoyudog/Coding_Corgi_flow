@@ -51,6 +51,7 @@ function approved(
       tree: `tree-${id}`,
       workspaceFingerprint: H5,
     },
+    tracker: { status: "not_required", marker: null },
     completedAt: OLD,
   };
 }
@@ -81,6 +82,7 @@ function incomplete(
       ? { status: "pending", remoteRevision: null }
       : { status: "not_required", remoteRevision: null },
     commit: { status: "pending", revision: null, tree: null, workspaceFingerprint: null },
+    tracker: { status: "not_required", marker: null },
     completedAt: null,
   };
 }
@@ -114,6 +116,7 @@ function previous(requirePush = false): LoopStateV2 {
     },
     planningRevision: H1,
     git: { baselineRevision: "old-base", finalRevision: null, workspaceFingerprint: H2 },
+    tracking: { binding: null },
     groups: {
       "TG-1": approved("TG-1", 1, H1, requirePush),
       "TG-2": approved("TG-2", 2, H2, requirePush),

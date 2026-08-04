@@ -1,6 +1,9 @@
 ---
 name: corgispec-loop
 description: Execute or resume a CorgiSpec Run Contract v2 one Task Group at a time through the canonical corgispec loop CLI. Use when starting, continuing, fixing, committing, recovering, or finalizing an implementation run; never write loop state or evidence artifacts directly.
+disable-model-invocation: true
+metadata:
+  opencode/autoinvoke: "false"
 hooks:
   PreToolUse:
     - matcher: "Edit|Write"
@@ -20,6 +23,7 @@ Use the Run Contract v2 CLI as the only lifecycle authority. You execute impleme
 - Never invent a revision, nonce, run ID, fingerprint, command, exit code, finding, or Git revision.
 - Never reuse an old response token after any successful mutation. Inspect again.
 - Execute only the Task Group named by the current CLI action.
+- Run this workflow only after the user explicitly requests it through its skill or platform command.
 - Do not commit until the phase is `awaiting_group_commit`.
 - Do not finalize until the phase is `awaiting_finalize`.
 - Treat contract errors, session conflicts, stale tokens, corruption, and planning revision changes as blockers.
@@ -42,6 +46,7 @@ Inspect output supplies one canonical action:
 - `dispatch_group`: implement exactly the current Task Group, then build a complete submission.
 - `fix_group`: fix only the reported failed evidence or active findings, rerun all affected checks, and submit a new complete attempt.
 - `commit_group`: commit the approved group, make the worktree clean, then acknowledge the commit.
+- `sync_tracker`: explicitly checkpoint the committed group with the configured tracker before continuing.
 - `finalize`: finalize the run.
 - `blocked`: stop and report the structured reason.
 - `terminal`: report the terminal phase and do not mutate anything.
@@ -96,6 +101,14 @@ When inspect returns `commit_group`:
 
 The CLI derives the commit from the current Git HEAD and checks the clean tree, submitted workspace fingerprint, and commit tree. When push is required, also pass `--push-status pushed --remote-revision "<revision>"`; never pass a caller-supplied commit option. If it rejects the acknowledgement, do not rewrite state or amend evidence; inspect and report the mismatch.
 
+## Tracker checkpoint
+
+When inspect returns `sync_tracker`, run:
+
+`corgispec loop sync-tracker "<change>" --run-id "<runId>" --session "<sessionId>" --state-revision <n> --nonce "<nonce>" --json`
+
+This is an explicit lifecycle action. Never run it from a Stop/idle hook, and never call `gh` or `glab` directly for this checkpoint. If the command fails or times out, inspect before retrying; it is responsible for safe idempotent recovery.
+
 ## Finalize
 
 When inspect returns `finalize`, run `corgispec loop finalize "<change>" --run-id "<runId>" --session "<sessionId>" --state-revision <n> --nonce "<nonce>" --json`.
@@ -104,7 +117,7 @@ Finalization rechecks planning revision, Git cleanliness/revision, every group c
 
 ## Hook behavior
 
-Hook wrappers may pass session input to the CLI and relay its JSON decision. They do not own state and must preserve stdin identity, stdout, stderr, and exit status. In hook-driven mode, stop after submitting a bundle so the hook can resume the canonical run.
+Hook wrappers may pass session input to the CLI and relay its JSON decision. They only inspect and report the next action: they never run `sync-tracker`, `gh`, `glab`, or any other tracker write. They do not own state and must preserve stdin identity, stdout, stderr, and exit status. In hook-driven mode, stop after submitting a bundle so the hook can resume the canonical run.
 
 ## Completion report
 

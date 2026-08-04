@@ -5,6 +5,6 @@ category: Workflow
 tags: [workflow, loop, run-contract]
 ---
 
-Invoke the **corgispec-loop** skill for `/corgi:loop`. Pass the optional change name and current session identity through unchanged. Use hook-driven mode unless the user explicitly selects self-driven mode.
+`/corgi:loop` is the explicit user entry point for the **corgispec-loop** workflow. Pass the optional change name and current session identity through unchanged. Use hook-driven mode unless the user explicitly selects self-driven mode.
 
 Never write `.corgi/loop/**`, `state.json`, `verify.json`, or `review.json` directly; every canonical mutation must be performed by `corgispec loop`.

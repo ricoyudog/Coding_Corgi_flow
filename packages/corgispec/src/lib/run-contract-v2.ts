@@ -12,6 +12,7 @@ export const ACTIVE_PHASES_V2 = [
   "awaiting_evaluation",
   "fixing",
   "awaiting_group_commit",
+  "awaiting_tracker_sync",
   "awaiting_finalize",
 ] as const;
 
@@ -34,6 +35,7 @@ export const LOOP_EVENT_TYPES_V2 = [
   "bundle_submitted",
   "evaluation_completed",
   "group_commit_acknowledged",
+  "group_tracker_checkpointed",
   "run_finalized",
   "run_invalidated",
   "run_blocked",
@@ -89,6 +91,20 @@ export interface GitBindingV2 {
   workspaceFingerprint: ArtifactHashV2;
 }
 
+export type LoopTrackerProviderV2 = "github" | "gitlab";
+
+/** Immutable Issue target captured when a fresh RC8 loop starts. */
+export interface LoopTrackerBindingV2 {
+  provider: LoopTrackerProviderV2;
+  issueUrl: string;
+  repository: string;
+  issueNumber: number;
+}
+
+export interface LoopTrackingStateV2 {
+  binding: LoopTrackerBindingV2 | null;
+}
+
 export type LoopGroupStatusV2 =
   | "pending"
   | "in_progress"
@@ -120,6 +136,11 @@ export interface GroupCommitStateV2 {
   workspaceFingerprint: ArtifactHashV2 | null;
 }
 
+export interface GroupTrackerCheckpointStateV2 {
+  status: "not_required" | "pending" | "checkpointed";
+  marker: string | null;
+}
+
 export interface LoopGroupStateV2 {
   id: string;
   ordinal: number;
@@ -130,6 +151,7 @@ export interface LoopGroupStateV2 {
   bundle: GroupBundleStateV2;
   push: GroupPushStateV2;
   commit: GroupCommitStateV2;
+  tracker: GroupTrackerCheckpointStateV2;
   completedAt: string | null;
 }
 
@@ -153,6 +175,7 @@ export interface LoopStateV2 {
   blockedReason: BlockedReasonV2 | null;
   planningRevision: ArtifactHashV2;
   git: GitBindingV2;
+  tracking: LoopTrackingStateV2;
   groups: Record<string, LoopGroupStateV2>;
   startedAt: string;
   updatedAt: string;
@@ -225,6 +248,13 @@ export interface GroupCommitAcknowledgedEventV2 extends LoopEventBaseV2 {
   remoteRevision: string | null;
 }
 
+export interface GroupTrackerCheckpointedEventV2 extends LoopEventBaseV2 {
+  type: "group_tracker_checkpointed";
+  groupId: string;
+  attempt: number;
+  marker: string;
+}
+
 export interface RunFinalizedEventV2 extends LoopEventBaseV2 {
   type: "run_finalized";
   finalGitRevision: string;
@@ -255,6 +285,7 @@ export type LoopEventV2 =
   | BundleSubmittedEventV2
   | EvaluationCompletedEventV2
   | GroupCommitAcknowledgedEventV2
+  | GroupTrackerCheckpointedEventV2
   | RunFinalizedEventV2
   | RunInvalidatedEventV2
   | RunBlockedEventV2
@@ -387,6 +418,37 @@ function checkReason(value: unknown, path: string, errors: string[]): void {
   }
 }
 
+function checkTrackerBinding(value: unknown, path: string, errors: string[]): void {
+  if (!isRecord(value)) {
+    errors.push(`${path} must be an object`);
+    return;
+  }
+  if (value["provider"] !== "github" && value["provider"] !== "gitlab") {
+    errors.push(`${path}.provider is invalid`);
+  }
+  if (!nonEmpty(value["issueUrl"])) {
+    errors.push(`${path}.issueUrl must be non-empty`);
+  } else {
+    try {
+      new URL(value["issueUrl"]);
+    } catch {
+      errors.push(`${path}.issueUrl must be a URL`);
+    }
+  }
+  if (!nonEmpty(value["repository"])) errors.push(`${path}.repository must be non-empty`);
+  if (!integer(value["issueNumber"], 1)) errors.push(`${path}.issueNumber must be a positive integer`);
+}
+
+function checkTracking(value: unknown, errors: string[]): value is LoopTrackingStateV2 {
+  if (!isRecord(value)) {
+    errors.push("tracking must be an object");
+    return false;
+  }
+  if (value["binding"] !== null) checkTrackerBinding(value["binding"], "tracking.binding", errors);
+  else if (!("binding" in value)) errors.push("tracking.binding must be an object or null");
+  return true;
+}
+
 function checkGroup(value: unknown, key: string, errors: string[]): value is LoopGroupStateV2 {
   const path = `groups.${key}`;
   if (!isRecord(value)) {
@@ -464,6 +526,28 @@ function checkGroup(value: unknown, key: string, errors: string[]): value is Loo
     const hasCommit = nonEmpty(commit["revision"]) && nonEmpty(commit["tree"])
       && hash(commit["workspaceFingerprint"]);
     if (acknowledged !== hasCommit) errors.push(`${path}.commit bindings must match acknowledged status`);
+  }
+
+  const tracker = value["tracker"];
+  if (!isRecord(tracker)) {
+    errors.push(`${path}.tracker must be an object`);
+  } else {
+    if (![
+      "not_required",
+      "pending",
+      "checkpointed",
+    ].includes(String(tracker["status"]))) {
+      errors.push(`${path}.tracker.status is invalid`);
+    }
+    if (!nullable(tracker["marker"], nonEmpty)) {
+      errors.push(`${path}.tracker.marker must be non-empty or null`);
+    }
+    if (tracker["status"] === "checkpointed" && !nonEmpty(tracker["marker"])) {
+      errors.push(`${path}.tracker checkpointed requires marker`);
+    }
+    if (tracker["status"] !== "checkpointed" && tracker["marker"] !== null) {
+      errors.push(`${path}.tracker marker is only valid when checkpointed`);
+    }
   }
 
   const status = value["status"];
@@ -548,6 +632,11 @@ export function validateLoopStateV2(value: unknown): RunContractValidationResult
     if (!hash(git["workspaceFingerprint"])) errors.push("git.workspaceFingerprint must be sha256");
   }
 
+  const trackingValid = checkTracking(value["tracking"], errors);
+  const trackerBinding = trackingValid && isRecord(value["tracking"])
+    ? value["tracking"]["binding"]
+    : undefined;
+
   const groupsValue = value["groups"];
   const groups: LoopGroupStateV2[] = [];
   if (!isRecord(groupsValue) || Object.keys(groupsValue).length === 0) {
@@ -607,6 +696,7 @@ export function validateLoopStateV2(value: unknown): RunContractValidationResult
       awaiting_evaluation: "in_progress",
       fixing: "in_progress",
       awaiting_group_commit: "awaiting_commit",
+      awaiting_tracker_sync: "completed",
       verification_failed: "failed",
       review_failed: "failed",
     };
@@ -617,6 +707,7 @@ export function validateLoopStateV2(value: unknown): RunContractValidationResult
       fixing: "none",
       awaiting_evaluation: "submitted",
       awaiting_group_commit: "approved",
+      awaiting_tracker_sync: "approved",
       verification_failed: "rejected",
       review_failed: "rejected",
     };
@@ -635,6 +726,18 @@ export function validateLoopStateV2(value: unknown): RunContractValidationResult
     }
     const pushExpected = isRecord(policy) && policy["requirePush"] === true ? "pushed" : "not_required";
     if (group.push.status !== pushExpected) errors.push(`completed group ${group.id} has inconsistent push status`);
+    const checkpoint = group.tracker;
+    const interruptedTrackerCheckpoint = isTerminalLoopPhaseV2(phase) &&
+      group.id === currentId &&
+      checkpoint.status === "pending";
+    const awaitingCurrentCheckpoint =
+      (phase === "awaiting_tracker_sync" && group.id === currentId) || interruptedTrackerCheckpoint;
+    if (trackerBinding === null && checkpoint.status !== "not_required") {
+      errors.push(`completed group ${group.id} must not require tracker synchronization`);
+    }
+    if (trackerBinding !== null && checkpoint.status !== (awaitingCurrentCheckpoint ? "pending" : "checkpointed")) {
+      errors.push(`completed group ${group.id} has inconsistent tracker checkpoint status`);
+    }
   }
   if (isRecord(policy) && typeof policy["requirePush"] === "boolean") {
     for (const group of groups) {
@@ -741,6 +844,11 @@ export function validateLoopEventV2(value: unknown): RunContractValidationResult
     if (!["not_required", "pushed"].includes(String(value["pushStatus"]))) errors.push("pushStatus is invalid");
     if (value["pushStatus"] === "pushed" && !nonEmpty(value["remoteRevision"])) errors.push("pushed requires remoteRevision");
     if (value["pushStatus"] === "not_required" && value["remoteRevision"] !== null) errors.push("not_required requires null remoteRevision");
+  } else if (type === "group_tracker_checkpointed") {
+    if (!nonEmpty(value["groupId"])) errors.push("groupId must be non-empty");
+    if (!isPortableRunSegmentV2(value["groupId"])) errors.push("groupId must be a portable safe segment");
+    if (!integer(value["attempt"], 1)) errors.push("attempt must be positive");
+    if (!nonEmpty(value["marker"])) errors.push("marker must be non-empty");
   } else if (type === "run_finalized") {
     if (!nonEmpty(value["finalGitRevision"])) errors.push("finalGitRevision must be non-empty");
     if (!hash(value["workspaceFingerprint"])) errors.push("workspaceFingerprint must be sha256");

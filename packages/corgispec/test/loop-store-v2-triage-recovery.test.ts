@@ -74,6 +74,7 @@ function initialState(): LoopStateV2 {
       finalRevision: null,
       workspaceFingerprint: H,
     },
+    tracking: { binding: null },
     groups: {
       "TG-1": {
         id: "TG-1",
@@ -98,6 +99,7 @@ function initialState(): LoopStateV2 {
           tree: null,
           workspaceFingerprint: null,
         },
+        tracker: { status: "not_required", marker: null },
         completedAt: null,
       },
     },

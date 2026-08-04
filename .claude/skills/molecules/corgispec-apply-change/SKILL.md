@@ -35,6 +35,18 @@ Execute one group, checkpoint it, and stop. Use CLI-returned paths for every pla
 5. Treat `changeRoot` and returned paths as authoritative even outside the current working directory. Do not reconstruct a planning path.
 6. Stop on failed readiness, blocked apply state, missing `taskArtifactId`, ambiguous task-artifact paths, or all groups complete.
 
+## Canonical loop ownership gate
+
+Before any implementation, task-artifact edit, or local/remote tracker write, inspect only the resolved change:
+
+```bash
+corgispec loop inspect "<change>" --json
+```
+
+- When the result has `status: "ok"` and a non-terminal `state.phase` (`action.type` is not `terminal`), an active canonical loop owns this change. Stop without editing planning/task artifacts or invoking `gh`/`glab`.
+- Report the returned `action.type` and require the user to explicitly continue the loop. In particular, `sync_tracker` must be performed through `corgispec loop sync-tracker ...`, and `finalize` through `corgispec loop finalize ...`; never run either action on the user's behalf.
+- If the result is `not_found` or has `action.type: "terminal"`, continue this skill. For any other inspect error or ambiguous response, stop before mutation and report it. An active loop for a different change does not block this workflow.
+
 ## Execute
 
 1. Use the apply response's `currentGroup`, task records, instruction, and `contextFiles`. Read planning context only from returned concrete paths.

@@ -8,7 +8,7 @@ import {
   assertCanonicalFinalizationEvidenceV2,
   type CanonicalSuccessorSourceV2,
 } from "../lib/canonical-convergence-evidence-v2.js";
-import { loadConfigFromDir } from "../lib/config.js";
+import { loadConfigFromDir, resolveTrackingProvider } from "../lib/config.js";
 import {
   assertEvidenceBundleV2,
   createEvidenceBundleV2,
@@ -56,6 +56,12 @@ import {
   type LoopStoreInspectionV2,
 } from "../lib/loop-store-v2.js";
 import { createOpenSpecAdapter } from "../lib/openspec-adapter.js";
+import {
+  resolveLoopTrackerBindingV2,
+  syncLoopTrackerCheckpointV2,
+  type LoopTrackerCheckpointInputV2,
+  type LoopTrackerCheckpointResultV2,
+} from "../lib/tracker-checkpoint-v2.js";
 import { isActiveLoopPhaseV2 } from "../lib/run-contract-v2.js";
 import type {
   ActiveLoopPhaseV2,
@@ -64,6 +70,7 @@ import type {
   LoopEventActorV2,
   LoopRunModeV2,
   LoopStateV2,
+  LoopTrackingStateV2,
 } from "../lib/run-contract-v2.js";
 
 export interface LoopPlanningSnapshotV2 {
@@ -71,6 +78,7 @@ export interface LoopPlanningSnapshotV2 {
   planningRevision: ArtifactHashV2;
   groups: Array<{ id: string; fingerprint: ArtifactHashV2 }>;
   blockers: string[];
+  tracking?: LoopTrackingStateV2;
 }
 
 export interface LoopSubmissionBundleV2 {
@@ -136,6 +144,9 @@ export type LoopRequestV2 =
       remoteRevision?: string;
     })
   | (LoopRequestBaseV2 & LoopCasRequestV2 & {
+      operation: "sync-tracker";
+    })
+  | (LoopRequestBaseV2 & LoopCasRequestV2 & {
       operation: "finalize";
       store?: string;
     })
@@ -188,6 +199,7 @@ export type LoopActionV2 =
   | { type: "fix_group"; groupId: string; attempt: number; reason: BlockedReasonV2 | null }
   | { type: "awaiting_evaluation"; groupId: string; attempt: number }
   | { type: "commit_group"; groupId: string; attempt: number }
+  | { type: "sync_tracker"; groupId: string; attempt: number }
   | { type: "finalize" }
   | { type: "blocked"; reason: { code: string; message: string } }
   | { type: "terminal"; phase: LoopStateV2["phase"]; reason: BlockedReasonV2 | null };
@@ -227,6 +239,7 @@ export interface LoopV2Dependencies {
     runId: string;
     groupIds: string[];
   }) => Promise<{ trustedLegacyGroupIds: string[] }>;
+  syncTracker?: (input: LoopTrackerCheckpointInputV2) => Promise<LoopTrackerCheckpointResultV2>;
 }
 
 export async function executeLoopV2(
@@ -389,6 +402,7 @@ async function executeLoopOperationV2(
         maxAttemptsPerGroup: request.maxAttemptsPerGroup ?? 3,
         maxEvents: request.maxEvents ?? 1_000,
       },
+      tracking: planning.tracking ?? { binding: null },
       groups: planning.groups.map((group) => ({
         id: group.id,
         taskGroupFingerprint: group.fingerprint,
@@ -486,6 +500,16 @@ async function executeLoopOperationV2(
       );
       if (replayed) {
         return successOutput("ack-commit", request.changeName, state, { idempotent: true });
+      }
+    }
+    if (request.operation === "sync-tracker") {
+      const replayed = inspection.events.some((record) =>
+        record.event.type === "group_tracker_checkpointed" &&
+        record.event.expectedStateRevision === request.stateRevision &&
+        record.event.expectedNonce === request.nonce
+      );
+      if (replayed) {
+        return successOutput("sync-tracker", request.changeName, state, { idempotent: true });
       }
     }
     if (!resumePartialSubmit) {
@@ -742,6 +766,30 @@ async function executeLoopOperationV2(
     return successOutput("ack-commit", request.changeName, persisted);
   }
 
+  if (request.operation === "sync-tracker") {
+    if (state.phase !== "awaiting_tracker_sync") {
+      throw commandError("invalid_phase", `sync-tracker is not allowed in ${state.phase}`);
+    }
+    const group = requireCurrentGroup(state);
+    if (group.tracker.status !== "pending") {
+      throw commandError("tracker_not_pending", "Current Task Group has no pending tracker checkpoint");
+    }
+    const synced = await (dependencies.syncTracker ?? syncLoopTrackerCheckpointV2)({
+      projectRoot,
+      state,
+      group,
+    });
+    const event = {
+      ...eventBase(state, "group_tracker_checkpointed", now(), newNonce, actor(state)),
+      groupId: group.id,
+      attempt: state.currentAttempt,
+      marker: synced.marker,
+    } as const;
+    const nextState = reduceLoopEventV2(state, event).postState;
+    const persisted = await store.transition({ ...casFromState(state), event, nextState });
+    return successOutput("sync-tracker", request.changeName, persisted);
+  }
+
   if (request.operation === "finalize") {
     if (state.phase !== "awaiting_finalize") {
       throw commandError("invalid_phase", `finalize is not allowed in ${state.phase}`);
@@ -853,6 +901,9 @@ function inferResumeTarget(state: LoopStateV2): ActiveLoopPhaseV2 {
   if (state.currentGroupId === null) return "awaiting_finalize";
   const group = state.groups[state.currentGroupId];
   if (!group) throw commandError("group_missing", "Run has no durable current Task Group");
+  if (group.status === "completed" && group.tracker.status === "pending") {
+    return "awaiting_tracker_sync";
+  }
   switch (group.bundle.status) {
     case "approved":
       return "awaiting_group_commit";
@@ -895,7 +946,7 @@ function makeBundleSubmittedEvent(
   };
 }
 
-function eventBase<T extends "group_commit_acknowledged" | "run_finalized" | "run_invalidated" | "run_resumed">(
+function eventBase<T extends "group_commit_acknowledged" | "group_tracker_checkpointed" | "run_finalized" | "run_invalidated" | "run_resumed">(
   state: LoopStateV2,
   type: T,
   occurredAt: string,
@@ -1236,6 +1287,12 @@ async function inspectPlanningDefault(
     true,
     { store },
   );
+  const tracking = {
+    binding: await resolveLoopTrackerBindingV2({
+      changeRoot: resolved.changeRoot,
+      provider: resolveTrackingProvider(config).provider,
+    }),
+  };
   return {
     ready: report.status === "ready",
     planningRevision: await computeRunPlanningRevisionV2({
@@ -1251,6 +1308,7 @@ async function inspectPlanningDefault(
     blockers: report.checks
       .filter((check) => check.status !== "pass")
       .map((check) => `${check.code}: ${check.message}`),
+    tracking,
   };
 }
 
@@ -1562,6 +1620,8 @@ function actionFor(state: LoopStateV2): LoopActionV2 {
       return { type: "awaiting_evaluation", groupId: state.currentGroupId!, attempt: state.currentAttempt };
     case "awaiting_group_commit":
       return { type: "commit_group", groupId: state.currentGroupId!, attempt: state.currentAttempt };
+    case "awaiting_tracker_sync":
+      return { type: "sync_tracker", groupId: state.currentGroupId!, attempt: state.currentAttempt };
     case "awaiting_finalize":
       return { type: "finalize" };
     default:
@@ -1724,6 +1784,19 @@ export function createLoopV2Command(dependencies: LoopV2Dependencies = {}): Comm
         }, dependencies), opts.json);
       } catch (error) {
         emitLoopResult(loopInputFailure("ack-commit", change, error), opts.json);
+      }
+    });
+
+  addCasOptions(loop.command("sync-tracker").argument("<change>"))
+    .action(async (change, opts) => {
+      try {
+        const stdin = needsCasStdin(opts) ? await readOptionalStdinJson() : {};
+        emitLoopResult(await executeLoopV2({
+          operation: "sync-tracker", changeName: change, projectRoot: opts.path,
+          ...casOptions(opts, stdin),
+        }, dependencies), opts.json);
+      } catch (error) {
+        emitLoopResult(loopInputFailure("sync-tracker", change, error), opts.json);
       }
     });
 

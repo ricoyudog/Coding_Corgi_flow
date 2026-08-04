@@ -25,6 +25,7 @@ interface HookLoopActionV2 {
     | "evaluate"
     | "fix_group"
     | "commit_group"
+    | "sync_tracker"
     | "finalize"
     | "terminal";
   groupId?: string;
@@ -243,6 +244,16 @@ function stateOutput(changeName: string, state: LoopStateV2): HookLoopOutputV2 {
 }
 
 function actionForState(state: LoopStateV2): HookLoopActionV2 {
+  // Hooks only report the explicit tracker checkpoint action; they never
+  // execute it or call a tracker CLI themselves.
+  if (state.phase === "awaiting_tracker_sync") {
+    return {
+      type: "sync_tracker",
+      groupId: state.currentGroupId ?? undefined,
+      attempt: state.currentAttempt,
+    };
+  }
+
   switch (state.phase) {
     case "awaiting_group_result":
       return { type: "dispatch_group", groupId: state.currentGroupId ?? undefined, attempt: state.currentAttempt };

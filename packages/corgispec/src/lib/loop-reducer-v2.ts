@@ -14,6 +14,7 @@ import type {
   LoopPolicyV2,
   LoopRunModeV2,
   LoopStateV2,
+  LoopTrackingStateV2,
   RunInitializedEventV2,
 } from "./run-contract-v2.js";
 import {
@@ -31,6 +32,7 @@ export const TRANSITION_MATRIX_V2: Readonly<Record<LoopPhaseV2, readonly LoopEve
   awaiting_evaluation: ["evaluation_completed", "run_invalidated", "run_blocked"],
   fixing: ["bundle_submitted", "run_invalidated", "run_blocked"],
   awaiting_group_commit: ["group_commit_acknowledged", "run_invalidated", "run_blocked"],
+  awaiting_tracker_sync: ["group_tracker_checkpointed", "run_invalidated", "run_blocked"],
   awaiting_finalize: ["run_finalized", "run_invalidated", "run_blocked"],
   done: ["run_invalidated"],
   verification_failed: ["run_resumed", "run_invalidated"],
@@ -86,6 +88,7 @@ export interface CreateInitialLoopStateV2Input {
   workspaceFingerprint: ArtifactHashV2;
   policy: LoopPolicyV2;
   limits: LoopLimitsV2;
+  tracking?: LoopTrackingStateV2;
   groups: readonly InitialLoopGroupV2[];
   startedAt: string;
 }
@@ -114,6 +117,7 @@ function blankGroup(
     },
     push: { status: requirePush ? "pending" : "not_required", remoteRevision: null },
     commit: { status: "pending", revision: null, tree: null, workspaceFingerprint: null },
+    tracker: { status: "not_required", marker: null },
     completedAt: null,
   };
 }
@@ -173,6 +177,7 @@ export function createInitialLoopStateV2(input: CreateInitialLoopStateV2Input): 
       finalRevision: null,
       workspaceFingerprint: input.workspaceFingerprint,
     },
+    tracking: input.tracking ? clone(input.tracking) : { binding: null },
     groups,
     startedAt: input.startedAt,
     updatedAt: input.startedAt,
@@ -343,6 +348,16 @@ function applyCommitAcknowledged(
   group.push = { status: event.pushStatus, remoteRevision: event.remoteRevision };
   group.status = "completed";
   group.completedAt = state.updatedAt;
+  if (state.tracking.binding !== null) {
+    group.tracker = { status: "pending", marker: null };
+    state.phase = "awaiting_tracker_sync";
+    state.blockedReason = null;
+    return;
+  }
+  advanceAfterCompletedGroup(state, group);
+}
+
+function advanceAfterCompletedGroup(state: LoopStateV2, group: LoopGroupStateV2): void {
   const next = nextPendingGroup(state, group.ordinal);
   if (next === null) {
     state.currentGroupId = null;
@@ -356,6 +371,24 @@ function applyCommitAcknowledged(
   state.currentAttempt = 1;
   state.phase = "awaiting_group_result";
   state.blockedReason = null;
+}
+
+function applyTrackerCheckpointed(
+  state: LoopStateV2,
+  event: Extract<LoopEventV2, { type: "group_tracker_checkpointed" }>,
+): void {
+  const group = checkGroupIdentity(state, event);
+  if (state.tracking.binding === null) {
+    reducerError("policy_violation", "tracker checkpoint requires a configured tracker binding");
+  }
+  if (group.status !== "completed" || group.commit.status !== "acknowledged") {
+    reducerError("bundle_mismatch", "tracker checkpoint requires an acknowledged Task Group commit");
+  }
+  if (group.tracker.status !== "pending") {
+    reducerError("policy_violation", "tracker checkpoint is not pending");
+  }
+  group.tracker = { status: "checkpointed", marker: event.marker };
+  advanceAfterCompletedGroup(state, group);
 }
 
 function applyResume(
@@ -405,7 +438,9 @@ function applyResume(
       (event.targetPhase === "awaiting_evaluation"
         && group.status === "in_progress" && group.bundle.status === "submitted") ||
       (event.targetPhase === "awaiting_group_commit"
-        && group.status === "awaiting_commit" && group.bundle.status === "approved");
+        && group.status === "awaiting_commit" && group.bundle.status === "approved") ||
+      (event.targetPhase === "awaiting_tracker_sync"
+        && group.status === "completed" && group.tracker.status === "pending");
     if (!validTarget) {
       reducerError(
         "resume_target_mismatch",
@@ -464,6 +499,9 @@ export function reduceLoopEventV2(
       break;
     case "group_commit_acknowledged":
       applyCommitAcknowledged(postState, event);
+      break;
+    case "group_tracker_checkpointed":
+      applyTrackerCheckpointed(postState, event);
       break;
     case "run_finalized":
       postState.phase = "done";

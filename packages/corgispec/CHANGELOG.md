@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-rc.8] - 2026-08-04
+
+### Added
+
+- `corgispec loop sync-tracker` records an explicit, retryable GitHub or GitLab checkpoint for the committed Task Group. It updates only the tracker-managed dashboard region and adds a stable checkpoint marker so an interrupted successful remote write is detected without duplicating the comment.
+
+### Changed
+
+- A new loop run now enters `awaiting_tracker_sync` after `ack-commit` for a configured GitHub or GitLab change. The next Task Group becomes available only after the explicit tracker checkpoint succeeds; trackerless and unbound changes retain the local-only flow.
+- Loop hooks report the required `sync_tracker` action but never write to GitHub or GitLab. Codex, Claude Code, and OpenCode require an explicit loop invocation, so ordinary skills, manual task edits, and host idle/Stop hooks cannot create tracker updates.
+- Active loops reserve tracker writes for their own change until they reach a terminal state, preventing lifecycle skills from creating duplicate checkpoint updates.
+
+### Security
+
+- Updated the production lockfile resolution of transitive `fast-uri` to 3.1.5 within AJV's existing compatible version range.
+
+### Migration
+
+- Active RC7 Run Contract state is not migrated. Start a new RC8 loop run after upgrading; CorgiSpec does not attempt to replay or synchronize prior RC7 Task Group progress.
+
 ## [3.0.0-rc.7] - 2026-07-31
 
 ### Breaking

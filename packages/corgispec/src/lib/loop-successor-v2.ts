@@ -82,6 +82,7 @@ function pendingGroup(
       tree: null,
       workspaceFingerprint: null,
     },
+    tracker: { status: "not_required", marker: null },
     completedAt: null,
   };
 }
@@ -198,6 +199,7 @@ export function createSuccessorRunV2(
       finalRevision: null,
       workspaceFingerprint: input.workspaceFingerprint,
     },
+    tracking: clone(input.previousState.tracking),
     groups,
     startedAt: input.startedAt,
     updatedAt: input.startedAt,

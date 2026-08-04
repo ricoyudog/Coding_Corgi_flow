@@ -52,6 +52,7 @@ function initial(options: {
   events?: number;
   groups?: number;
   requirePush?: boolean;
+  tracked?: boolean;
 } = {}): LoopStateV2 {
   const count = options.groups ?? 2;
   return createInitialLoopStateV2({
@@ -76,6 +77,14 @@ function initial(options: {
       maxAttemptsPerGroup: options.attempts ?? 3,
       maxEvents: options.events ?? 100,
     },
+    tracking: options.tracked ? {
+      binding: {
+        provider: "github",
+        issueUrl: "https://github.com/corgi/example/issues/1",
+        repository: "corgi/example",
+        issueNumber: 1,
+      },
+    } : undefined,
     groups: Array.from({ length: count }, (_, index) => ({
       id: `group-${index + 1}`,
       taskGroupFingerprint: hash(String((index + 7) % 10)),
@@ -147,6 +156,16 @@ function acknowledge(state: LoopStateV2): Extract<LoopEventV2, { type: "group_co
     pushStatus: pushed ? "pushed" : "not_required",
     remoteRevision: pushed ? `remote-${state.currentGroupId}` : null,
   } as Extract<LoopEventV2, { type: "group_commit_acknowledged" }>;
+}
+
+function checkpoint(state: LoopStateV2): Extract<LoopEventV2, { type: "group_tracker_checkpointed" }> {
+  return {
+    ...meta(state, "group_tracker_checkpointed"),
+    type: "group_tracker_checkpointed",
+    groupId: state.currentGroupId!,
+    attempt: state.currentAttempt,
+    marker: `checkpoint-${state.currentGroupId}`,
+  } as Extract<LoopEventV2, { type: "group_tracker_checkpointed" }>;
 }
 
 function finalized(state: LoopStateV2): Extract<LoopEventV2, { type: "run_finalized" }> {
@@ -341,6 +360,24 @@ describe("LoopStateV2 reducer", () => {
     expect(() => apply(state, wrongPush)).toThrow(expect.objectContaining({ code: "policy_violation" }));
   });
 
+  it("holds a tracked group until its explicit tracker checkpoint is recorded", () => {
+    let state = initial({ tracked: true });
+    state = apply(state, submit(state));
+    state = apply(state, evaluate(state));
+    state = apply(state, acknowledge(state));
+    expect(state).toMatchObject({
+      phase: "awaiting_tracker_sync",
+      currentGroupId: "group-1",
+      groups: { "group-1": { status: "completed", tracker: { status: "pending" } } },
+    });
+    state = apply(state, checkpoint(state));
+    expect(state).toMatchObject({
+      phase: "awaiting_group_result",
+      currentGroupId: "group-2",
+      groups: { "group-1": { tracker: { status: "checkpointed", marker: "checkpoint-group-1" } } },
+    });
+  });
+
   it("invalidates, blocks, and explicitly resumes terminal states", () => {
     for (const terminalPhase of ["circuit_breaker", "corrupted", "worktree_missing"] as const) {
       const source = initial();
@@ -408,6 +445,10 @@ describe("LoopStateV2 reducer", () => {
     const groupResult = initial();
     const awaitingEvaluation = apply(initial(), submit(initial()));
     const awaitingCommit = apply(awaitingEvaluation, evaluate(awaitingEvaluation));
+    let awaitingTracker = initial({ tracked: true });
+    awaitingTracker = apply(awaitingTracker, submit(awaitingTracker));
+    awaitingTracker = apply(awaitingTracker, evaluate(awaitingTracker));
+    awaitingTracker = apply(awaitingTracker, acknowledge(awaitingTracker));
     let fixing = initial({ attempts: 3 });
     fixing = apply(fixing, submit(fixing));
     fixing = apply(fixing, evaluate(fixing, "verification_failed"));
@@ -420,6 +461,7 @@ describe("LoopStateV2 reducer", () => {
       { source: groupResult, target: "awaiting_group_result", terminal: "worktree_missing" },
       { source: awaitingEvaluation, target: "awaiting_evaluation", terminal: "circuit_breaker" },
       { source: awaitingCommit, target: "awaiting_group_commit", terminal: "worktree_missing" },
+      { source: awaitingTracker, target: "awaiting_tracker_sync", terminal: "worktree_missing" },
       { source: fixing, target: "fixing", terminal: "circuit_breaker" },
     ];
 
@@ -508,6 +550,7 @@ describe("LoopStateV2 reducer", () => {
       awaiting_evaluation: ["evaluation_completed", "run_invalidated", "run_blocked"],
       fixing: ["bundle_submitted", "run_invalidated", "run_blocked"],
       awaiting_group_commit: ["group_commit_acknowledged", "run_invalidated", "run_blocked"],
+      awaiting_tracker_sync: ["group_tracker_checkpointed", "run_invalidated", "run_blocked"],
       awaiting_finalize: ["run_finalized", "run_invalidated", "run_blocked"],
       done: ["run_invalidated"],
       verification_failed: ["run_resumed", "run_invalidated"],

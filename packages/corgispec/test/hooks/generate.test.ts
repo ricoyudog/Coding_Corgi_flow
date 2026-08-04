@@ -255,6 +255,9 @@ process.stdin.on("end", () => {
       expect(output).toContain("session_id: sessionId");
       expect(output).toContain('const loopResult = runHook("loop-check"');
       expect(output).toContain('loopDecision.decision === "block"');
+      expect(output).not.toContain('runHook("sync-tracker"');
+      expect(output).not.toContain("glab issue");
+      expect(output).not.toContain("gh issue");
       expect(output).toContain("result.stdout");
       expect(output).toContain("result.stderr");
       expect(output).toContain("result.status !== 0");

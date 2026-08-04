@@ -24,9 +24,23 @@ Archive through the CLI/upstream instruction and never construct an archive path
 5. Use `taskArtifactId` and CLI task status to warn about incomplete work. Use returned `contextFiles` for QA/review evidence; never guess an evidence filename.
 6. Treat an external store `changeRoot` as valid. Do not prepend the repository path.
 
+## Canonical loop ownership gate
+
+Before any archive action, task-artifact edit, or local/remote tracker write, inspect only the resolved change:
+
+```bash
+corgispec loop inspect "<change>" --json
+```
+
+- When the result has `status: "ok"` and a non-terminal `state.phase` (`action.type` is not `terminal`), an active canonical loop owns this change. Stop without archiving, editing planning/task artifacts, or invoking `gh`/`glab`.
+- Report the returned `action.type` and require the user to explicitly continue the loop. In particular, `sync_tracker` must be performed through `corgispec loop sync-tracker ...`, and `finalize` through `corgispec loop finalize ...`; never run either action on the user's behalf.
+- If the result is `not_found` or has `action.type: "terminal"`, continue this skill. For any other inspect error or ambiguous response, stop before mutation and report it. An active loop for a different change does not block this workflow.
+
+When this inspection found a terminal canonical loop and tracking is enabled, archive is final-only: before the archive action or tracker closeout, verify the existing managed dashboard already shows all task checkboxes complete and every Group row `done`. Never rebuild, refresh, or backfill task checkboxes or Group progress. If that verification fails, stop without archiving or tracker mutation; if it succeeds, tracker closeout may only post the final summary and apply the final label/close policy.
+
 ## Archive
 
-1. Before moving anything, read GitLab tracker state at `<changeRoot>/.gitlab.yaml` when enabled. Require `issue.iid`/`issue.url`; if legacy `parent` or `groups` keys exist, stop before archival or remote mutation with the manual single-issue conversion guidance.
+1. Before moving anything, read GitLab tracker state at `<changeRoot>/.gitlab.yaml` when enabled. Require `issue.iid`/`issue.url`; if legacy `parent` or `groups` keys exist, stop before archival or remote mutation with the manual single-issue conversion guidance. When the loop inspection was terminal, verify the existing managed dashboard already has every task checkbox complete and every Group row `done`; never correct it here.
 2. Present incomplete-task, readiness, validation, and artifact-drift warnings. Require explicit confirmation when the CLI marks any warning as overridable; stop on a blocker.
 3. Execute only the archive action returned by `corgispec archive --json`. Let OpenSpec synchronize applicable deltas and choose the destination.
 4. Capture the actual archived root from CLI/upstream output. Verify the full change payload moved and no conflicting destination was overwritten.
@@ -34,7 +48,7 @@ Archive through the CLI/upstream instruction and never construct an archive path
 ## Close out
 
 - Extract durable session knowledge from returned planning artifacts, implementation evidence, and Git history without assuming an artifact name.
-- When GitLab tracking is enabled, read the live single Issue, require exactly one ordered dashboard marker pair, verify every Group row is `done`, and preserve all content outside the markers. Refresh final task/group progress, post `## Archive Summary`, move the Issue to `workflow::done`, and apply the existing close/open policy to that one Issue. Skip all tracker operations for provider none.
+- When GitLab tracking is enabled, read the live single Issue, require exactly one ordered dashboard marker pair, verify the existing dashboard already has every task checkbox complete and every Group row `done`, and preserve all content outside the markers. Never rebuild, refresh, or backfill task checkboxes or Group progress; post only `## Archive Summary`, move the Issue to `workflow::done`, and apply the existing close/open policy to that one Issue. Skip all tracker operations for provider none.
 - Remove the worktree only after archive and tracker closeout succeed; preserve its branch unless the user explicitly requests deletion.
 - Report old `changeRoot`, actual archived root, validation/warnings, knowledge extraction, tracker result, and worktree cleanup.
 
