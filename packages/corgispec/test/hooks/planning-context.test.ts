@@ -133,27 +133,24 @@ describe("authoritative hook planning context", () => {
     ]);
   });
 
-  it("deduplicates the same authoritative planning root across registered worktrees", async () => {
-    const primary = tempRoot("shared-root-primary");
-    const secondary = tempRoot("shared-root-secondary");
-    const authoritativeRoot = resolve(tempBareRoot("shared-authority"), "openspec");
-    mkdirSync(authoritativeRoot, { recursive: true });
-    const resolved = resolvedFixture(primary, "shared-change");
-    let resolveCalls = 0;
+  it("uses only the current worktree when siblings list the same change", async () => {
+    const primary = tempRoot("current-root-primary");
+    const sibling = tempRoot("current-root-sibling");
+    const resolved = resolvedFixture(primary, "shared-change", { taskArtifactId: "tasks" });
+    const calls: string[] = [];
     const dependencies: HookPlanningDependencies = {
-      listWorktrees: () => [primary, secondary, primary],
+      listWorktrees: () => {
+        throw new Error(`Current hook resolution must not enumerate ${sibling}`);
+      },
       createAdapter: (cwd) => ({
-        listChanges: async () => ({
-          ...list(cwd, ["shared-change"]),
-          root: { path: authoritativeRoot, source: "store" },
-        }),
+        listChanges: async () => {
+          calls.push(cwd);
+          return list(cwd, ["shared-change"]);
+        },
         getStatus: unusedStatus,
       }),
       createResolver: () => ({
-        resolve: async () => {
-          resolveCalls += 1;
-          return resolved;
-        },
+        resolve: async () => resolved,
       }) as ArtifactResolver,
     };
 
@@ -166,43 +163,7 @@ describe("authoritative hook planning context", () => {
 
     expect(changes).toHaveLength(1);
     expect(changes[0]).toMatchObject({ name: "shared-change", commandRoot: primary });
-    expect(resolveCalls).toBe(1);
-  });
-
-  it("fails closed when worktree discovery yields no trusted roots", async () => {
-    const root = tempRoot("no-worktrees");
-    await expect(resolveHookChanges(
-      root,
-      { schema: "custom", isolation: { mode: "worktree" } },
-      {},
-      { listWorktrees: () => [] },
-    )).rejects.toMatchObject({ code: "worktree_discovery_failed" });
-  });
-
-  it("fails closed before status resolution when a change is duplicated across worktrees", async () => {
-    const primary = tempRoot("primary");
-    const secondary = tempRoot("secondary");
-    let statusCalls = 0;
-    const dependencies: HookPlanningDependencies = {
-      listWorktrees: () => [primary, secondary],
-      createAdapter: (cwd) => ({
-        listChanges: async () => list(cwd, ["duplicate"]),
-        getStatus: async () => {
-          statusCalls += 1;
-          return await unusedStatus();
-        },
-      }),
-    };
-    const config: OpenSpecConfig = {
-      schema: "custom",
-      isolation: { mode: "worktree" },
-    };
-
-    await expect(resolveHookChanges(primary, config, {}, dependencies)).rejects.toMatchObject({
-      name: "HookPlanningError",
-      code: "ambiguous_change",
-    });
-    expect(statusCalls).toBe(0);
+    expect(calls).toEqual([primary]);
   });
 
   it("rejects duplicate rows in one OpenSpec list response", async () => {
@@ -278,6 +239,38 @@ describe("authoritative hook planning context", () => {
 });
 
 describe("session context and authoritative write matching", () => {
+  it("gathers session context from only the current worktree", async () => {
+    const primary = tempRoot("gather-current-primary");
+    const sibling = tempRoot("gather-current-sibling");
+    writeFileSync(
+      resolve(primary, "openspec/config.yaml"),
+      "schema: custom\nisolation:\n  mode: worktree\n",
+    );
+    const resolved = resolvedFixture(primary, "shared-change", { taskArtifactId: "tasks" });
+    const calls: string[] = [];
+    const dependencies: HookPlanningDependencies = {
+      currentBranch: () => "feature/current",
+      listWorktrees: () => {
+        throw new Error(`Session context must not enumerate ${sibling}`);
+      },
+      createAdapter: (cwd) => ({
+        listChanges: async () => {
+          calls.push(cwd);
+          return list(cwd, ["shared-change"]);
+        },
+        getStatus: unusedStatus,
+      }),
+      createResolver: () => ({ resolve: async () => resolved }) as ArtifactResolver,
+    };
+
+    await expect(gatherSessionContext(primary, {}, dependencies)).resolves.toMatchObject({
+      isolationMode: "worktree",
+      currentBranch: "feature/current",
+      activeChanges: [{ name: "shared-change", worktreePath: "." }],
+    });
+    expect(calls).toEqual([primary]);
+  });
+
   it("returns null without a project config and gathers Store-backed custom task context", async () => {
     const bare = tempBareRoot("gather-missing");
     await expect(gatherSessionContext(bare)).resolves.toBeNull();
@@ -348,6 +341,74 @@ describe("session context and authoritative write matching", () => {
       {},
       dependencies,
     )).resolves.toBeNull();
+  });
+
+  it("routes writes only through their managed worktree", async () => {
+    const root = tempRoot("written-managed-root");
+    const managedRoot = resolve(root, ".worktrees");
+    const managed = resolve(managedRoot, "change-a");
+    const external = tempRoot("written-external-root");
+    mkdirSync(resolve(managed, "openspec"), { recursive: true });
+    writeFileSync(resolve(managed, "openspec/config.yaml"), "schema: custom\n");
+
+    const rootChange = resolvedFixture(root, "duplicate", { taskArtifactId: "tasks" });
+    const managedChange = resolvedFixture(managed, "duplicate", { taskArtifactId: "tasks" });
+    const externalChange = resolvedFixture(external, "duplicate", { taskArtifactId: "tasks" });
+    const changesByRoot = new Map([
+      [root, rootChange],
+      [managed, managedChange],
+      [external, externalChange],
+    ]);
+    const rootsByAdapter = new Map<object, string>();
+    const calls: string[] = [];
+    const dependencies: HookPlanningDependencies = {
+      listWorktrees: () => [root, managed, external],
+      createAdapter: (cwd) => {
+        calls.push(cwd);
+        const adapter = {
+          listChanges: async () => list(cwd, ["duplicate"]),
+          getStatus: unusedStatus,
+        };
+        rootsByAdapter.set(adapter, cwd);
+        return adapter;
+      },
+      createResolver: (adapter) => ({
+        resolve: async () => changesByRoot.get(rootsByAdapter.get(adapter)!)!,
+      }) as ArtifactResolver,
+    };
+    const config: OpenSpecConfig = {
+      schema: "custom",
+      isolation: { mode: "worktree", root: ".worktrees" },
+    };
+
+    await expect(resolveWrittenChange(
+      resolve(managedChange.changeRoot, "tasks.md"),
+      root,
+      config,
+      {},
+      dependencies,
+    )).resolves.toMatchObject({ name: "duplicate", commandRoot: managed });
+    expect(calls).toEqual([managed]);
+
+    calls.splice(0);
+    await expect(resolveWrittenChange(
+      resolve(rootChange.changeRoot, "tasks.md"),
+      root,
+      config,
+      {},
+      dependencies,
+    )).resolves.toMatchObject({ name: "duplicate", commandRoot: root });
+    expect(calls).toEqual([root]);
+
+    calls.splice(0);
+    await expect(resolveWrittenChange(
+      resolve(externalChange.changeRoot, "tasks.md"),
+      root,
+      config,
+      {},
+      dependencies,
+    )).resolves.toBeNull();
+    expect(calls).toEqual([]);
   });
 
   it("rejects overlapping authoritative change roots as ambiguous", async () => {

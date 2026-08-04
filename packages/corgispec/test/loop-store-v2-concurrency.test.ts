@@ -61,6 +61,7 @@ function initial(): { state: LoopStateV2; event: RunInitializedEventV2 } {
     blockedReason: null,
     planningRevision: H,
     git: { baselineRevision: "base", finalRevision: null, workspaceFingerprint: H },
+    tracking: { binding: null },
     groups: {
       "TG-1": {
         id: "TG-1",
@@ -80,6 +81,7 @@ function initial(): { state: LoopStateV2; event: RunInitializedEventV2 } {
         },
         push: { status: "not_required", remoteRevision: null },
         commit: { status: "pending", revision: null, tree: null, workspaceFingerprint: null },
+        tracker: { status: "not_required", marker: null },
         completedAt: null,
       },
     },

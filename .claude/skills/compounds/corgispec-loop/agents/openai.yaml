@@ -2,3 +2,5 @@ interface:
   display_name: "CorgiSpec Loop"
   short_description: "Execute a canonical CorgiSpec Run Contract v2"
   default_prompt: "Use $corgispec-loop to execute or resume this change through the canonical Run Contract v2 CLI."
+policy:
+  allow_implicit_invocation: false

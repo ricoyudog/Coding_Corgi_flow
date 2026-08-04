@@ -47,6 +47,15 @@ const CONTRACT_FILES = [
   "molecules/corgispec-explore/SKILL.md",
 ] as const;
 
+const LOOP_GUARDED_LIFECYCLE_SKILLS = [
+  "corgispec-gh-apply",
+  "corgispec-apply-change",
+  "corgispec-gh-review",
+  "corgispec-review",
+  "corgispec-gh-archive",
+  "corgispec-archive-change",
+] as const;
+
 function read(path: string): string {
   return readFileSync(path, "utf-8");
 }
@@ -139,6 +148,28 @@ describe("single-Issue tracker contract", () => {
     for (const file of CONTRACT_FILES) {
       const contract = read(resolve(OPENCODE_SKILLS, file));
       for (const pattern of operationalLegacy) expect(contract, file).not.toMatch(pattern);
+    }
+  });
+
+  it("defers same-change lifecycle tracker writes to an active canonical loop", () => {
+    for (const skill of LOOP_GUARDED_LIFECYCLE_SKILLS) {
+      const contract = read(resolve(OPENCODE_SKILLS, "molecules", skill, "SKILL.md"));
+      expect(contract, skill).toContain('corgispec loop inspect "<change>" --json');
+      expect(contract, skill).toContain("non-terminal `state.phase`");
+      expect(contract, skill).toContain("`sync_tracker`");
+      expect(contract, skill).toContain("`finalize`");
+      expect(contract, skill).toContain("invoking `gh`/`glab`");
+      expect(contract, skill).toContain("`not_found`");
+      expect(contract, skill).toContain("different change does not block this workflow");
+    }
+
+    for (const skill of ["corgispec-gh-archive", "corgispec-archive-change"] as const) {
+      const contract = read(resolve(OPENCODE_SKILLS, "molecules", skill, "SKILL.md"));
+      expect(contract, skill).toContain("archive is final-only");
+      expect(contract, skill).toContain("all task checkboxes complete and every Group row `done`");
+      expect(contract, skill).toContain("Never rebuild, refresh, or backfill task checkboxes or Group progress");
+      expect(contract, skill).toContain("only post the final summary and apply the final label/close policy");
+      expect(contract, skill).not.toContain("Refresh final task/group progress");
     }
   });
 });

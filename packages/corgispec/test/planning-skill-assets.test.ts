@@ -127,6 +127,17 @@ describe("workflow skill hook frontmatter", () => {
           ? { PreToolUse: PRE_WRITE_HOOK, Stop: STOP_HOOK }
           : { PreToolUse: PRE_WRITE_HOOK },
       );
+      expect(readFrontmatter(mirror).hooks).toEqual(
+        stop
+          ? { PreToolUse: PRE_WRITE_HOOK, Stop: STOP_HOOK }
+          : { PreToolUse: PRE_WRITE_HOOK },
+      );
+      if (slug === "corgispec-loop") {
+        expect(readFrontmatter(canonical).metadata).toMatchObject({
+          "opencode/autoinvoke": "false",
+        });
+        expect(readFrontmatter(canonical)["disable-model-invocation"]).toBe(true);
+      }
     });
   }
 

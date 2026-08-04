@@ -551,6 +551,7 @@ function buildMigratedState(
             tree: null,
             workspaceFingerprint: null,
           },
+      tracker: { status: "not_required", marker: null },
       completedAt: isCompleted ? migratedAt : null,
     };
   }
@@ -606,6 +607,7 @@ function buildMigratedState(
       finalRevision: null,
       workspaceFingerprint: options.workspaceFingerprint,
     },
+    tracking: { binding: null },
     groups,
     startedAt: isoOr(legacy.value["startedAt"], migratedAt),
     updatedAt: migratedAt,

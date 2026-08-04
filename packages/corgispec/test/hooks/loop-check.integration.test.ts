@@ -17,7 +17,11 @@ import {
   reduceLoopEventV2,
 } from "../../src/lib/loop-reducer-v2.js";
 import { LoopStoreV2 } from "../../src/lib/loop-store-v2.js";
-import type { ArtifactHashV2, LoopStateV2 } from "../../src/lib/run-contract-v2.js";
+import type {
+  ArtifactHashV2,
+  LoopEventV2,
+  LoopStateV2,
+} from "../../src/lib/run-contract-v2.js";
 
 const CLI = resolve(__dirname, "../../dist/corgispec.js");
 const roots: string[] = [];
@@ -49,6 +53,87 @@ describe("Run Contract v2 loop-check hook", () => {
       terminal: false,
       action: { type: "dispatch_group", groupId: "1", attempt: 1 },
     });
+  });
+
+  it("reports an explicit tracker checkpoint without mutating the canonical run", async () => {
+    const root = project("tracker-checkpoint");
+    let state = await seed(root, "change-a", "run-a", "session-a", true);
+    const store = new LoopStoreV2({ projectRoot: root });
+
+    state = await transition(store, state, {
+      schemaVersion: 2,
+      type: "bundle_submitted",
+      runId: state.runId,
+      seq: state.lastEventSeq + 1,
+      expectedStateRevision: state.stateRevision,
+      expectedNonce: state.nonce,
+      nextNonce: "nonce-bundle",
+      occurredAt: "2026-07-15T00:00:01.000Z",
+      actor: state.owner,
+      groupId: "1",
+      attempt: 1,
+      bundleId: "bundle-1",
+      bundleHash: hash("c"),
+      artifactHash: hash("d"),
+      observedGitRevision: "observed-1",
+      workspaceFingerprint: state.git.workspaceFingerprint,
+    } as Extract<LoopEventV2, { type: "bundle_submitted" }>);
+    state = await transition(store, state, {
+      schemaVersion: 2,
+      type: "evaluation_completed",
+      runId: state.runId,
+      seq: state.lastEventSeq + 1,
+      expectedStateRevision: state.stateRevision,
+      expectedNonce: state.nonce,
+      nextNonce: "nonce-evaluated",
+      occurredAt: "2026-07-15T00:00:02.000Z",
+      actor: state.owner,
+      groupId: "1",
+      attempt: 1,
+      result: "pass",
+      evidenceHash: hash("e"),
+      reviewHash: hash("f"),
+      reviewClean: true,
+      reason: null,
+    } as Extract<LoopEventV2, { type: "evaluation_completed" }>);
+    state = await transition(store, state, {
+      schemaVersion: 2,
+      type: "group_commit_acknowledged",
+      runId: state.runId,
+      seq: state.lastEventSeq + 1,
+      expectedStateRevision: state.stateRevision,
+      expectedNonce: state.nonce,
+      nextNonce: "nonce-committed",
+      occurredAt: "2026-07-15T00:00:03.000Z",
+      actor: state.owner,
+      groupId: "1",
+      attempt: 1,
+      commitRevision: "commit-1",
+      commitTree: "tree-1",
+      workspaceFingerprint: state.git.workspaceFingerprint,
+      pushStatus: "not_required",
+      remoteRevision: null,
+    } as Extract<LoopEventV2, { type: "group_commit_acknowledged" }>);
+
+    expect(state.phase).toBe("awaiting_tracker_sync");
+    const runRoot = resolve(root, ".corgi/loop/change-a/runs/run-a");
+    const watched = [
+      resolve(runRoot, "state.json"),
+      resolve(runRoot, "events.jsonl"),
+      resolve(root, ".corgi/loop/change-a/current.json"),
+    ];
+    const before = watched.map((path) => readFileSync(path));
+
+    const result = runHook(root, { session_id: "session-a" });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toMatchObject({
+      decision: "block",
+      status: "active",
+      phase: "awaiting_tracker_sync",
+      action: { type: "sync_tracker", groupId: "1", attempt: 1 },
+    });
+    watched.forEach((path, index) => expect(readFileSync(path)).toEqual(before[index]));
   });
 
   it("fails session conflict without changing state, events, or current pointer", async () => {
@@ -396,6 +481,7 @@ async function seed(
   changeName: string,
   runId: string,
   sessionId: string,
+  tracked = false,
 ): Promise<LoopStateV2> {
   const state = createInitialLoopStateV2({
     changeName,
@@ -413,6 +499,16 @@ async function seed(
       requireCleanWorktreeForCommit: true,
       requirePush: false,
     },
+    tracking: tracked
+      ? {
+        binding: {
+          provider: "gitlab",
+          issueUrl: "https://gitlab.example.test/group/project/-/issues/1",
+          repository: "group/project",
+          issueNumber: 1,
+        },
+      }
+      : { binding: null },
     limits: { maxGroups: 10, maxAttemptsPerGroup: 3, maxEvents: 100 },
     groups: [{ id: "1", taskGroupFingerprint: hash("c") }],
     startedAt: "2026-07-15T00:00:00.000Z",
@@ -422,6 +518,23 @@ async function seed(
     event: createRunInitializedEventV2(state),
   });
   return state;
+}
+
+async function transition(
+  store: LoopStoreV2,
+  state: LoopStateV2,
+  event: LoopEventV2,
+): Promise<LoopStateV2> {
+  const next = reduceLoopEventV2(state, event).postState;
+  return await store.transition({
+    changeName: state.changeName,
+    runId: state.runId,
+    sessionId: state.sessionId,
+    expectedStateRevision: state.stateRevision,
+    expectedNonce: state.nonce,
+    event,
+    nextState: next,
+  });
 }
 
 function runHook(

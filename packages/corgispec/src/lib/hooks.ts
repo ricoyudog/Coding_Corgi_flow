@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { relative, resolve } from "node:path";
+import { dirname, relative, resolve } from "node:path";
 import {
   assertWritableArtifactPath,
   createArtifactResolver,
@@ -198,9 +198,8 @@ export function formatHookOutput(
 // ─── Active Changes Scanning ────────────────────────────────────────────
 
 /**
- * Resolve active changes exclusively through OpenSpec's JSON list/status
- * contracts. In worktree mode every registered Corgi worktree is queried and
- * duplicate ownership fails closed instead of selecting the first result.
+ * Resolve active changes from the current hook working directory through
+ * OpenSpec's JSON list/status contracts.
  */
 export async function scanActiveChanges(
   cwd: string,
@@ -222,86 +221,47 @@ export async function resolveHookChanges(
   options: HookPlanningOptions = {},
   dependencies: HookPlanningDependencies = {},
 ): Promise<ResolvedHookChange[]> {
+  return resolveHookChangesFromRoot(cwd, cwd, config, options, dependencies);
+}
+
+async function resolveHookChangesFromRoot(
+  cwd: string,
+  commandRoot: string,
+  config: OpenSpecConfig,
+  options: HookPlanningOptions,
+  dependencies: HookPlanningDependencies,
+): Promise<ResolvedHookChange[]> {
   const createAdapter = dependencies.createAdapter ?? defaultAdapterFactory;
   const createResolver =
     dependencies.createResolver ?? ((adapter) => createArtifactResolver(adapter));
-  const listWorktrees = dependencies.listWorktrees ?? listGitWorktrees;
   const isolationMode = config.isolation?.mode ?? "none";
-
-  // A named Store is a single authoritative planning home. Querying it once
-  // avoids manufacturing duplicates by asking the same Store from each
-  // registered Git worktree.
-  const candidateRoots = isolationMode === "worktree" && !options.store
-    ? listWorktrees(cwd)
-    : [cwd];
-  const roots = [...new Set(candidateRoots.map((root) => resolve(root)))]
-    .filter((root) => root === resolve(cwd) || findConfigPath(root) !== null);
-  if (roots.length === 0) {
+  const resolvedCwd = resolve(cwd);
+  const resolvedCommandRoot = resolve(commandRoot);
+  if (resolvedCommandRoot !== resolvedCwd && findConfigPath(resolvedCommandRoot) === null) {
     throw new HookPlanningError(
       "No trusted Git worktree could be resolved for hook planning context",
       "worktree_discovery_failed",
     );
   }
 
-  const listed = await Promise.all(roots.map(async (commandRoot) => {
-    const adapter = createAdapter(commandRoot);
-    const response = await adapter.listChanges(options);
-    const seen = new Set<string>();
-    for (const change of response.changes) {
-      if (seen.has(change.name)) {
-        throw new HookPlanningError(
-          `Change '${change.name}' appears more than once in the OpenSpec list response for ${commandRoot}`,
-          "ambiguous_change",
-          { changeName: change.name, worktreePaths: [commandRoot] },
-        );
-      }
-      seen.add(change.name);
-    }
-    const authoritativeRoot =
-      response.root && typeof response.root.path === "string"
-        ? resolve(commandRoot, response.root.path)
-        : commandRoot;
-    return {
-      commandRoot,
-      authoritativeRoot,
-      adapter,
-      resolver: createResolver(adapter),
-      changes: response.changes,
-    };
-  }));
-
-  const owners = new Map<string, Array<(typeof listed)[number]>>();
-  for (const source of listed) {
-    for (const change of source.changes) {
-      const entries = owners.get(change.name) ?? [];
-      if (!entries.some((entry) => entry.authoritativeRoot === source.authoritativeRoot)) {
-        entries.push(source);
-      }
-      owners.set(change.name, entries);
-    }
-  }
-
-  for (const [changeName, sources] of owners) {
-    if (sources.length > 1) {
-      const worktreePaths = sources.map((source) => source.commandRoot).sort();
+  const adapter = createAdapter(resolvedCommandRoot);
+  const response = await adapter.listChanges(options);
+  const seen = new Set<string>();
+  for (const change of response.changes) {
+    if (seen.has(change.name)) {
       throw new HookPlanningError(
-        `Change '${changeName}' is ambiguous across worktrees: ${worktreePaths.join(", ")}`,
+        `Change '${change.name}' appears more than once in the OpenSpec list response for ${resolvedCommandRoot}`,
         "ambiguous_change",
-        { changeName, worktreePaths },
+        { changeName: change.name, worktreePaths: [resolvedCommandRoot] },
       );
     }
+    seen.add(change.name);
   }
+  const resolver = createResolver(adapter);
 
   const resolvedChanges = await Promise.all(
-    [...owners.entries()].map(async ([name, [source]]) => {
-      if (!source) {
-        throw new HookPlanningError(
-          `OpenSpec did not provide an owner for change '${name}'`,
-          "openspec_contract_mismatch",
-          { changeName: name },
-        );
-      }
-      const resolvedChange = await source.resolver.resolve(name, options);
+    response.changes.map(async ({ name }) => {
+      const resolvedChange = await resolver.resolve(name, options);
       if (resolvedChange.changeName !== name) {
         throw new HookPlanningError(
           `OpenSpec status returned change '${resolvedChange.changeName}' for requested change '${name}'`,
@@ -326,10 +286,10 @@ export async function resolveHookChanges(
         : null;
       return {
         name,
-        commandRoot: source.commandRoot,
+        commandRoot: resolvedCommandRoot,
         worktreePath:
           isolationMode === "worktree"
-            ? relative(cwd, source.commandRoot) || "."
+            ? relative(resolvedCwd, resolvedCommandRoot) || "."
             : null,
         resolved: resolvedChange,
         taskSummary,
@@ -355,7 +315,15 @@ export async function resolveWrittenChange(
   dependencies: HookPlanningDependencies = {},
 ): Promise<ResolvedHookChange | null> {
   const candidate = isPortableAbsolute(filePath) ? filePath : resolve(cwd, filePath);
-  const changes = await resolveHookChanges(cwd, config, options, dependencies);
+  const commandRoot = resolveWriteCommandRoot(candidate, cwd, config, options, dependencies);
+  if (!commandRoot) return null;
+  const changes = await resolveHookChangesFromRoot(
+    cwd,
+    commandRoot,
+    config,
+    options,
+    dependencies,
+  );
   const lexicalMatches = changes.filter((change) =>
     isPathInside(change.resolved.changeRoot, candidate)
   );
@@ -373,6 +341,32 @@ export async function resolveWrittenChange(
   const match = lexicalMatches[0]!;
   await assertWritableArtifactPath(match.resolved, candidate);
   return match;
+}
+
+function resolveWriteCommandRoot(
+  candidate: string,
+  cwd: string,
+  config: OpenSpecConfig,
+  options: HookPlanningOptions,
+  dependencies: HookPlanningDependencies,
+): string | null {
+  const resolvedCwd = resolve(cwd);
+  if (options.store || config.isolation?.mode !== "worktree") {
+    return resolvedCwd;
+  }
+
+  const managedRoot = resolve(resolvedCwd, config.isolation.root ?? ".worktrees");
+  if (isPathInside(managedRoot, candidate)) {
+    const listWorktrees = dependencies.listWorktrees ?? listGitWorktrees;
+    const matchingWorktree = [...new Set(listWorktrees(resolvedCwd).map((path) => resolve(path)))]
+      .filter((worktree) => dirname(worktree) === managedRoot)
+      .filter((worktree) => findConfigPath(worktree) !== null)
+      .filter((worktree) => isPathInside(worktree, candidate))
+      .sort((left, right) => right.length - left.length || compareCodeUnits(left, right))[0];
+    return matchingWorktree ?? null;
+  }
+
+  return isPathInside(resolvedCwd, candidate) ? resolvedCwd : null;
 }
 
 // ─── Stdin Reading ──────────────────────────────────────────────────────

@@ -150,6 +150,134 @@ describe("loop v2 command functions with real Git and store", () => {
     expect(JSON.parse(JSON.stringify(finalized.output))).toEqual(finalized.output);
   });
 
+  it("requires an explicit tracker checkpoint after every tracked Task Group commit", async () => {
+    const root = repo("tracked-checkpoints");
+    const planning = planningSnapshot([
+      { id: "1", fingerprint: hashCanonicalArtifactV2({ group: 1 }) },
+      { id: "2", fingerprint: hashCanonicalArtifactV2({ group: 2 }) },
+    ]);
+    planning.tracking = {
+      binding: {
+        provider: "github",
+        issueUrl: "https://github.com/corgi/example/issues/7",
+        repository: "corgi/example",
+        issueNumber: 7,
+      },
+    };
+    let trackerCalls = 0;
+    const dependencies: LoopV2Dependencies = {
+      ...deps(planning),
+      syncTracker: async ({ group }) => {
+        trackerCalls += 1;
+        return { marker: `checkpoint-${group.id}`, alreadyPresent: false };
+      },
+    };
+
+    const initialized = await executeLoopV2({
+      operation: "init", projectRoot: root, changeName: "example",
+      sessionId: "session-1", ownerId: "agent-1", runId: "run-tracked",
+    }, dependencies);
+    let state = initialized.output.state!;
+
+    writeFileSync(resolve(root, "README.md"), "group one\n");
+    const firstSubmitted = await executeLoopV2({
+      operation: "submit", projectRoot: root, changeName: "example", ...token(state),
+      bundle: await submissionFor(root, state, "PASS", "bundle-one"),
+    }, dependencies);
+    git(root, "add", "README.md");
+    git(root, "commit", "-m", "group one");
+    const firstAcknowledged = await executeLoopV2({
+      operation: "ack-commit", projectRoot: root, changeName: "example",
+      ...token(firstSubmitted.output.state!),
+    }, dependencies);
+    expect(trackerCalls).toBe(0);
+    expect(firstAcknowledged.output.state?.phase).toBe("awaiting_tracker_sync");
+    expect(firstAcknowledged.output.action).toEqual({ type: "sync_tracker", groupId: "1", attempt: 1 });
+
+    const firstSynced = await executeLoopV2({
+      operation: "sync-tracker", projectRoot: root, changeName: "example",
+      ...token(firstAcknowledged.output.state!),
+    }, dependencies);
+    expect(trackerCalls).toBe(1);
+    expect(firstSynced.output.state).toMatchObject({
+      phase: "awaiting_group_result",
+      currentGroupId: "2",
+      groups: { "1": { tracker: { status: "checkpointed", marker: "checkpoint-1" } } },
+    });
+
+    state = firstSynced.output.state!;
+    writeFileSync(resolve(root, "README.md"), "group two\n");
+    const secondSubmitted = await executeLoopV2({
+      operation: "submit", projectRoot: root, changeName: "example", ...token(state),
+      bundle: await submissionFor(root, state, "PASS", "bundle-two"),
+    }, dependencies);
+    git(root, "add", "README.md");
+    git(root, "commit", "-m", "group two");
+    const secondAcknowledged = await executeLoopV2({
+      operation: "ack-commit", projectRoot: root, changeName: "example",
+      ...token(secondSubmitted.output.state!),
+    }, dependencies);
+    expect(secondAcknowledged.output.state?.phase).toBe("awaiting_tracker_sync");
+    const secondSynced = await executeLoopV2({
+      operation: "sync-tracker", projectRoot: root, changeName: "example",
+      ...token(secondAcknowledged.output.state!),
+    }, dependencies);
+    expect(trackerCalls).toBe(2);
+    expect(secondSynced.output.action).toEqual({ type: "finalize" });
+    expect(secondSynced.output.state?.groups["2"]?.tracker.status).toBe("checkpointed");
+
+    const replayed = await executeLoopV2({
+      operation: "sync-tracker", projectRoot: root, changeName: "example",
+      ...token(secondAcknowledged.output.state!),
+    }, dependencies);
+    expect(replayed.output.idempotent).toBe(true);
+    expect(trackerCalls).toBe(2);
+  });
+
+  it("does not change local loop state when tracker synchronization fails", async () => {
+    const root = repo("tracker-failure");
+    const planning = planningSnapshot();
+    planning.tracking = {
+      binding: {
+        provider: "gitlab",
+        issueUrl: "https://gitlab.example.test/team/example/-/issues/5",
+        repository: "https://gitlab.example.test/team/example",
+        issueNumber: 5,
+      },
+    };
+    const dependencies: LoopV2Dependencies = {
+      ...deps(planning),
+      syncTracker: async () => { throw new Error("tracker unavailable"); },
+    };
+    const initialized = await executeLoopV2({
+      operation: "init", projectRoot: root, changeName: "example",
+      sessionId: "session-1", ownerId: "agent-1", runId: "run-tracker-failure",
+    }, dependencies);
+    const initial = initialized.output.state!;
+    writeFileSync(resolve(root, "README.md"), "implemented\n");
+    const submitted = await executeLoopV2({
+      operation: "submit", projectRoot: root, changeName: "example", ...token(initial),
+      bundle: await submissionFor(root, initial, "PASS", "bundle-pass"),
+    }, dependencies);
+    git(root, "add", "README.md");
+    git(root, "commit", "-m", "implemented");
+    const acknowledged = await executeLoopV2({
+      operation: "ack-commit", projectRoot: root, changeName: "example",
+      ...token(submitted.output.state!),
+    }, dependencies);
+    const statePath = resolve(root, ".corgi/loop/example/runs/run-tracker-failure/state.json");
+    const eventsPath = resolve(root, ".corgi/loop/example/runs/run-tracker-failure/events.jsonl");
+    const before = [readFileSync(statePath), readFileSync(eventsPath)];
+
+    const failed = await executeLoopV2({
+      operation: "sync-tracker", projectRoot: root, changeName: "example",
+      ...token(acknowledged.output.state!),
+    }, dependencies);
+    expect(failed.exitCode).toBe(2);
+    expect(failed.output.state).toBeUndefined();
+    expect([readFileSync(statePath), readFileSync(eventsPath)]).toEqual(before);
+  });
+
   it("moves self-driven failure to fixing and accepts a fresh retry attempt", async () => {
     const root = repo("retry");
     const planning = planningSnapshot();
@@ -1470,11 +1598,15 @@ function git(root: string, ...args: string[]): string {
   return execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
 }
 
-function planningSnapshot(): LoopPlanningSnapshotV2 {
+function planningSnapshot(
+  groups: Array<{ id: string; fingerprint: ReturnType<typeof hashCanonicalArtifactV2> }> = [
+    { id: "1", fingerprint: hashCanonicalArtifactV2({ group: 1 }) },
+  ],
+): LoopPlanningSnapshotV2 {
   return {
     ready: true,
     planningRevision: hashCanonicalArtifactV2({ planning: "v1" }),
-    groups: [{ id: "1", fingerprint: hashCanonicalArtifactV2({ group: 1 }) }],
+    groups,
     blockers: [],
   };
 }

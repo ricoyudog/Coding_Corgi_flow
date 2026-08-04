@@ -153,6 +153,13 @@ function events(): LoopEventV2[] {
       pushStatus: "not_required",
       remoteRevision: null,
     } as LoopEventV2,
+    {
+      ...common("group_tracker_checkpointed"),
+      type: "group_tracker_checkpointed",
+      groupId: "group-1",
+      attempt: 1,
+      marker: "checkpoint-1",
+    } as LoopEventV2,
     { ...common("run_finalized"), type: "run_finalized", finalGitRevision: "final", workspaceFingerprint: H3 } as LoopEventV2,
     { ...common("run_invalidated"), type: "run_invalidated", reason: REASON } as LoopEventV2,
     { ...common("run_blocked"), type: "run_blocked", terminalPhase: "circuit_breaker", reason: REASON } as LoopEventV2,
@@ -176,6 +183,31 @@ describe("LoopStateV2 contract", () => {
       if (phase === "awaiting_group_commit") {
         candidate.groups["group-1"]!.status = "awaiting_commit";
         bindBundle(candidate, "approved");
+      }
+      if (phase === "awaiting_tracker_sync") {
+        candidate.tracking.binding = {
+          provider: "github",
+          issueUrl: "https://github.com/corgi/example/issues/1",
+          repository: "corgi/example",
+          issueNumber: 1,
+        };
+        candidate.groups["group-1"]!.status = "completed";
+        candidate.groups["group-1"]!.bundle = {
+          status: "approved",
+          bundleId: "bundle-1",
+          bundleHash: H1,
+          artifactHash: H2,
+          evidenceHash: H2,
+          reviewHash: H3,
+          observedGitRevision: "observed",
+          workspaceFingerprint: H2,
+        };
+        candidate.groups["group-1"]!.commit = {
+          status: "acknowledged", revision: "commit", tree: "tree", workspaceFingerprint: H2,
+        };
+        candidate.groups["group-1"]!.tracker = { status: "pending", marker: null };
+        candidate.groups["group-1"]!.completedAt = T1;
+        candidate.updatedAt = T1;
       }
       if (phase === "awaiting_finalize") {
         Object.assign(candidate, completedState());
@@ -240,6 +272,8 @@ describe("LoopStateV2 contract", () => {
       ["git base", mutate((x) => { x.git.baselineRevision = ""; })],
       ["git final", mutate((x) => { x.git.finalRevision = ""; })],
       ["git fingerprint", mutate((x) => { x.git.workspaceFingerprint = "x"; })],
+      ["tracking object", mutate((x) => { x.tracking = null; })],
+      ["tracking binding", mutate((x) => { x.tracking.binding = { provider: "jira" }; })],
       ["start time", mutate((x) => { x.startedAt = "today"; })],
       ["update time", mutate((x) => { x.updatedAt = "today"; })],
       ["completed time", mutate((x) => { x.completedAt = "today"; })],
@@ -282,6 +316,9 @@ describe("LoopStateV2 contract", () => {
       ["pending retains", mutate((x) => {
         Object.assign(x.groups["group-1"].commit, { revision: "r", tree: "t", workspaceFingerprint: H2 });
       })],
+      ["tracker object", mutate((x) => { x.groups["group-1"].tracker = null; })],
+      ["tracker status", mutate((x) => { x.groups["group-1"].tracker.status = "sent"; })],
+      ["tracker marker", mutate((x) => { x.groups["group-1"].tracker.marker = "unexpected"; })],
     ];
     for (const [label, candidate] of cases) expect(validateLoopStateV2(candidate).valid, label).toBe(false);
   });
@@ -338,6 +375,7 @@ describe("LoopEventV2 and durable record contracts", () => {
       "awaiting_evaluation",
       "fixing",
       "awaiting_group_commit",
+      "awaiting_tracker_sync",
       "awaiting_finalize",
     ] as const) {
       const resume = { ...events().at(-1)!, targetPhase };
@@ -393,14 +431,15 @@ describe("LoopEventV2 and durable record contracts", () => {
       ["commit push", bad(3, (x) => { x.pushStatus = "pending"; })],
       ["push remote", bad(3, (x) => { x.pushStatus = "pushed"; })],
       ["not-required remote", bad(3, (x) => { x.remoteRevision = "r"; })],
-      ["final revision", bad(4, (x) => { x.finalGitRevision = ""; })],
-      ["final hash", bad(4, (x) => { x.workspaceFingerprint = "x"; })],
-      ["invalidate reason", bad(5, (x) => { x.reason = null; })],
-      ["block phase", bad(6, (x) => { x.terminalPhase = "done"; })],
-      ["block reason", bad(6, (x) => { x.reason = null; })],
-      ["resume session", bad(7, (x) => { x.sessionId = ""; })],
-      ["resume target", bad(7, (x) => { x.targetPhase = "done"; })],
-      ["resume limit", bad(7, (x) => { x.maxAttemptsPerGroup = 0; })],
+      ["checkpoint marker", bad(4, (x) => { x.marker = ""; })],
+      ["final revision", bad(5, (x) => { x.finalGitRevision = ""; })],
+      ["final hash", bad(5, (x) => { x.workspaceFingerprint = "x"; })],
+      ["invalidate reason", bad(6, (x) => { x.reason = null; })],
+      ["block phase", bad(7, (x) => { x.terminalPhase = "done"; })],
+      ["block reason", bad(7, (x) => { x.reason = null; })],
+      ["resume session", bad(8, (x) => { x.sessionId = ""; })],
+      ["resume target", bad(8, (x) => { x.targetPhase = "done"; })],
+      ["resume limit", bad(8, (x) => { x.maxAttemptsPerGroup = 0; })],
     ];
     for (const [label, candidate] of cases) expect(validateLoopEventV2(candidate).valid, label).toBe(false);
     expect(() => assertLoopEventV2(cases[1]![1])).toThrow(RunContractValidationErrorV2);
@@ -408,7 +447,7 @@ describe("LoopEventV2 and durable record contracts", () => {
 
   it("rejects unsafe group identifiers in every group-scoped event", () => {
     const valid = events();
-    for (const eventIndex of [1, 2, 3]) {
+    for (const eventIndex of [1, 2, 3, 4]) {
       for (const unsafeId of ["../escape", "/absolute", "C:\\escape", "NUL.txt", "group.", "group name"]) {
         const candidate = structuredClone(valid[eventIndex]) as Record<string, unknown>;
         candidate["groupId"] = unsafeId;

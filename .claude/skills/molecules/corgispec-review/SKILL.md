@@ -17,6 +17,18 @@ Gather evidence first, then ask the human to approve or reject. Do not infer any
 4. Accept `trackingProvider: "gitlab"` or `"none"`. Route `"github"` to `corgispec-gh-review`; never infer provider from `schemaName`.
 5. Treat returned paths as authoritative even outside the current working directory.
 
+## Canonical loop ownership gate
+
+Before any task-artifact edit or local/remote tracker write, inspect only the resolved change:
+
+```bash
+corgispec loop inspect "<change>" --json
+```
+
+- When the result has `status: "ok"` and a non-terminal `state.phase` (`action.type` is not `terminal`), an active canonical loop owns this change. Stop without editing planning/task artifacts or invoking `gh`/`glab`.
+- Report the returned `action.type` and require the user to explicitly continue the loop. In particular, `sync_tracker` must be performed through `corgispec loop sync-tracker ...`, and `finalize` through `corgispec loop finalize ...`; never run either action on the user's behalf.
+- If the result is `not_found` or has `action.type: "terminal"`, continue this skill. For any other inspect error or ambiguous response, stop before mutation and report it. An active loop for a different change does not block this workflow.
+
 ## Select and inspect
 
 1. When tracked, read `<changeRoot>/.gitlab.yaml`. Require `issue.iid`/`issue.url`; if legacy `parent` or `groups` keys exist, stop before any local or remote mutation with the documented manual-conversion guidance. Query the single live Issue and select the requested group or first dashboard row in `review` while the Issue has label `workflow::review`. When untracked, select a completed group from status or ask when ambiguous.
