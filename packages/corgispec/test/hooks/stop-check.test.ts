@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import {
   createFakeStatus,
   installFakeOpenSpec,
@@ -70,6 +70,77 @@ describe("hook stop-check", () => {
       listRoot: change.planningRoot,
       statuses: { "done-change": change.status },
     });
+
+    const output = execSync(`node ${CLI} hook stop-check --path ${tempDir}`, {
+      encoding: "utf-8",
+      input: JSON.stringify({}),
+      env: openspec.env,
+    });
+
+    expect(output).toBe("");
+  });
+
+  it("checks only the current worktree when siblings list the same change", () => {
+    const sibling = resolve(tempDir, ".worktrees/sibling");
+    writeFileSync(
+      resolve(tempDir, "openspec/config.yaml"),
+      "schema: github-tracked\nisolation:\n  mode: worktree\n  root: .worktrees\n",
+    );
+    execFileSync("git", ["init"], { cwd: tempDir, stdio: "ignore" });
+    execFileSync("git", ["add", "openspec/config.yaml"], { cwd: tempDir, stdio: "ignore" });
+    execFileSync(
+      "git",
+      ["-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "-m", "initial"],
+      { cwd: tempDir, stdio: "ignore" },
+    );
+    mkdirSync(resolve(tempDir, ".worktrees"), { recursive: true });
+    execFileSync("git", ["worktree", "add", "-b", "sibling", sibling], {
+      cwd: tempDir,
+      stdio: "ignore",
+    });
+
+    for (const root of [tempDir, sibling]) {
+      const changeRoot = resolve(root, "openspec/changes/shared-change");
+      mkdirSync(changeRoot, { recursive: true });
+      writeFileSync(resolve(changeRoot, "tasks.md"), "## 1. Setup\n\n- [x] 1.1 Complete\n");
+    }
+    writeFileSync(
+      openspec.executable,
+      `#!/usr/bin/env node
+const path = require("node:path");
+const args = process.argv.slice(2);
+const planningRoot = path.resolve(process.cwd(), "openspec");
+const changeRoot = path.resolve(planningRoot, "changes", "shared-change");
+const taskPath = path.resolve(changeRoot, "tasks.md");
+if (args[0] === "--version") {
+  process.stdout.write("1.6.0\\n");
+  process.exit(0);
+}
+if (args[0] === "list") {
+  process.stdout.write(JSON.stringify({
+    changes: [{ name: "shared-change", completedTasks: 1, totalTasks: 1, lastModified: "2026-08-04T00:00:00.000Z", status: "complete" }],
+    root: { path: planningRoot, source: "test" },
+  }));
+  process.exit(0);
+}
+if (args[0] === "status") {
+  process.stdout.write(JSON.stringify({
+    changeName: "shared-change",
+    schemaName: "github-tracked",
+    planningHome: { kind: "repo", root: planningRoot, changesDir: path.resolve(planningRoot, "changes"), defaultSchema: "github-tracked" },
+    changeRoot,
+    artifactPaths: { tasks: { outputPath: "tasks.md", resolvedOutputPath: taskPath, existingOutputPaths: [taskPath] } },
+    nextSteps: [],
+    actionContext: { mode: "planning", sourceOfTruth: "openspec", planningArtifacts: ["tasks"], linkedContext: [], allowedEditRoots: [changeRoot], requiresAffectedAreaSelection: false, constraints: [] },
+    isComplete: true,
+    applyRequires: [],
+    artifacts: [{ id: "tasks", outputPath: "tasks.md", status: "done" }],
+  }));
+  process.exit(0);
+}
+process.exit(9);
+`,
+    );
 
     const output = execSync(`node ${CLI} hook stop-check --path ${tempDir}`, {
       encoding: "utf-8",
