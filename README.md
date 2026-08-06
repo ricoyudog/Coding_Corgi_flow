@@ -55,7 +55,7 @@ Coding Corgi Flow is the **community extension** of [OpenSpec](https://github.co
 | 🧩 **Composable Skills** | Atoms → Molecules → Compounds with validated metadata |
 | 🪝 **Session Hooks** | Lifecycle hooks (pre-write, pre-bash, session-start…) with context gates |
 | 🔄 **Automated Pipeline (Loop)** | One-command apply-verify-review per group with auto-approve/fix, zero human gates |
-| 📦 **One-command Install** | `npm i -g corgispec@next` → `corgispec bootstrap` → done |
+| 📦 **One-command Install** | `npm i -g corgispec` → `corgispec bootstrap` → done |
 
 It ships as an npm CLI (`corgispec`), a Claude Code / Codex plugin, and a set of slash commands for OpenCode, Claude Code, and Codex.
 
@@ -78,11 +78,11 @@ Choose your path:
 
 ```bash
 npm install -g @fission-ai/openspec@^1.6.0
-npm install -g corgispec@next
+npm install -g corgispec
 corgispec doctor --path /path/to/your-project
 ```
 
-`next` is the prerelease channel and currently resolves to `3.0.0-rc.7`. For a reproducible install, pin it with `npm install -g corgispec@3.0.0-rc.7`. The unqualified `corgispec` package and the `latest` tag remain on stable `2.4.3`; they do not install this RC.
+The unqualified `corgispec` package, `latest`, and `next` all resolve to stable `3.0.0`. For a reproducible install, pin it with `npm install -g corgispec@3.0.0`.
 
 Options: `--platform <platforms>` (claude, opencode, codex; default: all), `--scope <scope>` (global, local, both; default: both). When TTY is detected and flags are not provided, interactive prompts ask for platform and scope. `local` manages project commands, schema, config, manifest, and any existing hooks; `global` manages user-level skills for the selected platforms plus Claude Code and OpenCode user commands; `both` preflights and updates both surfaces as one operation. Supplying `--platform` restricts detection and repair to exactly those platforms.
 
@@ -174,7 +174,7 @@ Review and explicitly approve the planning package after `propose` returns. Prop
 
 > Claude Code uses `/corgi:<command>` syntax (e.g., `/corgi:propose`). Platform auto-detected from `config.yaml`.
 
-### Planning integrity in 3.0 RC
+### Planning integrity in 3.0
 
 OpenSpec 1.6 JSON is the source of truth for artifact dependencies, glob-expanded files, instructions, and locations. Corgi uses the returned `planningHome`, `changeRoot`, `artifactPaths`, and `actionContext`; it does not assume a local `openspec/changes/<name>` directory or hard-code artifact filenames. This also allows a change selected from an OpenSpec Store to live outside the current repository.
 
@@ -506,7 +506,7 @@ rules:
 
 ### Migrating from CorgiSpec 2.x
 
-1. Upgrade to Node >=20.19.0 and OpenSpec >=1.6.0 <2.0.0, then install `corgispec@next` (currently `3.0.0-rc.7`) or pin `corgispec@3.0.0-rc.7` exactly. The unqualified package remains stable `2.4.3` via `latest`.
+1. Upgrade to Node >=20.19.0 and OpenSpec >=1.6.0 <2.0.0, then install `corgispec` (stable `3.0.0`) or pin `corgispec@3.0.0` exactly. `latest` and `next` resolve to the same stable version.
 2. Keep your existing schema name, but make the inferred tracker explicit:
 
    ```yaml

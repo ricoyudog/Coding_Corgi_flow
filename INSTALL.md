@@ -1,11 +1,11 @@
-# CorgiSpec 3.0 RC — Agent Bootstrap
+# CorgiSpec 3.0 — Agent Bootstrap
 
 Use this file as the entry point when an LLM agent installs or upgrades CorgiSpec in a target project. CorgiSpec and OpenSpec are separate CLIs: install and validate both before bootstrap writes managed files.
 
 ## Runtime requirements
 
 - Node.js >=20.19.0
-- `corgispec@3.0.0-rc.7`
+- `corgispec@3.0.0`
 - `@fission-ai/openspec` >=1.6.0 <2.0.0
 
 OpenSpec 1.3–1.5 are unsupported; do not continue with a compatibility fallback.
@@ -13,12 +13,12 @@ OpenSpec 1.3–1.5 are unsupported; do not continue with a compatibility fallbac
 ```bash
 node --version
 npm install -g @fission-ai/openspec@^1.6.0
-npm install -g corgispec@next
+npm install -g corgispec
 openspec --version
 corgispec --version
 ```
 
-`next` is the npm prerelease channel and currently resolves to `corgispec@3.0.0-rc.7`. Use `npm install -g corgispec@3.0.0-rc.7` when an exact, reproducible version is required. Do not use the unqualified package name for this upgrade: `corgispec` and `corgispec@latest` remain on stable `2.4.3`.
+The unqualified package, `corgispec@latest`, and `corgispec@next` resolve to stable `3.0.0`. Use `npm install -g corgispec@3.0.0` when an exact, reproducible version is required.
 
 ## Fresh bootstrap
 
@@ -129,7 +129,7 @@ OpenCode 1.18.x has no awaited stop hook. Its TypeScript plugin observes `sessio
 
 ## Clean source and package verification
 
-When validating this repository or preparing the RC release, start from a clean checkout and run:
+When validating this repository or preparing a release, start from a clean checkout and run:
 
 ```bash
 cd packages/corgispec
@@ -138,7 +138,7 @@ npm run release:check
 npm pack
 ```
 
-The release check rebuilds bundled assets, builds and typechecks the package, runs the complete test and coverage gates, creates a temporary npm tarball, installs it into a temporary project, and smoke-tests the packaged CLI and asset checksums. The optional final `npm pack` writes `corgispec-3.0.0-rc.7.tgz` for release verification or offline installation; normal consumers install the prerelease from npm with `corgispec@next`.
+The release check rebuilds bundled assets, builds and typechecks the package, runs the complete test and coverage gates, creates a temporary npm tarball, installs it into a temporary project, and smoke-tests the packaged CLI and asset checksums. The optional final `npm pack` writes `corgispec-3.0.0.tgz` for release verification or offline installation; normal consumers install the stable package with `corgispec`.
 
 ## Rules
 

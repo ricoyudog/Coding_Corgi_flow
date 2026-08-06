@@ -1,6 +1,6 @@
 {
   "name": "corgispec",
-  "version": "3.0.0-rc.8",
+  "version": "3.0.0",
   "description": "Unified CLI for Corgi workflow — skill management, validation, and AI instruction generation",
   "type": "module",
   "bin": {
@@ -49,7 +49,7 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/",
-    "tag": "next"
+    "tag": "latest"
   },
   "dependencies": {
     "ajv": "^8.17.1",

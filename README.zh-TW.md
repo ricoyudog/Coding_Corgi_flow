@@ -55,7 +55,7 @@ Coding Corgi Flow 是 [OpenSpec](https://github.com/Fission-AI/OpenSpec)（由 [
 | 🧩 **可組合 Skill** | Atoms → Molecules → Compounds，附帶驗證過的 metadata |
 | 🪝 **Session Hooks** | 生命週期 hooks（pre-write、pre-bash、session-start…）搭配 context gates |
 | 🔄 **自動化管線（Loop）** | Run Contract v2 管理每個 group 的 apply、evidence、review、commit 與 crash 復原 |
-| 📦 **一行指令安裝** | `npm i -g corgispec@next` → `corgispec bootstrap` → 完成 |
+| 📦 **一行指令安裝** | `npm i -g corgispec` → `corgispec bootstrap` → 完成 |
 
 以 npm CLI（`corgispec`）、Claude Code / Codex plugin，以及 OpenCode、Claude Code、Codex 的 slash command 形式發佈。
 
@@ -78,12 +78,12 @@ Coding Corgi Flow 是 [OpenSpec](https://github.com/Fission-AI/OpenSpec)（由 [
 
 ```bash
 npm install -g @fission-ai/openspec@^1.6.0
-npm install -g corgispec@next
+npm install -g corgispec
 corgispec doctor --path /path/to/your-project
 corgispec bootstrap --target /path/to/your-project --schema github-tracked
 ```
 
-`next` 是預發布頻道，目前指向 `3.0.0-rc.7`。若要可重現的安裝，請使用 `npm install -g corgispec@3.0.0-rc.7` 鎖定版本。未加版本的 `corgispec` 與 `latest` tag 仍維持穩定版 `2.4.3`，不會安裝此 RC。
+未加版本的 `corgispec`、`latest` 與 `next` 都會解析為穩定版 `3.0.0`。若要可重現的安裝，請使用 `npm install -g corgispec@3.0.0` 鎖定版本。
 
 可使用 `--platform <platforms>`（claude、opencode、codex；預設全部）與 `--scope <scope>`（global、local、both；預設 both）。`local` 管理專案 commands、schema、config、manifest 與已存在的 hooks；`global` 管理所選平台的 user-level skills，以及 Claude Code/OpenCode 的 user commands；`both` 會先一起 preflight，再更新兩個範圍。指定 `--platform` 時，只偵測及修復列出的平台。
 
@@ -161,7 +161,7 @@ Fetch and follow instructions from https://raw.githubusercontent.com/ricoyudog/C
 
 > Claude Code 使用 `/corgi:<command>` 格式（如 `/corgi:propose`）。平台從 `config.yaml` 自動偵測。
 
-### 3.0 RC 的 Planning Integrity
+### 3.0 的 Planning Integrity
 
 OpenSpec 1.6 JSON 是 artifact 相依、glob 展開檔案、instructions 與位置的唯一真相來源。Corgi 使用 OpenSpec 回傳的 `planningHome`、`changeRoot`、`artifactPaths` 與 `actionContext`；不再假設 change 位於本地 `openspec/changes/<name>`，也不再寫死 artifact 檔名。因此，透過 OpenSpec Store 選取的 change 可以位於目前 repository 之外。
 
@@ -493,7 +493,7 @@ rules:
 
 ### 從 CorgiSpec 2.x 遷移
 
-1. 升級至 Node >=20.19.0 與 OpenSpec >=1.6.0 <2.0.0，再安裝 `corgispec@next`（目前為 `3.0.0-rc.7`），或精確鎖定 `corgispec@3.0.0-rc.7`。未加版本的 package 仍透過 `latest` 取得穩定版 `2.4.3`。
+1. 升級至 Node >=20.19.0 與 OpenSpec >=1.6.0 <2.0.0，再安裝 `corgispec`（穩定版 `3.0.0`），或精確鎖定 `corgispec@3.0.0`。`latest` 與 `next` 會解析為相同的穩定版本。
 2. 保留既有 schema 名稱，但明確寫出原先推斷的 tracker：
 
    ```yaml
