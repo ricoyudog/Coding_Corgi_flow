@@ -1,6 +1,6 @@
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
-import yaml from "js-yaml";
+import * as yaml from "js-yaml";
 
 /**
  * OpenSpec schema name. OpenSpec 1.6 supports project-defined schemas, so
@@ -99,8 +99,14 @@ export function loadConfig(configPath: string): OpenSpecConfig {
   let raw: unknown;
   try {
     const content = readFileSync(configPath, "utf-8");
+    if (content.trim().length === 0) {
+      throw new ConfigError("Config file is empty or not a YAML mapping");
+    }
     raw = yaml.load(content);
   } catch (err) {
+    if (err instanceof ConfigError) {
+      throw err;
+    }
     throw new ConfigError(
       `Failed to parse config YAML: ${err instanceof Error ? err.message : String(err)}`
     );
