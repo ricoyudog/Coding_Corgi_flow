@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Safe managed-install bootstrap and migration for Claude Code, OpenCode, and Codex, including manifest v2, conflict backups, transaction rollback, and opt-in hook migration.
 - Explicit, retry-safe GitHub and GitLab tracker checkpoints for each committed Task Group; tracker writes stay explicit and hooks only report the required next action.
 
+### Security
+
+- Updated the production `js-yaml` dependency to 5.2.2 to clear the high-severity audit finding reported for the RC8 lockfile.
+
 ### Breaking
 
 - Node.js >=20.19.0 and OpenSpec CLI >=1.6.0 <2.0.0 are required.

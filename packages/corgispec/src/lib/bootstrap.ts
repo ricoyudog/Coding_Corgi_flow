@@ -15,7 +15,7 @@ import { homedir, tmpdir } from "node:os";
 import { basename, delimiter, dirname, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import yaml from "js-yaml";
+import * as yaml from "js-yaml";
 import { initializeOpenSpec } from "../commands/init.js";
 import type { CommandPlatform, Platform } from "./platform.js";
 import type { SchemaType, TrackingProvider } from "./config.js";

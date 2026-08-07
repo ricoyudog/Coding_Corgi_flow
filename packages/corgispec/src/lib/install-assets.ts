@@ -8,7 +8,7 @@ import {
 } from "node:fs";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import yaml from "js-yaml";
+import * as yaml from "js-yaml";
 import type {
   IsolationConfig,
   SchemaType,
@@ -526,7 +526,7 @@ export function patchInstallerConfig(
   existingYaml: string,
   input: InstallerConfigPatchInput
 ): string {
-  const parsed = yaml.load(existingYaml);
+  const parsed = existingYaml.trim().length > 0 ? yaml.load(existingYaml) : undefined;
   const existing = isRecord(parsed) ? parsed : {};
 
   const next: Record<string, unknown> = {
