@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-08-06
+
+### Added
+
+- Stable release of the RC.1–RC.8 delivery: OpenSpec 1.6-aware planning and stores, deterministic `update`/`ready`/`converge` commands, and the durable Run Contract v2 loop.
+- Safe managed-install bootstrap and migration for Claude Code, OpenCode, and Codex, including manifest v2, conflict backups, transaction rollback, and opt-in hook migration.
+- Explicit, retry-safe GitHub and GitLab tracker checkpoints for each committed Task Group; tracker writes stay explicit and hooks only report the required next action.
+
+### Breaking
+
+- Node.js >=20.19.0 and OpenSpec CLI >=1.6.0 <2.0.0 are required.
+- GitHub- and GitLab-tracked changes use one Issue per change. Replace the former `parent`/`groups` tracker structure with the documented `issue` object before continuing a tracked change.
+
+### Migration
+
+- Upgrade the runtime, install `corgispec@3.0.0`, then run `corgispec doctor` and `corgispec ready <change> --strict` for every active change.
+- Active RC7 Run Contract state is not migrated. Start a new loop run rather than attempting to replay prior RC7 Task Group progress.
+
 ## [3.0.0-rc.8] - 2026-08-04
 
 ### Added
