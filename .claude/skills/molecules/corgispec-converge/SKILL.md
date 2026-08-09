@@ -52,7 +52,7 @@ After a successful append:
 
 1. Run `corgispec ready "<change>" --strict --json`.
 2. Inspect the successor with `corgispec loop inspect "<change>" --json`.
-3. Start or resume through the `corgispec-loop` skill.
+3. Start or resume through the `corgispec-apply` skill.
 
 ## Report
 

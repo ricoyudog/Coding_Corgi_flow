@@ -23,7 +23,7 @@ Then read `docs/` or code as needed.
 ### Shutdown (every session end)
 Update `memory/session-bridge.md`: Done / Waiting / New Pitfalls / New Discoveries
 
-### opsx Apply → Long-term Memory
+### Corgi Apply → Long-term Memory
 After each Task Group completes:
 - New pitfalls → append to `memory/pitfalls.md` (link source change)
 - New implicit rules → append to `wiki/architecture/implicit-contracts.md`

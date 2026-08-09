@@ -2,7 +2,7 @@
   "slug": "corgispec-verify",
   "tier": "molecule",
   "version": "1.0.0",
-  "description": "Automated verification gate between apply and review \u2014 runs tests, checks spec coverage, validates lint/build",
+  "description": "Standalone verification gate for apply checkpoints \u2014 runs tests, checks spec coverage, validates lint/build",
   "depends_on": [],
   "platform": "universal",
   "tags": [

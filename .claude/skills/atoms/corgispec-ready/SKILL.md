@@ -1,6 +1,6 @@
 ---
 name: corgispec-ready
-description: Assess whether an existing CorgiSpec change is safe to implement by combining deterministic `corgispec ready` checks with a read-only cross-artifact semantic review. Use before apply or loop execution, after planning edits, or whenever proposal, requirements, scenarios, design, and tasks may disagree.
+description: Assess whether an existing CorgiSpec change is safe to implement by combining deterministic `corgispec ready` checks with a read-only cross-artifact semantic review. Use before apply execution, after planning edits, or whenever proposal, requirements, scenarios, design, and tasks may disagree.
 ---
 
 # Assess planning readiness

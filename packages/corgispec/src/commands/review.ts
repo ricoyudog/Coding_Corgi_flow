@@ -49,7 +49,7 @@ export function createReviewCommand(
           return;
         }
         if (review.completedGroups.length === 0) {
-          console.log("No completed task groups to review. Run `corgispec apply` first.");
+          console.log("No completed task groups to review. Run the CorgiSpec apply workflow first.");
           return;
         }
         console.log(`Review: ${review.changeName}`);

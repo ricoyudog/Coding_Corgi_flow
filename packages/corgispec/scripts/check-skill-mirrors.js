@@ -14,8 +14,8 @@ const claudeRoot = resolve(repoRoot, ".claude/skills");
 // byte-identical so lifecycle contract changes cannot drift between platforms.
 const allowedDifferences = [
   "atoms/corgispec-memory-init/templates/",
-  "compounds/corgispec-loop/SKILL.md",
-  "compounds/corgispec-loop/skill.meta.json",
+  "compounds/corgispec-apply/SKILL.md",
+  "compounds/corgispec-apply/skill.meta.json",
   "molecules/corgispec-human-qa/skill.meta.json",
   "molecules/corgispec-review-loop/SKILL.md",
   "molecules/corgispec-review-loop/skill.meta.json",

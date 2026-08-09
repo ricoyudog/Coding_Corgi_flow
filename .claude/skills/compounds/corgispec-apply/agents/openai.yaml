@@ -1,0 +1,6 @@
+interface:
+  display_name: "CorgiSpec Apply"
+  short_description: "Run all Task Groups with per-group commits"
+  default_prompt: "Use $corgispec-apply to implement this change through every Task Group with a separate verified commit for each."
+policy:
+  allow_implicit_invocation: false

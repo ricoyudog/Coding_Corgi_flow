@@ -343,7 +343,7 @@ async function executeLoopOperationV2(
             message: planning.blockers.join("; ") || "Planning is not ready",
           },
         },
-        message: "Run corgispec ready and repair planning before loop init",
+        message: "Run corgispec ready and repair planning before starting apply",
         error: {
           code: "planning_not_ready",
           message: planning.blockers.join("; ") || "Planning is not ready",

@@ -328,7 +328,6 @@ for (const name of ${JSON.stringify([
   "corgi-converge",
   "corgi-archive",
   "corgi-human-qa",
-  "corgi-loop",
 ])}) {
   const sessionID = "command-" + name;
   await message(sessionID);
@@ -338,8 +337,7 @@ for (const name of ${JSON.stringify([
 }
 
 for (const name of ${JSON.stringify([
-  "corgispec-apply-change",
-  "corgispec-gh-apply",
+  "corgispec-apply",
   "corgispec-propose",
   "corgispec-gh-propose",
   "corgispec-update",
@@ -347,7 +345,6 @@ for (const name of ${JSON.stringify([
   "corgispec-archive-change",
   "corgispec-gh-archive",
   "corgispec-human-qa",
-  "corgispec-loop",
 ])}) {
   const sessionID = "skill-" + name;
   await message(sessionID);
@@ -361,7 +358,7 @@ await tool("normal-session", "write", { filePath: "/workspace/normal.ts" });
 await idle("normal-session");
 
 await message("reset-session");
-await tool("reset-session", "skill", { name: "corgispec-apply-change" });
+await tool("reset-session", "skill", { name: "corgispec-propose" });
 await tool("reset-session", "write", { filePath: "/workspace/active.ts" });
 await message("reset-session");
 await tool("reset-session", "write", { filePath: "/workspace/reset.ts" });
@@ -396,19 +393,13 @@ await idle("concurrent-b");
         JSON.parse(record.input).tool_input.file_path as string
       );
 
-      expect(preWrites).toHaveLength(21);
+      expect(preWrites).toHaveLength(18);
       expect(writtenPaths).not.toContain("/workspace/normal.ts");
       expect(writtenPaths).not.toContain("/workspace/reset.ts");
       expect(writtenPaths).not.toContain("/workspace/a-after-reset.ts");
       expect(writtenPaths).toContain("/workspace/b-after-reset.ts");
-      expect(stopChecks).toHaveLength(4);
-      expect(stopChecks.map((record) => JSON.parse(record.input).session_id).sort()).toEqual([
-        "command-corgi-apply",
-        "concurrent-b",
-        "skill-corgispec-apply-change",
-        "skill-corgispec-gh-apply",
-      ]);
-      expect(loopChecks).toHaveLength(21);
+      expect(stopChecks).toHaveLength(0);
+      expect(loopChecks).toHaveLength(18);
     });
 
     it("re-enters OpenCode from a fire-and-forget idle event while preserving hook output", () => {
@@ -422,14 +413,6 @@ let input = "";
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (chunk) => { input += chunk; });
 process.stdin.on("end", () => {
-  if (process.argv.at(-1) === "stop-check") {
-    if (process.env.FAKE_STOP_BLOCK === "1") {
-      process.stdout.write("OPENCODE-STOP-OUT:" + input);
-      process.stderr.write("OPENCODE-STOP-ERR:" + process.argv.slice(2).join(" "));
-      process.exitCode = 2;
-    }
-    return;
-  }
   if (process.argv.at(-1) === "loop-check") {
     if (process.env.FAKE_LOOP_BLOCK === "1") {
       process.stdout.write(JSON.stringify({
@@ -548,25 +531,6 @@ process.stdout.write("\\nPROMPTS:" + JSON.stringify(prompts));
         body: { parts: [{ text: expect.stringContaining("Run Contract v2 is still active") }] },
       });
       expect(blocked.stderr).toBe("OPENCODE-ERR:hook loop-check");
-
-      const stopBlocked = spawnSync(process.execPath, [harnessPath], {
-        encoding: "utf8",
-        env: { ...env, FAKE_STOP_BLOCK: "1" },
-      });
-      expect(stopBlocked.status).toBe(0);
-      const taskBlocked = parseHarness(stopBlocked.stdout);
-      expect(taskBlocked.hookOutput).toMatch(/^OPENCODE-STOP-OUT:/u);
-      expect(JSON.parse(taskBlocked.hookOutput.replace(/^OPENCODE-STOP-OUT:/u, ""))).toMatchObject({
-        hook_event_name: "Stop",
-        stop_hook_active: false,
-        session_id: "opencode-session",
-      });
-      expect(taskBlocked.prompts[0]).toMatchObject({
-        path: { id: "opencode-session" },
-        body: { parts: [{ text: expect.stringContaining("Hook: stop-check") }] },
-      });
-      expect(stopBlocked.stderr).toBe("OPENCODE-STOP-ERR:hook stop-check");
-      expect(taskBlocked.hookOutput).not.toContain("OPENCODE-OUT:");
     });
 
     it("--deep flag is no-op (produces same output as default)", () => {

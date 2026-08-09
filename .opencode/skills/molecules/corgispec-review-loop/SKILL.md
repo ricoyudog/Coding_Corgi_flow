@@ -1,11 +1,11 @@
 ---
 name: corgispec-review-loop
-description: Collect structured review findings for the current Run Contract v2 attempt without a human gate or filesystem writes. Use inside corgispec-loop after verification and return findings for the canonical loop submit command.
+description: Collect structured review findings for the current Run Contract v2 attempt without a human gate or filesystem writes. Use inside corgispec-apply after verification and return findings for the canonical loop submit command.
 ---
 
 # Review a loop attempt
 
-Review the implementation for the exact run, Task Group, and attempt returned by `corgispec loop inspect`. Return structured findings to the parent loop workflow; do not persist them yourself.
+Review the implementation for the exact run, Task Group, and attempt returned by `corgispec loop inspect`. Return structured findings to the parent apply workflow; do not persist them yourself.
 
 ## Constraints
 

@@ -31,11 +31,7 @@
 ## 🗺️ The Pipeline
 
 <p align="center">
-  <img src="docs/assets/corgi_journey_illustration.png" alt="Corgi journey: Propose → Apply → Verify → Review → Archive" width="100%"/>
-</p>
-
-<p align="center">
-  <img src="docs/assets/corgi-loop-pipeline-flow.png" alt="Complete Corgi Loop pipeline — from /corgi:propose through Manual vs Automated paths, converging to /corgi:archive" width="100%"/>
+  <img src="docs/assets/corgi_journey_illustration.png" alt="Corgi journey: Propose → Apply with per-group verification and commits → Human QA → Archive" width="100%"/>
 </p>
 
 ---
@@ -47,14 +43,14 @@ Coding Corgi Flow is the **community extension** of [OpenSpec](https://github.co
 | Superpower | Why you need it |
 |---|---|
 | 📌 **Automatic Issue Tracking** | One GitLab or GitHub Issue per change, with a synced Task Dashboard |
-| 🛑 **Checkpoint-based Apply** | One Task Group at a time — never lose control of your AI |
+| 🛑 **Per-Group Commit Checkpoints** | Apply verifies and commits each Task Group before advancing |
 | ✅ **Automated Verify Gate** | Lint, build, tests, spec coverage — blocks review on failure |
 | 🔍 **5-Axis Review** | Architecture · Security · Performance · Quality · Completeness |
 | 🧠 **Cross-Session Memory** | 3-layer system — your AI remembers across sessions (≤3000 tokens at startup) |
 | 🌿 **Worktree Isolation** | Parallel changes, each in its own git worktree (opt-in) |
 | 🧩 **Composable Skills** | Atoms → Molecules → Compounds with validated metadata |
 | 🪝 **Session Hooks** | Lifecycle hooks (pre-write, pre-bash, session-start…) with context gates |
-| 🔄 **Automated Pipeline (Loop)** | One-command apply-verify-review per group with auto-approve/fix, zero human gates |
+| 🔄 **Automated Apply Pipeline** | One-command implementation, verification, review, and commit per group with auto-fix |
 | 📦 **One-command Install** | `npm i -g corgispec` → `corgispec bootstrap` → done |
 
 It ships as an npm CLI (`corgispec`), a Claude Code / Codex plugin, and a set of slash commands for OpenCode, Claude Code, and Codex.
@@ -82,7 +78,7 @@ npm install -g corgispec
 corgispec doctor --path /path/to/your-project
 ```
 
-The unqualified `corgispec` package, `latest`, and `next` all resolve to stable `3.0.0`. For a reproducible install, pin it with `npm install -g corgispec@3.0.0`.
+The unqualified `corgispec` package, `latest`, and `next` all resolve to stable `3.0.1`. For a reproducible install, pin it with `npm install -g corgispec@3.0.1`.
 
 Options: `--platform <platforms>` (claude, opencode, codex; default: all), `--scope <scope>` (global, local, both; default: both). When TTY is detected and flags are not provided, interactive prompts ask for platform and scope. `local` manages project commands, schema, config, manifest, and any existing hooks; `global` manages user-level skills for the selected platforms plus Claude Code and OpenCode user commands; `both` preflights and updates both surfaces as one operation. Supplying `--platform` restricts detection and repair to exactly those platforms.
 
@@ -147,7 +143,7 @@ Fetch and follow instructions from https://raw.githubusercontent.com/ricoyudog/C
 /corgi:propose Add user authentication with JWT and refresh tokens
 ```
 
-Review and explicitly approve the planning package after `propose` returns. Propose stops at that handoff; only a later explicit `apply` or `loop` invocation may begin implementation. Then continue with `verify` → `review` → `human-qa` → `archive`, one Task Group at a time.
+Review and explicitly approve the planning package after `propose` returns. Propose stops at that handoff; only a later explicit `apply` invocation may begin implementation. Apply implements, verifies, reviews, and commits each Task Group before advancing. After the run completes, continue with `human-qa` → `archive`.
 
 ---
 
@@ -157,11 +153,10 @@ Review and explicitly approve the planning package after `propose` returns. Prop
 | -------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `/corgi-propose`     | Generate planning artifacts and issues, then stop for explicit review before implementation                       |
 | `/corgi-update`      | Reconcile existing planning artifacts, with one confirmed artifact-scoped diff at a time                           |
-| `/corgi-ready`       | Check deterministic planning integrity before apply or loop                                                        |
-| `/corgi-apply`       | Execute one Task Group, sync closeout, pause for review                                                            |
+| `/corgi-ready`       | Check deterministic planning integrity before apply                                                                |
 | `/corgi-verify`      | Automated quality gate — lint, build, tests, spec coverage                                                         |
 | `/corgi-review`      | 5-axis review with evidence gathering, approve/reject/discuss                                                      |
-| `/corgi-loop`        | Run Contract v2 pipeline — CAS-safe apply, evidence, review, commit, recovery, and finalization                    |
+| `/corgi-apply`       | Only implementation entry — CAS-safe per-group work, evidence, review, commit, recovery, and finalization          |
 | `/corgi-converge`    | Compare fresh planning/Git/evidence and append one confirmed successor Task Group when implementation has a gap    |
 | `/corgi-human-qa`    | Human QA gate — route to specialized QA atoms (smoke, UI, API, CLI, backend, exploratory)                          |
 | `/corgi-archive`     | Close issues, sync delta specs, extract knowledge, cleanup                                                         |
@@ -203,10 +198,8 @@ For `ready`, exit code `0` means ready, `1` means a planning blocker, and `2` me
 <table>
   <tr>
     <td width="50%">
-      <b>📋 Checkpoint-based Apply</b><br/>
-      One Task Group at a time, pauses for review — never lose control.
-      <br/><br/>
-      <img src="docs/articles/images/group check point.png" alt="Checkpoint-based apply" width="100%"/>
+      <b>📋 Per-Group Apply Checkpoints</b><br/>
+      Every Task Group is verified, reviewed, and committed separately before apply advances.
     </td>
     <td width="50%">
       <b>📌 Automatic Issue Tracking</b><br/>
@@ -296,7 +289,7 @@ Hooks give you **lifecycle control** over AI sessions — validate context befor
 | `pre-bash` | Before shell commands | Block destructive ops, enforce allowlists |
 | `post-compact` | After context compaction | Ensure session-bridge is updated |
 | `stop-check` | Before session ends | Validate shutdown state, flush memory |
-| `loop-check` | Before a loop-driven session ends | Inspect canonical Run Contract v2 state and return the required next action |
+| `loop-check` | Before an apply-driven session ends | Inspect canonical Run Contract v2 state and return the required next action |
 
 Claude Code and Codex have awaited lifecycle hooks, so a non-zero `stop-check` or `loop-check` exit can stop completion directly. OpenCode 1.18.x does not expose an awaited stop hook: its generated plugin observes `session.idle`, preserves hook stdout/stderr, and calls `session.promptAsync` to re-enter the interactive session when work remains. The authoritative hard gates are still `corgispec ready` and the canonical `corgispec loop ...` state transitions. A one-shot `opencode run` can tear down before that asynchronous re-entry completes, so automation should explicitly inspect the ready/loop CLI result instead of treating idle as completion.
 
@@ -316,20 +309,20 @@ Hooks are **opt-in** — existing projects work without them. Run `corgispec hoo
 
 ---
 
-## 🔄 Automated Pipeline (Loop)
+## 🔄 Automated Pipeline (Apply)
 
-Manually running `/corgi:apply` → `/corgi:verify` → `/corgi:review` for every Task Group works — but it means 3+ command invocations per group. The **Corgi Loop** automates this.
+**Corgi Apply is the only public implementation entry.** It uses the Run Contract v2 loop engine internally, and one invocation drives every Task Group through implementation, verification, review evidence, and a dedicated commit.
 
 ```text
 # One command to rule them all:
-/corgi:loop <change-name>
+/corgi:apply <change-name>
 ```
 
-**What it does:** Executes one bounded **Task Group attempt** (apply → verify → review evidence), then submits it to the deterministic Run Contract v2 CLI. Skills never write lifecycle files. The CLI owns locking, CAS, event replay, evidence validation, commit acknowledgement, and finalization.
+**What it does:** Executes one bounded **Task Group attempt** (implement → verify → review evidence), then submits it to the deterministic Run Contract v2 CLI. Skills never write lifecycle files. The CLI owns locking, CAS, event replay, evidence validation, commit acknowledgement, and finalization.
 
 | Mode | Behavior |
 |---|---|
-| **Approve and commit** | Clean evidence/review → `awaiting_group_commit`; the CLI verifies a clean, matching commit tree before advancing |
+| **Required group commit** | Clean evidence/review → `awaiting_group_commit`; one dedicated, matching commit is required before advancing |
 | **Auto-fix loop** | Self-driven failure with retry budget → `fixing`; hook-driven or exhausted retries stop deterministically |
 | **Crash recovery** | Fsynced events replay into atomic snapshots; only a truncated final JSONL record can be repaired automatically |
 
@@ -339,13 +332,13 @@ Manually running `/corgi:apply` → `/corgi:verify` → `/corgi:review` for ever
 |---|---|---|
 | Driving mode | Hook-driven (stop-based) | Self-driven (`selfDriven: true`) |
 | On failure | Stops immediately | Auto-retry up to 3 times |
-| Command | `/corgi:loop <name>` | `/corgi-loop <name>` |
+| Command | `/corgi:apply <name>` | `/corgi-apply <name>` |
 
 Canonical state is stored under `.corgi/loop/<change>/`, with atomic per-run snapshots and append-only event/triage logs. Every mutation carries `stateRevision + nonce`; stale tokens and conflicting sessions leave the filesystem unchanged.
 
 **Design principle:** *Hard Logic Orchestrates, LLM Executes.* The CLI owns state-machine transitions, validation, evidence identity, locks, recovery, and circuit breakers. The LLM skill executes bounded work and submits truthful evidence through the CLI.
 
-→ **[Full Loop Guide](.opencode/skills/compounds/corgispec-loop/SKILL.md)**
+→ **[Full Apply Guide](.opencode/skills/compounds/corgispec-apply/SKILL.md)**
 
 ---
 
@@ -360,7 +353,7 @@ Skills are organized in a **composable 3-tier hierarchy**:
 | Tier | Role | Dependencies |
 |---|---|---|
 | **Atom** | Single reusable operation (resolve config, parse tasks) | None |
-| **Molecule** | Workflow combining atoms (propose, apply, review) | Atoms only |
+| **Molecule** | Workflow combining atoms (propose, verify, review) | Atoms only |
 | **Compound** | End-to-end orchestration (the full pipeline) | Molecules only |
 
 Each skill has two files:
@@ -394,7 +387,7 @@ Pipeline: `proposal → specs → design → tasks → apply`
 Key decisions:
 - **Capability-driven specs** — one spec file per capability, traceable contracts
 - **Delta spec model** — ADDED/MODIFIED/REMOVED/RENAMED operations accumulate into canonical specs
-- **Task Groups as checkpoints** — each `## N. Group` = one dashboard section, one apply session, one review cycle
+- **Task Groups as checkpoints** — each `## N. Group` = one dashboard section, one apply checkpoint, one dedicated commit
 
 <details>
 <summary>Creating a custom schema</summary>
@@ -453,7 +446,7 @@ Set `schema: my-schema` in `config.yaml`.
 | Capability | Vanilla OpenSpec | Coding Corgi Flow |
 |---|---|---|
 | Issue tracking | None | One Issue per change via `gh` or `glab` |
-| Apply behavior | All tasks at once | Checkpoint-based: one group, pause, review |
+| Implementation behavior | All tasks at once | Apply verifies, reviews, and commits one group before advancing automatically |
 | Progress sync | Local checkboxes only | One managed dashboard plus lifecycle comments |
 | Workflow labels | None | `backlog → todo → in-progress → review → done` |
 | Review | None | 5-axis automated checks + verify gate + decision loop |
@@ -465,7 +458,7 @@ Set `schema: my-schema` in `config.yaml`.
 | Memory health | None | 14-check lint (freshness, caps, links, extraction) |
 | Skill architecture | Flat files | Atoms → Molecules → Compounds with schema validation |
 | Session hooks | None | Lifecycle hooks (pre-write, pre-bash, session-start…) + context gates |
-| Automated pipeline | None | One-command loop: apply, verify, review per group with auto-approve/fix |
+| Automated pipeline | None | One-command apply: implement, verify, review, and commit per group with auto-fix |
 | Plugin marketplace | None | Claude Code `/plugin install` + Codex marketplace |
 
 ---
@@ -502,11 +495,11 @@ rules:
     - Max 2 hours per task
 ```
 
-`schema` selects only the OpenSpec workflow; it no longer selects an issue tracker. `corgi.taskArtifactId` may be omitted only when the schema exposes an artifact whose id is exactly `tasks`. Apply and ready require that artifact to resolve to one concrete file. The installer preserves project-owned `context` and `rules`.
+`schema` selects only the OpenSpec workflow; it no longer selects an issue tracker. `corgi.taskArtifactId` may be omitted only when the schema exposes an artifact whose id is exactly `tasks`. Task-group inspection and ready require that artifact to resolve to one concrete file. The installer preserves project-owned `context` and `rules`.
 
 ### Migrating from CorgiSpec 2.x
 
-1. Upgrade to Node >=20.19.0 and OpenSpec >=1.6.0 <2.0.0, then install `corgispec` (stable `3.0.0`) or pin `corgispec@3.0.0` exactly. `latest` and `next` resolve to the same stable version.
+1. Upgrade to Node >=20.19.0 and OpenSpec >=1.6.0 <2.0.0, then install `corgispec` (stable `3.0.1`) or pin `corgispec@3.0.1` exactly. `latest` and `next` resolve to the same stable version.
 2. Keep your existing schema name, but make the inferred tracker explicit:
 
    ```yaml

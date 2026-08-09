@@ -76,7 +76,7 @@ Before writing the first artifact, create and maintain a visible planning checkl
 
 - Write `.worktree.yaml` under `changeRoot` when isolation is active and verify it with `git worktree list`.
 - Run `corgispec ready "<change>" --strict --json` and require ready.
-- Report created artifact IDs and paths, the single GitHub Issue URL or the skip reason, `changeRoot`, worktree, and the matching platform command the user may invoke later for apply or loop. For Codex, explicitly report `$corgispec-gh-apply <change>` or `$corgispec-loop <change>`.
+- Report created artifact IDs and paths, the single GitHub Issue URL or the skip reason, `changeRoot`, worktree, and the matching platform apply command the user may invoke later. For Codex, explicitly report `$corgispec-apply <change>`.
 
 ## Terminal handoff boundary
 
@@ -85,5 +85,5 @@ Before writing the first artifact, create and maintain a visible planning checkl
 - Propose is a planning-only workflow and is terminal for the current turn.
 - A strict `ready` result confirms planning integrity; it is not user approval to implement.
 - An original request phrased as "fix", "implement", or "build" supplies planning intent only and does not authorize implementation after propose.
-- After reporting, end the current turn. Do not invoke apply, loop, implementation, review, archive, commit, push, or publish actions.
-- Implementation may begin only after a later explicit user request for the matching apply or loop workflow.
+- After reporting, end the current turn. Do not invoke apply, implementation, review, archive, commit, push, or publish actions.
+- Implementation may begin only after a later explicit user request for the apply workflow.

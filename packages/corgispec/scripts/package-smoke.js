@@ -122,19 +122,34 @@ function verifyAssetManifest(assetsDirectory) {
     "skills/molecules/corgispec-gh-propose/SKILL.md",
     "skills/molecules/corgispec-update/SKILL.md",
     "skills/molecules/corgispec-converge/SKILL.md",
-    "skills/compounds/corgispec-loop/SKILL.md",
+    "skills/compounds/corgispec-apply/SKILL.md",
     "commands/opencode/corgi-propose.md",
     "commands/opencode/corgi-ready.md",
     "commands/opencode/corgi-update.md",
     "commands/opencode/corgi-converge.md",
-    "commands/opencode/corgi-loop.md",
+    "commands/opencode/corgi-apply.md",
     "commands/claude/corgi/propose.md",
     "commands/claude/corgi/ready.md",
     "commands/claude/corgi/update.md",
     "commands/claude/corgi/converge.md",
-    "commands/claude/corgi/loop.md",
+    "commands/claude/corgi/apply.md",
   ]) {
     if (!declaredFiles.includes(required)) fail(`required asset ${required} is missing`);
+  }
+  for (const retired of [
+    "commands/opencode/corgi-loop.md",
+    "commands/claude/corgi/loop.md",
+  ]) {
+    if (declaredFiles.includes(retired)) fail(`retired asset ${retired} is still packaged`);
+  }
+  for (const retiredPrefix of [
+    "skills/molecules/corgispec-apply-change/",
+    "skills/molecules/corgispec-gh-apply/",
+    "skills/compounds/corgispec-loop/",
+  ]) {
+    if (declaredFiles.some((path) => path.startsWith(retiredPrefix))) {
+      fail(`retired skill ${retiredPrefix} is still packaged`);
+    }
   }
 
   return declaredFiles.length;
@@ -366,13 +381,11 @@ try {
     "status",
     "instructions",
     "propose",
-    "apply",
     "review",
     "archive",
     "doctor",
     "update",
     "ready",
-    "loop",
     "converge",
   ]) {
     if (!new RegExp(`(?:^|\\s)${command}(?:\\s|$)`, "m").test(help)) {
@@ -380,6 +393,10 @@ try {
     }
     run(process.execPath, [binPath, command, "--help"], { cwd: consumerDirectory });
   }
+  if (/^\s+apply\b/m.test(help)) fail("internal apply command is visible in top-level help");
+  if (/^\s+loop\b/m.test(help)) fail("internal loop command is visible in top-level help");
+  run(process.execPath, [binPath, "apply", "--help"], { cwd: consumerDirectory });
+  run(process.execPath, [binPath, "loop", "--help"], { cwd: consumerDirectory });
 
   const skills = JSON.parse(
     run(process.execPath, [binPath, "list", "--skills", "--json", "--path", installedRoot], {
@@ -392,7 +409,7 @@ try {
     "corgispec-gh-propose",
     "corgispec-update",
     "corgispec-converge",
-    "corgispec-loop",
+    "corgispec-apply",
   ]
     .every((slug) => skills.some((skill) => skill.slug === slug))) {
     fail("packaged skill inventory is missing a 3.0 lifecycle skill");

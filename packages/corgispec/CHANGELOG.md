@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.1] - 2026-08-09
+
+### Changed
+
+- `corgi-apply` is now the sole user-facing implementation workflow after propose. It drives the existing Run Contract v2 loop engine across every Task Group through implementation, verification, review evidence, a dedicated commit, optional tracker checkpoint, and finalization.
+- Every approved Task Group must have its own clean, matching commit acknowledged by Run Contract v2 before tracker synchronization or the next group can begin.
+- The hidden `corgispec apply` read-only query and `corgispec loop ...` state-machine API remain callable for internal lifecycle compatibility but are not user workflow entries.
+
+### Removed
+
+- Removed `/corgi-loop`, `/corgi:loop`, and `corgispec-loop` from packaged user commands and skills.
+- The provider-specific `corgispec-apply-change` and `corgispec-gh-apply` skills remain retired.
+- Managed bootstrap updates remove only signature-proven retired loop commands and Corgi-identified retired skills; custom same-path content remains a conflict and is never silently deleted.
+
+### Migration
+
+- Install `corgispec@3.0.1`, then run `corgispec bootstrap --mode update` for each managed project and selected user platform. Start or resume implementation with the matching `corgi-apply` command or skill.
+
 ## [3.0.0] - 2026-08-06
 
 ### Added

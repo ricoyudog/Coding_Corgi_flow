@@ -87,6 +87,22 @@ describe("bundle-assets", () => {
       resolve(REPO_ROOT, ".opencode/skills/atoms/corgispec-memory-init/templates/wiki/hot.md")
     );
 
+    expectBundledFile(
+      bundleRoot,
+      "commands/opencode/corgi-apply.md",
+      resolve(REPO_ROOT, ".opencode/commands/corgi-apply.md")
+    );
+    expectBundledFile(
+      bundleRoot,
+      "commands/claude/corgi/apply.md",
+      resolve(REPO_ROOT, ".claude/commands/corgi/apply.md")
+    );
+    expect(existsSync(resolve(bundleRoot, "commands/opencode/corgi-loop.md"))).toBe(false);
+    expect(existsSync(resolve(bundleRoot, "commands/claude/corgi/loop.md"))).toBe(false);
+    expect(existsSync(resolve(bundleRoot, "skills/molecules/corgispec-apply-change"))).toBe(false);
+    expect(existsSync(resolve(bundleRoot, "skills/molecules/corgispec-gh-apply"))).toBe(false);
+    expect(existsSync(resolve(bundleRoot, "skills/compounds/corgispec-apply/SKILL.md"))).toBe(true);
+    expect(existsSync(resolve(bundleRoot, "skills/compounds/corgispec-loop"))).toBe(false);
     expect(existsSync(resolve(ASSETS_ROOT, "schemas/skill-meta.schema.json"))).toBe(true);
   });
 });
@@ -421,6 +437,31 @@ isolation:
     expect(classifications).toMatchObject([
       { path: custom.path, state: "ambiguous" },
       { path: owned.path, state: "obsolete" },
+    ]);
+  });
+
+  it("retires only signature-proven project-local loop commands", () => {
+    const opencodeLoop = LEGACY_PROJECT_ASSET_CATALOG.find(
+      (entry) => entry.path === ".opencode/commands/corgi-loop.md"
+    )!;
+    const claudeLoop = LEGACY_PROJECT_ASSET_CATALOG.find(
+      (entry) => entry.path === ".claude/commands/corgi/loop.md"
+    )!;
+    writeFile(
+      resolve(caseDir, opencodeLoop.path),
+      "Run the corgispec-loop workflow with state in .corgi/loop.\n",
+    );
+    writeFile(resolve(caseDir, claudeLoop.path), "# custom loop command\n");
+
+    const classifications = classifyManagedProjectFiles({
+      targetDir: caseDir,
+      expectedFiles: [],
+      obsoleteCandidates: [opencodeLoop, claudeLoop],
+    });
+
+    expect(classifications).toMatchObject([
+      { path: claudeLoop.path, state: "ambiguous" },
+      { path: opencodeLoop.path, state: "obsolete" },
     ]);
   });
 

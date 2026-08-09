@@ -5,7 +5,6 @@ import { resolve } from "node:path";
 const GATE_PATTERN = /\*\*Context Gate\*\*.*isolation\.mode.*active changes.*current branch/;
 
 const GATED_SKILLS = [
-  "corgispec-apply-change",
   "corgispec-archive-change",
   "corgispec-verify",
   "corgispec-review",
@@ -28,12 +27,6 @@ describe("validate gate check", () => {
       expect(content).toMatch(GATE_PATTERN);
     });
   }
-
-  it("corgi-apply.md command wrapper contains the canonical Context Gate", () => {
-    const cmdPath = resolve(PROJECT_ROOT, ".opencode/commands/corgi-apply.md");
-    const content = readFileSync(cmdPath, "utf-8");
-    expect(content).toMatch(GATE_PATTERN);
-  });
 
   it("all gated skills are byte-identical across .opencode and .claude directories", () => {
     for (const skill of GATED_SKILLS) {

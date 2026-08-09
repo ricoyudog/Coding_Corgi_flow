@@ -20,8 +20,6 @@ const CLAUDE_SKILLS = resolve(REPO_ROOT, ".claude/skills");
 const TRACKER_SKILLS = [
   "corgispec-gh-propose",
   "corgispec-propose",
-  "corgispec-gh-apply",
-  "corgispec-apply-change",
   "corgispec-gh-review",
   "corgispec-review",
   "corgispec-verify",
@@ -35,8 +33,6 @@ const TRACKER_SKILLS = [
 const CONTRACT_FILES = [
   "molecules/corgispec-gh-propose/SKILL.md",
   "molecules/corgispec-propose/references/gitlab-issues.md",
-  "molecules/corgispec-gh-apply/references/issue-sync.md",
-  "molecules/corgispec-apply-change/references/issue-sync.md",
   "molecules/corgispec-gh-review/SKILL.md",
   "molecules/corgispec-review/SKILL.md",
   "molecules/corgispec-verify/SKILL.md",
@@ -48,8 +44,6 @@ const CONTRACT_FILES = [
 ] as const;
 
 const LOOP_GUARDED_LIFECYCLE_SKILLS = [
-  "corgispec-gh-apply",
-  "corgispec-apply-change",
   "corgispec-gh-review",
   "corgispec-review",
   "corgispec-gh-archive",
@@ -74,12 +68,6 @@ describe("single-Issue tracker contract", () => {
   const glPropose = read(
     resolve(OPENCODE_SKILLS, "molecules/corgispec-propose/references/gitlab-issues.md"),
   );
-  const ghApply = read(
-    resolve(OPENCODE_SKILLS, "molecules/corgispec-gh-apply/references/issue-sync.md"),
-  );
-  const glApply = read(
-    resolve(OPENCODE_SKILLS, "molecules/corgispec-apply-change/references/issue-sync.md"),
-  );
   const ghReview = read(resolve(OPENCODE_SKILLS, "molecules/corgispec-gh-review/SKILL.md"));
   const glReview = read(resolve(OPENCODE_SKILLS, "molecules/corgispec-review/SKILL.md"));
   const ghArchive = read(resolve(OPENCODE_SKILLS, "molecules/corgispec-gh-archive/SKILL.md"));
@@ -102,32 +90,15 @@ describe("single-Issue tracker contract", () => {
     expect(glPropose).toMatch(/issue:\n\s+iid: <issue-iid>\n\s+url: <issue-url>/);
   });
 
-  it("rejects legacy tracker state before implementation or tracker mutation", () => {
+  it("rejects legacy tracker state before tracker mutation", () => {
     for (const file of CONTRACT_FILES) {
       const contract = read(resolve(OPENCODE_SKILLS, file));
       expect(contract, file).toMatch(/legacy `parent` or `groups`|legacy `parent`\/`groups`/i);
       expect(contract, file).toMatch(/unsupported|stop/i);
     }
-
-    expect(ghApply).toContain("stop before implementation or any remote mutation");
-    expect(glApply).toContain("stop before implementation or any remote mutation");
   });
 
-  it("keeps the task artifact authoritative and preserves unmanaged body content", () => {
-    for (const apply of [ghApply, glApply]) {
-      expect(apply).toContain("The task artifact always wins");
-      expect(apply).toContain("exactly one ordered");
-      expect(apply).toContain("preserve all surrounding content");
-      expect(apply).toContain("Apply Checkpoint: Group N");
-    }
-  });
-
-  it("defines the single-card lifecycle through archive", () => {
-    expect(ghApply).toContain("`backlog` for the first group or `todo`");
-    expect(ghApply).toContain("from `in-progress` to `review`");
-    expect(glApply).toContain("`workflow::backlog` for the first group or `workflow::todo`");
-    expect(glApply).toContain("from `workflow::in-progress` to `workflow::review`");
-
+  it("defines review and archive transitions on the single Issue", () => {
     expect(ghReview).toContain("move the Issue from `review` to `todo`");
     expect(ghReview).toContain("keep it in `review` for Human QA and archive");
     expect(glReview).toContain("move `workflow::review` to `workflow::todo`");

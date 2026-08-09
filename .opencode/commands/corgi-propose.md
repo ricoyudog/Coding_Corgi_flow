@@ -19,5 +19,5 @@ description: Create a complete CorgiSpec planning package and optional tracker h
 - Propose is a planning-only workflow and is terminal for the current turn.
 - A strict `ready` result confirms planning integrity; it is not user approval to implement.
 - An original request phrased as "fix", "implement", or "build" supplies planning intent only and does not authorize implementation after propose.
-- After reporting, end the current turn. Do not invoke apply, loop, implementation, review, archive, commit, push, or publish actions.
-- Implementation may begin only after a later explicit user request for `/corgi-apply <change>` or `/corgi-loop <change>`.
+- After reporting, end the current turn. Do not invoke apply, implementation, review, archive, commit, push, or publish actions.
+- Implementation may begin only after a later explicit user request for `/corgi-apply <change>`.

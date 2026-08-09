@@ -5,7 +5,7 @@ Use this file as the entry point when an LLM agent installs or upgrades CorgiSpe
 ## Runtime requirements
 
 - Node.js >=20.19.0
-- `corgispec@3.0.0`
+- `corgispec@3.0.1`
 - `@fission-ai/openspec` >=1.6.0 <2.0.0
 
 OpenSpec 1.3–1.5 are unsupported; do not continue with a compatibility fallback.
@@ -18,7 +18,7 @@ openspec --version
 corgispec --version
 ```
 
-The unqualified package, `corgispec@latest`, and `corgispec@next` resolve to stable `3.0.0`. Use `npm install -g corgispec@3.0.0` when an exact, reproducible version is required.
+The unqualified package, `corgispec@latest`, and `corgispec@next` resolve to stable `3.0.1`. Use `npm install -g corgispec@3.0.1` when an exact, reproducible version is required.
 
 ## Fresh bootstrap
 
@@ -94,7 +94,7 @@ corgispec doctor --path /path/to/project
 corgispec ready <change> --path /path/to/project --strict --json
 ```
 
-Exit code `0` means ready, `1` means the planning contract has blockers, and `2` means an environment or OpenSpec contract error. Resolve blockers before apply or loop.
+Exit code `0` means ready, `1` means the planning contract has blockers, and `2` means an environment or OpenSpec contract error. Resolve blockers before apply, then use `/corgi:apply` (Claude Code), `/corgi-apply` (OpenCode), or `$corgispec-apply` (Codex). Apply runs every Task Group through the internal Run Contract v2 loop engine and requires a dedicated acknowledged commit before advancing.
 
 ## Planning updates and OpenSpec Stores
 
@@ -138,7 +138,7 @@ npm run release:check
 npm pack
 ```
 
-The release check rebuilds bundled assets, builds and typechecks the package, runs the complete test and coverage gates, creates a temporary npm tarball, installs it into a temporary project, and smoke-tests the packaged CLI and asset checksums. The optional final `npm pack` writes `corgispec-3.0.0.tgz` for release verification or offline installation; normal consumers install the stable package with `corgispec`.
+The release check rebuilds bundled assets, builds and typechecks the package, runs the complete test and coverage gates, creates a temporary npm tarball, installs it into a temporary project, and smoke-tests the packaged CLI and asset checksums. The optional final `npm pack` writes `corgispec-3.0.1.tgz` for release verification or offline installation; normal consumers install the stable package with `corgispec`.
 
 ## Rules
 

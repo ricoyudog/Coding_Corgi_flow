@@ -33,8 +33,6 @@ const SKILLS = [
 ] as const;
 
 const WORKFLOW_HOOK_SKILLS = [
-  { slug: "corgispec-apply-change", tier: "molecules", stop: true },
-  { slug: "corgispec-gh-apply", tier: "molecules", stop: true },
   { slug: "corgispec-propose", tier: "molecules", stop: false },
   { slug: "corgispec-gh-propose", tier: "molecules", stop: false },
   { slug: "corgispec-update", tier: "molecules", stop: false },
@@ -42,7 +40,7 @@ const WORKFLOW_HOOK_SKILLS = [
   { slug: "corgispec-archive-change", tier: "molecules", stop: false },
   { slug: "corgispec-gh-archive", tier: "molecules", stop: false },
   { slug: "corgispec-human-qa", tier: "molecules", stop: false },
-  { slug: "corgispec-loop", tier: "compounds", stop: false },
+  { slug: "corgispec-apply", tier: "compounds", stop: false },
 ] as const;
 
 const PRE_WRITE_HOOK = [{
@@ -132,7 +130,7 @@ describe("workflow skill hook frontmatter", () => {
           ? { PreToolUse: PRE_WRITE_HOOK, Stop: STOP_HOOK }
           : { PreToolUse: PRE_WRITE_HOOK },
       );
-      if (slug === "corgispec-loop") {
+      if (slug === "corgispec-apply") {
         expect(readFrontmatter(canonical).metadata).toMatchObject({
           "opencode/autoinvoke": "false",
         });
@@ -194,7 +192,7 @@ describe("planning workflow guardrails", () => {
     expect(ready).toContain("State explicitly that the review made no file changes");
   });
 
-  it("keeps every propose provider planning-only until a later explicit apply or loop request", () => {
+  it("keeps every propose provider planning-only until a later explicit apply request", () => {
     const sharedBoundary = [
       "visible planning checklist",
       "Throughout propose, keep `HEAD` unchanged.",
@@ -209,12 +207,14 @@ describe("planning workflow guardrails", () => {
 
     for (const markdown of [propose, ghPropose]) {
       for (const contract of sharedBoundary) expect(markdown).toContain(contract);
-      expect(markdown).toContain("Do not invoke apply, loop, implementation, review, archive, commit, push, or publish actions.");
+      expect(markdown).toContain("Do not invoke apply, implementation, review, archive, commit, push, or publish actions.");
     }
-    expect(propose).toContain("`$corgispec-apply-change <change>`");
-    expect(ghPropose).toContain("`$corgispec-gh-apply <change>`");
-    expect(propose).toContain("`$corgispec-loop <change>`");
-    expect(ghPropose).toContain("`$corgispec-loop <change>`");
+    expect(propose).toContain("`$corgispec-apply <change>`");
+    expect(ghPropose).toContain("`$corgispec-apply <change>`");
+    expect(propose).not.toContain("$corgispec-loop");
+    expect(ghPropose).not.toContain("$corgispec-loop");
+    expect(propose).not.toContain("corgispec-apply-change");
+    expect(ghPropose).not.toContain("corgispec-gh-apply");
   });
 
   it("blocks active v1 runs and constrains update writes to authoritative artifacts", () => {
@@ -267,6 +267,8 @@ describe("planning workflow guardrails", () => {
     }
     expect(openCodePropose).toContain("`/corgi-apply <change>`");
     expect(claudePropose).toContain("`/corgi:apply <change>`");
+    expect(openCodePropose).not.toContain("/corgi-loop");
+    expect(claudePropose).not.toContain("/corgi:loop");
 
     expect(read(resolve(REPO_ROOT, ".opencode/commands/corgi-ready.md"))).toContain(
       "**corgispec-ready**"

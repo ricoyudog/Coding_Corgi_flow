@@ -1,0 +1,15 @@
+{
+  "slug": "corgispec-apply",
+  "tier": "compound",
+  "version": "2.1.0",
+  "platform": "universal",
+  "description": "Unified apply executor backed by Run Contract v2 with one required commit per approved Task Group.",
+  "depends_on": [
+    "corgispec-verify",
+    "corgispec-review-loop"
+  ],
+  "installation": {
+    "targets": ["opencode", "claude", "codex"],
+    "base_path": "compounds/corgispec-apply"
+  }
+}
