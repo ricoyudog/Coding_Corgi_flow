@@ -135,11 +135,12 @@ jobs:
 
           latest_before="$(npm view corgispec dist-tags.latest --registry="$registry" --silent)"
           next_before="$(npm view corgispec dist-tags.next --registry="$registry" --silent)"
-          if [[ -z "$latest_before" || -z "$next_before" ]]; then
-            echo "::error::Could not resolve the existing npm latest and next dist-tags."
+          if [[ -z "$latest_before" ]]; then
+            echo "::error::Could not resolve the existing npm latest dist-tag."
             exit 1
           fi
-          printf 'npm latest is %s and next is %s before publication.\n' "$latest_before" "$next_before"
+          printf 'npm latest is %s and next is %s before publication.\n' \
+            "$latest_before" "${next_before:-<unset>}"
 
       - name: Build immutable publish tarball
         id: package
