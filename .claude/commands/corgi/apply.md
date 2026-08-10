@@ -1,15 +1,10 @@
 ---
 name: "Corgi: Apply"
-description: Implement one CorgiSpec Task Group using authoritative CLI paths
+description: Apply a CorgiSpec change through all Task Groups with per-group commits
 category: Workflow
-tags: [workflow, apply]
+tags: [workflow, apply, run-contract]
 ---
 
-**Input**: Accept an optional change name; resolve exactly one when omitted.
+`/corgi:apply` is the sole user-facing implementation entry for the **corgispec-apply** workflow. Pass the optional change name and current session identity through unchanged. Use hook-driven mode unless the user explicitly selects self-driven mode. The skill uses the internal Run Contract v2 loop engine, and every approved Task Group must receive its own acknowledged commit before apply advances.
 
-1. **Context Gate**: If session context already contains `isolation.mode`, active changes with worktree paths, and the current branch, reuse it. Otherwise read isolation configuration and resolve the existing worktree.
-2. Run `corgispec status "<change>" --json` from the selected worktree.
-3. Require `changeRoot`, `artifactPaths`, `contextFiles`, `taskArtifactId`, `trackingProvider`, and `trackingProviderSource`. If absent, stop and request a CLI upgrade.
-4. Route only by normalized `trackingProvider`: `github` → **corgispec-gh-apply**; `gitlab` or `none` → **corgispec-apply-change**.
-5. Pass the status JSON and input through unchanged. Never route by `schemaName` or infer a planning path.
-6. Verify exactly one group was processed, task state changed only at CLI-returned paths, tracker sync matched the provider, and isolated output stayed in its worktree.
+Never write `.corgi/loop/**`, `state.json`, `verify.json`, or `review.json` directly; every canonical mutation must be performed by `corgispec loop`.

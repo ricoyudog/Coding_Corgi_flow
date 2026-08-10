@@ -28,7 +28,7 @@ export function createApplyCommand(
   const resolverFactory = dependencies.createResolver ?? ((adapter) => createArtifactResolver(adapter));
 
   cmd
-    .description("Output instructions for implementing the next task group")
+    .description("Internal read-only query for the next task group")
     .argument("[name]", "Change name")
     .option("--json", "Output as JSON")
     .option("--store <id>", "OpenSpec Store id")
@@ -56,7 +56,7 @@ export function createApplyCommand(
           if (opts.json) {
             console.log(JSON.stringify({ status: "not_ready", readiness: report }, null, 2));
           } else {
-            console.error("Change is not ready to apply. Run `corgispec ready` for details.");
+            console.error("Change is not ready for task-group inspection. Run `corgispec ready` for details.");
           }
           process.exitCode = 1;
           return;

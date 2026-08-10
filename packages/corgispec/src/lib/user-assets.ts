@@ -45,9 +45,15 @@ export interface PlanUserAssetsOptions {
 }
 
 const ALL_PLATFORMS: Platform[] = ["claude", "opencode", "codex"];
-const LEGACY_USER_COMMANDS: Partial<Record<CommandPlatform, string[]>> = {
-  claude: ["human-qa.md"],
+const RETIRED_USER_COMMANDS: Partial<Record<CommandPlatform, string[]>> = {
+  claude: ["human-qa.md", "loop.md"],
+  opencode: ["corgi-loop.md"],
 };
+const RETIRED_USER_SKILLS = [
+  "corgispec-apply-change",
+  "corgispec-gh-apply",
+  "corgispec-loop",
+] as const;
 
 export function planUserAssets(options: PlanUserAssetsOptions): UserAssetPlan {
   const requested = options.platforms
@@ -56,6 +62,7 @@ export function planUserAssets(options: PlanUserAssetsOptions): UserAssetPlan {
   const actions: UserAssetAction[] = [];
   const conflicts: Array<{ path: string; reason: string }> = [];
   const skillSources = listBundledSkillEntries(resolve(options.assetsRoot, "skills"));
+  const currentSkillNames = new Set(skillSources.map((skill) => skill.name));
 
   for (const platform of requested) {
     const skillDir = options.userSkillDirs?.[platform] ?? getSkillDir(platform);
@@ -74,6 +81,25 @@ export function planUserAssets(options: PlanUserAssetsOptions): UserAssetPlan {
       actions.push(action);
       if (action.status === "ambiguous") {
         conflicts.push({ path: target, reason: action.reason ?? "Skill ownership is ambiguous" });
+      }
+    }
+
+    for (const name of RETIRED_USER_SKILLS) {
+      if (currentSkillNames.has(name)) continue;
+      const target = resolve(skillDir, name);
+      if (!existsSync(target)) continue;
+      const status = classifyRetiredSkill(target, name);
+      const action: UserAssetAction = {
+        platform,
+        kind: "skill",
+        name,
+        target,
+        status: status.status,
+        reason: status.reason,
+      };
+      actions.push(action);
+      if (action.status === "ambiguous") {
+        conflicts.push({ path: target, reason: action.reason ?? "Retired skill ownership is ambiguous" });
       }
     }
 
@@ -106,7 +132,7 @@ export function planUserAssets(options: PlanUserAssetsOptions): UserAssetPlan {
       }
     }
 
-    for (const legacyName of LEGACY_USER_COMMANDS[commandPlatform] ?? []) {
+    for (const legacyName of RETIRED_USER_COMMANDS[commandPlatform] ?? []) {
       if (currentNames.has(legacyName)) continue;
       const target = resolve(commandDir, legacyName);
       if (!existsSync(target)) continue;
@@ -151,12 +177,12 @@ export function applyUserAssetPlan(
   }
 
   for (const action of plan.actions) {
-    if (action.kind !== "command") continue;
     if (action.status === "obsolete") {
       rmSync(action.target, { recursive: true, force: true });
       removed.push(action.target);
       continue;
     }
+    if (action.kind !== "command") continue;
     if (!action.source) continue;
     mkdirSync(dirname(action.target), { recursive: true });
     cpSync(action.source, action.target);
@@ -190,6 +216,29 @@ function classifySkill(
     return { status: "outdated" };
   }
   return { status: "ambiguous", reason: "Existing skill does not carry a matching Corgi identity" };
+}
+
+function classifyRetiredSkill(
+  target: string,
+  expectedSlug: string,
+): { status: "obsolete" | "ambiguous"; reason: string } {
+  const metadataPath = resolve(target, "skill.meta.json");
+  if (existsSync(metadataPath)) {
+    try {
+      const metadata = JSON.parse(readFileSync(metadataPath, "utf8")) as { slug?: unknown };
+      return metadata.slug === expectedSlug
+        ? { status: "obsolete", reason: "Known retired Corgi skill" }
+        : { status: "ambiguous", reason: "Retired skill metadata has a different identity" };
+    } catch {
+      return { status: "ambiguous", reason: "Retired skill metadata is malformed" };
+    }
+  }
+
+  const content = safeRead(resolve(target, "SKILL.md"));
+  if (content && new RegExp(`^name:\\s*["']?${escapeRegExp(expectedSlug)}["']?\\s*$`, "mu").test(content)) {
+    return { status: "obsolete", reason: "Known retired Corgi skill" };
+  }
+  return { status: "ambiguous", reason: "Retired skill path has custom content" };
 }
 
 function classifyCommand(

@@ -19,7 +19,7 @@ The result is a structured memory system that:
 - Costs ≤ 3000 tokens at session startup
 - Is human-readable in Obsidian (valid markdown with wikilinks)
 - Self-compacts via size caps and rotation rules
-- Integrates with the Corgi lifecycle (apply closeout, archive extraction)
+- Integrates with the Corgi lifecycle (apply checkpoints, archive extraction)
 
 ## When to Use
 
@@ -492,7 +492,7 @@ Then read `docs/` or code as needed.
 ### Shutdown (every session end)
 Update `memory/session-bridge.md`: Done / Waiting / New Pitfalls / New Discoveries
 
-### corgi Apply → Long-term Memory
+### Corgi Apply → Long-term Memory
 After each Task Group completes:
 - New pitfalls → append to `memory/pitfalls.md` (link source change)
 - New implicit rules → append to `wiki/architecture/implicit-contracts.md`

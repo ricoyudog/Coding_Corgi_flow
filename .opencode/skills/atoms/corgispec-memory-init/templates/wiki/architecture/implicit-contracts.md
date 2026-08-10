@@ -9,4 +9,4 @@ updated: {{DATE}}
 
 ## Contracts
 
-(No implicit contracts discovered yet — these are added during opsx apply sessions when hidden dependencies or assumptions are found)
+(No implicit contracts discovered yet — these are added during Corgi Loop sessions when hidden dependencies or assumptions are found)

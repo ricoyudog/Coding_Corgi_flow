@@ -54,7 +54,7 @@ Read [references/artifact-creation.md](references/artifact-creation.md), then re
 - When `trackingProvider` is `none`, skip all tracker commands and tracker-state writes.
 - If isolation is active, write `.worktree.yaml` directly under the authoritative `changeRoot` and verify the worktree with `git worktree list`.
 - Run `corgispec ready "<change>" --strict --json`. Do not claim handoff readiness unless it returns ready.
-- Report the change name, `changeRoot`, created artifact IDs and concrete paths, readiness, tracking result, worktree result, and the matching platform command the user may invoke later for apply or loop. For Codex, explicitly report `$corgispec-apply-change <change>` or `$corgispec-loop <change>`.
+- Report the change name, `changeRoot`, created artifact IDs and concrete paths, readiness, tracking result, worktree result, and the matching platform apply command the user may invoke later. For Codex, explicitly report `$corgispec-apply <change>`.
 
 ## Terminal handoff boundary
 
@@ -65,5 +65,5 @@ Read [references/artifact-creation.md](references/artifact-creation.md), then re
 - Propose is a planning-only workflow and is terminal for the current turn.
 - A strict `ready` result confirms planning integrity; it is not user approval to implement.
 - An original request phrased as "fix", "implement", or "build" supplies planning intent only and does not authorize implementation after propose.
-- After reporting, end the current turn. Do not invoke apply, loop, implementation, review, archive, commit, push, or publish actions.
-- Implementation may begin only after a later explicit user request for the matching apply or loop workflow.
+- After reporting, end the current turn. Do not invoke apply, implementation, review, archive, commit, push, or publish actions.
+- Implementation may begin only after a later explicit user request for the apply workflow.

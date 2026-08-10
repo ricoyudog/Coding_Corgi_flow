@@ -141,6 +141,8 @@ describe("bootstrap library", () => {
     const output = execSync(`node ${CLI} --help`, { encoding: "utf-8" });
 
     expect(output).toContain("bootstrap");
+    expect(output).not.toMatch(/^\s+apply\b/mu);
+    expect(output).not.toMatch(/^\s+loop\b/mu);
   });
 
   it("prints pure JSON for a fresh local bootstrap", () => {

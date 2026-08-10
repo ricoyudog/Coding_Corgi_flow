@@ -48,7 +48,7 @@ For each requirement in the spec (look for `## Requirements` section, then indiv
 
 1. **Extract**: Requirement ID, description, and Scenario blocks (WHEN/THEN statements)
 2. **Search**: For each scenario, search the implementation files for corresponding logic
-   - Look in files produced by the group (from the apply Rich Summary)
+   - Look in files produced by the group (from the Apply Checkpoint or actual diff)
    - Also check the broader codebase if the spec references existing modules
 3. **Classify**:
    - **✅ Full**: ALL scenarios for this requirement have corresponding implementation code. Provide specific file:function references as evidence.

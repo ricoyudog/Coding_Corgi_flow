@@ -468,7 +468,7 @@ function updatedDashboardDescription(): string {
 
 function checkpointComment(ordinal: number, revision: string, marker: string): string {
   return [
-    `## Loop Checkpoint: Group ${ordinal}`,
+    `## Apply Checkpoint: Group ${ordinal}`,
     "",
     marker,
     "",

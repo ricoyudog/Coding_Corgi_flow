@@ -18,7 +18,7 @@ Archive through the CLI/upstream instruction and never construct an archive path
 ## Resolve and validate
 
 1. Resolve the change and isolated worktree with [references/worktree-discovery.md](references/worktree-discovery.md) when required.
-2. Run `corgispec status "<change>" --json`, `corgispec apply "<change>" --json`, and `corgispec archive "<change>" --json` from the selected worktree.
+2. Run `corgispec status "<change>" --json`, the internal read-only query `corgispec apply "<change>" --json`, and `corgispec archive "<change>" --json` from the selected worktree.
 3. Require matching `changeRoot` and the fields `artifactPaths`, `contextFiles`, `taskArtifactId`, `trackingProvider`, and `trackingProviderSource`. Stop and request a CLI upgrade when absent.
 4. Accept `trackingProvider: "gitlab"` or `"none"`. Route `"github"` to `corgispec-gh-archive`; never infer provider from `schemaName`.
 5. Use `taskArtifactId` and CLI task status to warn about incomplete work. Use returned `contextFiles` for QA/review evidence; never guess an evidence filename.
@@ -33,7 +33,7 @@ corgispec loop inspect "<change>" --json
 ```
 
 - When the result has `status: "ok"` and a non-terminal `state.phase` (`action.type` is not `terminal`), an active canonical loop owns this change. Stop without archiving, editing planning/task artifacts, or invoking `gh`/`glab`.
-- Report the returned `action.type` and require the user to explicitly continue the loop. In particular, `sync_tracker` must be performed through `corgispec loop sync-tracker ...`, and `finalize` through `corgispec loop finalize ...`; never run either action on the user's behalf.
+- Report the returned `action.type` and require the user to explicitly continue the apply workflow. In particular, `sync_tracker` must be performed through `corgispec loop sync-tracker ...`, and `finalize` through `corgispec loop finalize ...`; never run either action on the user's behalf.
 - If the result is `not_found` or has `action.type: "terminal"`, continue this skill. For any other inspect error or ambiguous response, stop before mutation and report it. An active loop for a different change does not block this workflow.
 
 When this inspection found a terminal canonical loop and tracking is enabled, archive is final-only: before the archive action or tracker closeout, verify the existing managed dashboard already shows all task checkboxes complete and every Group row `done`. Never rebuild, refresh, or backfill task checkboxes or Group progress. If that verification fails, stop without archiving or tracker mutation; if it succeeds, tracker closeout may only post the final summary and apply the final label/close policy.

@@ -1,6 +1,6 @@
 ---
 name: corgispec-verify
-description: Verify completed CorgiSpec Task Groups against tests, builds, linting, and returned planning requirements, with optional GitHub or GitLab evidence posting. Use after apply and before human review.
+description: Verify completed CorgiSpec Task Groups against tests, builds, linting, and returned planning requirements, with optional GitHub or GitLab evidence posting. Use for standalone verification of an apply checkpoint before human review.
 ---
 
 # Verify completed Task Groups
@@ -12,7 +12,7 @@ Gather reproducible evidence without changing implementation, planning, or track
 ## Resolve context
 
 1. Resolve the change and isolated worktree with [references/worktree-discovery.md](references/worktree-discovery.md) when required.
-2. Run `corgispec status "<change>" --json` and `corgispec apply "<change>" --json` from the selected worktree.
+2. Run `corgispec status "<change>" --json` and the internal read-only query `corgispec apply "<change>" --json` from the selected worktree.
 3. Require matching `changeRoot` plus `artifactPaths`, `contextFiles`, `taskArtifactId`, `trackingProvider`, and `trackingProviderSource`. Stop and request a CLI upgrade when absent.
 4. Accept only normalized provider values `github`, `gitlab`, or `none`; never infer provider from `schemaName`.
 5. Treat returned planning/store paths as authoritative even outside the working directory. Never construct an artifact path.

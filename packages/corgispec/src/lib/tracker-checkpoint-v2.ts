@@ -225,7 +225,7 @@ function updateDashboardBlock(block: string, groupOrdinal: number): string {
 
 function checkpointComment(group: LoopGroupStateV2, marker: string): string {
   return [
-    `## Loop Checkpoint: Group ${group.ordinal}`,
+    `## Apply Checkpoint: Group ${group.ordinal}`,
     "",
     marker,
     "",

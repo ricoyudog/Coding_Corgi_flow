@@ -12,7 +12,7 @@ Gather evidence first, then ask the human to approve or reject. Do not infer any
 ## Resolve context
 
 1. Resolve the change and isolated worktree with [references/worktree-discovery.md](references/worktree-discovery.md) when required.
-2. Run `corgispec status "<change>" --json` and `corgispec apply "<change>" --json` from the selected worktree.
+2. Run `corgispec status "<change>" --json` and the internal read-only query `corgispec apply "<change>" --json` from the selected worktree.
 3. Require matching `changeRoot` plus `artifactPaths`, `contextFiles`, `taskArtifactId`, `trackingProvider`, and `trackingProviderSource`. Stop and request a CLI upgrade when absent.
 4. Accept `trackingProvider: "gitlab"` or `"none"`. Route `"github"` to `corgispec-gh-review`; never infer provider from `schemaName`.
 5. Treat returned paths as authoritative even outside the current working directory.
@@ -26,7 +26,7 @@ corgispec loop inspect "<change>" --json
 ```
 
 - When the result has `status: "ok"` and a non-terminal `state.phase` (`action.type` is not `terminal`), an active canonical loop owns this change. Stop without editing planning/task artifacts or invoking `gh`/`glab`.
-- Report the returned `action.type` and require the user to explicitly continue the loop. In particular, `sync_tracker` must be performed through `corgispec loop sync-tracker ...`, and `finalize` through `corgispec loop finalize ...`; never run either action on the user's behalf.
+- Report the returned `action.type` and require the user to explicitly continue the apply workflow. In particular, `sync_tracker` must be performed through `corgispec loop sync-tracker ...`, and `finalize` through `corgispec loop finalize ...`; never run either action on the user's behalf.
 - If the result is `not_found` or has `action.type: "terminal"`, continue this skill. For any other inspect error or ambiguous response, stop before mutation and report it. An active loop for a different change does not block this workflow.
 
 ## Select and inspect

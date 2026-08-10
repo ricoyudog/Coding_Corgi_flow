@@ -1,6 +1,6 @@
 ---
-name: corgispec-loop
-description: Execute or resume a CorgiSpec Run Contract v2 one Task Group at a time through the canonical corgispec loop CLI. Use when starting, continuing, fixing, committing, recovering, or finalizing an implementation run; never write loop state or evidence artifacts directly.
+name: corgispec-apply
+description: Execute or resume the sole user-facing CorgiSpec implementation workflow through the canonical Run Contract v2 engine, including a required commit for every approved Task Group. Use when starting, continuing, fixing, committing, recovering, or finalizing an implementation run; never write loop state or evidence artifacts directly.
 disable-model-invocation: true
 metadata:
   opencode/autoinvoke: "false"
@@ -12,9 +12,9 @@ hooks:
           command: "corgispec hook pre-write"
 ---
 
-# CorgiSpec Loop
+# CorgiSpec Apply
 
-Use the Run Contract v2 CLI as the only lifecycle authority. You execute implementation work and collect truthful evidence; `corgispec loop` validates and persists every transition.
+Use this apply skill as the only user-facing implementation entry and the Run Contract v2 CLI as the lifecycle authority. You execute implementation work and collect truthful evidence; the internal `corgispec loop` API validates and persists every transition.
 
 ## Hard rules
 
@@ -24,7 +24,9 @@ Use the Run Contract v2 CLI as the only lifecycle authority. You execute impleme
 - Never reuse an old response token after any successful mutation. Inspect again.
 - Execute only the Task Group named by the current CLI action.
 - Run this workflow only after the user explicitly requests it through its skill or platform command.
+- Never route users to the retired `corgi-loop` or `corgispec-loop` entry points, or to the old provider-specific `corgispec-apply-change` and `corgispec-gh-apply` skills.
 - Do not commit until the phase is `awaiting_group_commit`.
+- Give every approved Task Group its own new commit and acknowledge it before tracker sync, the next group, or finalization. Never combine multiple Task Groups in one commit.
 - Do not finalize until the phase is `awaiting_finalize`.
 - Treat contract errors, session conflicts, stale tokens, corruption, and planning revision changes as blockers.
 
@@ -45,7 +47,7 @@ Inspect output supplies one canonical action:
 
 - `dispatch_group`: implement exactly the current Task Group, then build a complete submission.
 - `fix_group`: fix only the reported failed evidence or active findings, rerun all affected checks, and submit a new complete attempt.
-- `commit_group`: commit the approved group, make the worktree clean, then acknowledge the commit.
+- `commit_group`: create one dedicated commit for the approved group, make the worktree clean, then acknowledge the commit.
 - `sync_tracker`: explicitly checkpoint the committed group with the configured tracker before continuing.
 - `finalize`: finalize the run.
 - `blocked`: stop and report the structured reason.
@@ -95,11 +97,12 @@ Do not dismiss or accept risk on behalf of a human. Only a human actor may submi
 
 When inspect returns `commit_group`:
 
-1. Confirm the approved workspace contains exactly the submitted implementation.
-2. Commit the group and leave the worktree clean.
-3. Run `corgispec loop ack-commit "<change>" --run-id "<runId>" --session "<sessionId>" --state-revision <n> --nonce "<nonce>" --json`.
+1. Confirm the approved workspace contains exactly the submitted Task Group implementation and no work from a later group.
+2. Create one commit for that Task Group, including its authorized task-checkbox updates, and no unrelated changes.
+3. Leave the worktree clean.
+4. Run `corgispec loop ack-commit "<change>" --run-id "<runId>" --session "<sessionId>" --state-revision <n> --nonce "<nonce>" --json`.
 
-The CLI derives the commit from the current Git HEAD and checks the clean tree, submitted workspace fingerprint, and commit tree. When push is required, also pass `--push-status pushed --remote-revision "<revision>"`; never pass a caller-supplied commit option. If it rejects the acknowledgement, do not rewrite state or amend evidence; inspect and report the mismatch.
+Passing evaluation does not complete a group. The CLI advances only after it derives the dedicated commit from the current Git HEAD and checks the clean tree, submitted workspace fingerprint, commit tree, and ancestry. Do not run tracker sync or begin another group before acknowledgement succeeds. When push is required, also pass `--push-status pushed --remote-revision "<revision>"`; never pass a caller-supplied commit option. If it rejects the acknowledgement, do not rewrite state or amend evidence; inspect and report the mismatch.
 
 ## Tracker checkpoint
 
@@ -121,4 +124,4 @@ Hook wrappers may pass session input to the CLI and relay its JSON decision. The
 
 ## Completion report
 
-Report the change, run ID, terminal phase, completed groups, planning revision, baseline/final Git revisions, and any structured blocked reason. State explicitly that all canonical mutations were performed by `corgispec loop`.
+Report the change, run ID, terminal phase, completed groups and their commit revisions, planning revision, baseline/final Git revisions, and any structured blocked reason. State explicitly that all canonical mutations were performed by `corgispec loop`.

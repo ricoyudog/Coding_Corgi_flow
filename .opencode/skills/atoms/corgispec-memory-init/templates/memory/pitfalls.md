@@ -9,7 +9,7 @@ updated: {{DATE}}
 
 ## Active
 
-(No pitfalls yet — these accumulate during opsx apply sessions)
+(No pitfalls yet — these accumulate during Corgi Loop sessions)
 
 ## Archive
 

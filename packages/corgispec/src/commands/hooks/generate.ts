@@ -320,12 +320,10 @@ const WRITE_COMMANDS = new Set([
   "corgi-converge",
   "corgi-archive",
   "corgi-human-qa",
-  "corgi-loop",
 ]);
-const STOP_COMMANDS = new Set(["corgi-apply"]);
+const STOP_COMMANDS = new Set<string>();
 const WRITE_SKILLS = new Set([
-  "corgispec-apply-change",
-  "corgispec-gh-apply",
+  "corgispec-apply",
   "corgispec-propose",
   "corgispec-gh-propose",
   "corgispec-update",
@@ -333,12 +331,8 @@ const WRITE_SKILLS = new Set([
   "corgispec-archive-change",
   "corgispec-gh-archive",
   "corgispec-human-qa",
-  "corgispec-loop",
 ]);
-const STOP_SKILLS = new Set([
-  "corgispec-apply-change",
-  "corgispec-gh-apply",
-]);
+const STOP_SKILLS = new Set<string>();
 
 function buildStopPayload(event: unknown): string {
   const record = event && typeof event === "object" ? event as Record<string, any> : {};

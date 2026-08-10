@@ -65,12 +65,12 @@ program.addCommand(createGraphCommand());
 program.addCommand(createStatusCommand());
 program.addCommand(createInstructionsCommand());
 program.addCommand(createProposeCommand());
-program.addCommand(createApplyCommand());
+program.addCommand(createApplyCommand(), { hidden: true });
 program.addCommand(createReviewCommand());
 program.addCommand(createArchiveCommand());
 program.addCommand(createUpdateCommand());
 program.addCommand(createReadyCommand());
-program.addCommand(createLoopV2Command());
+program.addCommand(createLoopV2Command(), { hidden: true });
 program.addCommand(createConvergeCommand());
 
 // Hook subcommands (corgispec hook <name>)

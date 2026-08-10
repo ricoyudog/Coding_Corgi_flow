@@ -39,7 +39,7 @@ describe("user asset migration", () => {
       resolve(assetsRoot, "skills/molecules/corgispec-demo/skill.meta.json"),
       `${JSON.stringify({ slug: "corgispec-demo" })}\n`,
     );
-    write(resolve(assetsRoot, "commands/claude/corgi/apply.md"), "Use $corgispec-apply-change\n");
+    write(resolve(assetsRoot, "commands/claude/corgi/apply.md"), "Use $corgispec-apply\n");
     write(resolve(assetsRoot, "commands/opencode/corgi-apply.md"), "Use /corgi-apply\n");
   });
 
@@ -59,7 +59,23 @@ describe("user asset migration", () => {
       resolve(claudeSkills, "corgispec-demo/skill.meta.json"),
       `${JSON.stringify({ slug: "corgispec-demo" })}\n`,
     );
-    write(resolve(claudeCommands, "apply.md"), "Old $corgispec-apply-change dispatcher\n");
+    write(
+      resolve(claudeSkills, "corgispec-apply-change/skill.meta.json"),
+      `${JSON.stringify({ slug: "corgispec-apply-change" })}\n`,
+    );
+    write(
+      resolve(claudeSkills, "corgispec-apply-change/SKILL.md"),
+      "---\nname: corgispec-apply-change\n---\n",
+    );
+    write(
+      resolve(claudeSkills, "corgispec-loop/skill.meta.json"),
+      `${JSON.stringify({ slug: "corgispec-loop" })}\n`,
+    );
+    write(
+      resolve(claudeSkills, "corgispec-loop/SKILL.md"),
+      "---\nname: corgispec-loop\n---\n",
+    );
+    write(resolve(claudeCommands, "loop.md"), "Old $corgispec-loop dispatcher for .corgi/loop\n");
     write(resolve(claudeCommands, "human-qa.md"), "Use $corgispec-human-qa\n");
 
     const options = {
@@ -84,6 +100,21 @@ describe("user asset migration", () => {
     }));
     expect(plan.actions).toContainEqual(expect.objectContaining({
       platform: "claude",
+      name: "corgispec-apply-change",
+      status: "obsolete",
+    }));
+    expect(plan.actions).toContainEqual(expect.objectContaining({
+      platform: "claude",
+      name: "corgispec-loop",
+      status: "obsolete",
+    }));
+    expect(plan.actions).toContainEqual(expect.objectContaining({
+      platform: "claude",
+      name: "loop.md",
+      status: "obsolete",
+    }));
+    expect(plan.actions).toContainEqual(expect.objectContaining({
+      platform: "claude",
       name: "human-qa.md",
       status: "obsolete",
     }));
@@ -95,14 +126,18 @@ describe("user asset migration", () => {
       "current",
     );
     expect(readFileSync(resolve(claudeCommands, "apply.md"), "utf8")).toContain(
-      "$corgispec-apply-change",
+      "$corgispec-apply",
     );
+    expect(existsSync(resolve(claudeSkills, "corgispec-apply-change"))).toBe(false);
+    expect(existsSync(resolve(claudeSkills, "corgispec-loop"))).toBe(false);
+    expect(existsSync(resolve(claudeCommands, "loop.md"))).toBe(false);
     expect(existsSync(resolve(claudeCommands, "human-qa.md"))).toBe(false);
   });
 
   it("marks user content without a Corgi identity as ambiguous", () => {
     write(resolve(claudeSkills, "corgispec-demo/SKILL.md"), "# personal replacement\n");
-    write(resolve(claudeCommands, "apply.md"), "# personal command\n");
+    write(resolve(claudeSkills, "corgispec-loop/SKILL.md"), "# personal loop workflow\n");
+    write(resolve(claudeCommands, "loop.md"), "# personal command\n");
 
     const plan = planUserAssets({
       assetsRoot,
@@ -112,7 +147,8 @@ describe("user asset migration", () => {
     });
 
     expect(plan.conflicts.map((conflict) => conflict.path).sort()).toEqual([
-      resolve(claudeCommands, "apply.md"),
+      resolve(claudeCommands, "loop.md"),
+      resolve(claudeSkills, "corgispec-loop"),
       resolve(claudeSkills, "corgispec-demo"),
     ].sort());
     expect(() => applyUserAssetPlan(plan, {

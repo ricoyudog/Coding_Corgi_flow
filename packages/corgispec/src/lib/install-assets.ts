@@ -72,6 +72,16 @@ export const LEGACY_PROJECT_ASSET_CATALOG: readonly LegacyProjectAssetCatalogEnt
     kind: "command",
     signatures: ["opsx", "install"],
   },
+  {
+    path: ".opencode/commands/corgi-loop.md",
+    kind: "command",
+    signatures: ["corgispec-loop", ".corgi/loop"],
+  },
+  {
+    path: ".claude/commands/corgi/loop.md",
+    kind: "command",
+    signatures: ["corgispec-loop", ".corgi/loop"],
+  },
 ] as const;
 
 /**
