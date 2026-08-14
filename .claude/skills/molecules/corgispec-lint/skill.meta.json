@@ -1,8 +1,8 @@
 {
   "slug": "corgispec-lint",
   "tier": "molecule",
-  "version": "1.0.0",
-  "description": "Validate memory health across 11 checks with severity levels, size caps, and auto-fix routing",
+  "version": "4.0.0-rc1",
+  "description": "Read-only validation of RFC-first Memory/Wiki health across 14 checks",
   "depends_on": [
     "corgispec-memory-init"
   ],

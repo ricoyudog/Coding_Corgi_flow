@@ -165,6 +165,7 @@ describe("lifecycle CLI process contracts", () => {
     );
     writeTasks(false);
     writeFileSync(fakeOpenSpec, FAKE_OPENSPEC);
+    writeFileSync(invocationLog, "");
     chmodSync(fakeOpenSpec, 0o755);
 
     fixture = completeFixture();
@@ -450,7 +451,7 @@ describe("lifecycle CLI process contracts", () => {
     expectStoreContract();
   });
 
-  it("propose delegates creation to openspec new change without shell interpretation", () => {
+  it("rejects legacy free-form Propose before invoking OpenSpec", () => {
     const name = "new-capability";
     const proposedRoot = resolve(changesDir, name);
     mkdirSync(proposedRoot, { recursive: true });
@@ -515,111 +516,43 @@ describe("lifecycle CLI process contracts", () => {
       "--json",
     );
 
-    expect(command.status).toBe(0);
+    expect(command.status).toBe(1);
     expect(parseJson(command)).toMatchObject({
-      changeName: name,
-      artifactId: "proposal",
-      changeRoot: proposedRoot,
-      created: { id: name, schema: "custom-flow" },
+      status: "contract_error",
+      error: { code: "PROJECT_REQUIRES_V4_MIGRATION" },
     });
-    expect(operationArgv()[0]).toEqual([
-      "new",
-      "change",
-      name,
-      "--description",
-      description,
-      "--goal",
-      goal,
-      "--json",
-      "--store",
-      STORE,
-      "--schema",
-      "custom-flow",
-    ]);
-    expect(operationArgv()).toEqual(expect.arrayContaining([
-      ["status", "--change", name, "--json", "--store", STORE],
-      ["instructions", "proposal", "--change", name, "--json", "--store", STORE],
-    ]));
-    expectStoreContract();
+    expect(operationArgv()).toEqual([]);
   });
 
-  it("apply and review succeed while archive reports a business blocker on stdout", () => {
-    const apply = run("apply", CHANGE, "--store", STORE, "--path", projectRoot, "--json");
-    expect(apply.status).toBe(0);
-    expect(parseJson(apply)).toMatchObject({
-      changeName: CHANGE,
-      state: "ready",
-      taskArtifactId: "delivery",
-      currentGroup: { number: 2, name: "Delivery", status: "pending" },
-      changeRoot,
-      planningComplete: true,
-      implementationComplete: false,
-      readiness: { status: "ready", taskArtifactId: "delivery" },
-    });
-    expect(operationArgv()).toEqual(expect.arrayContaining([
-      ["status", "--change", CHANGE, "--json", "--store", STORE],
-      [
-        "validate",
-        CHANGE,
-        "--type",
-        "change",
-        "--strict",
-        "--json",
-        "--store",
-        STORE,
-      ],
-      ["instructions", "apply", "--change", CHANGE, "--json", "--store", STORE],
-    ]));
-    expectStoreContract();
+  it("publishes the Run Contract v3 lifecycle and amendment command surface", () => {
+    const top = run("--help");
+    expect(top.status).toBe(0);
+    expect(top.stderr).toBe("");
+    for (const name of ["apply", "verify", "review", "human-qa", "archive", "change"]) {
+      expect(top.stdout).toMatch(new RegExp(`^  ${name}(?: \\[options\\])?`, "mu"));
+    }
+    expect(top.stdout).not.toMatch(/^  loop(?: |$)/mu);
+    expect(top.stdout).not.toMatch(/^  converge(?: |$)/mu);
 
-    writeFileSync(invocationLog, "");
-    const review = run("review", CHANGE, "--store", STORE, "--path", projectRoot, "--json");
-    expect(review.status).toBe(0);
-    expect(parseJson(review)).toMatchObject({
-      changeName: CHANGE,
-      state: "applying",
-      completedGroups: [{ number: 1, name: "Foundation", status: "done" }],
-      changeRoot,
-      planningComplete: true,
-      implementationComplete: false,
-    });
-    expect(operationArgv()).toEqual([
-      ["status", "--change", CHANGE, "--json", "--store", STORE],
-    ]);
-
-    writeFileSync(invocationLog, "");
-    const blocked = run("archive", CHANGE, "--store", STORE, "--path", projectRoot, "--json");
-    expect(blocked.status).toBe(1);
-    expect(parseJson(blocked)).toMatchObject({
-      changeName: CHANGE,
-      isReady: false,
-      reason: "Change not ready for archive: 1 tasks remaining",
-      planningComplete: true,
-      implementationComplete: false,
-    });
-    expect(operationArgv()).toEqual([
-      ["status", "--change", CHANGE, "--json", "--store", STORE],
-    ]);
-    expectStoreContract();
-
-    writeTasks(true);
-    writeFileSync(invocationLog, "");
-    const archived = run("archive", CHANGE, "--store", STORE, "--path", projectRoot, "--json");
-    expect(archived.status).toBe(0);
-    expect(parseJson(archived)).toMatchObject({
-      changeName: CHANGE,
-      isReady: true,
-      planningComplete: true,
-      implementationComplete: true,
-      isComplete: true,
-    });
-    expect(operationArgv()).toEqual([
-      ["status", "--change", CHANGE, "--json", "--store", STORE],
-    ]);
-    expectStoreContract();
+    const expectations: Array<[string[], string]> = [
+      [["apply", "--help"], "Run Contract v3 Task Group application"],
+      [["verify", "--help"], "exact RFC acceptance coverage"],
+      [["review", "--help"], "explicit human implementation decision"],
+      [["human-qa", "--help"], "Human QA evidence"],
+      [["archive", "--help"], "strong, resumable Run Contract v3 archive gate"],
+      [["change", "--help"], "adopt-amendment"],
+      [["change", "adopt-amendment", "--help"], "--from <RFC-ID>"],
+    ];
+    for (const [args, expected] of expectations) {
+      const command = run(...args);
+      expect(command.status, args.join(" ")).toBe(0);
+      expect(command.stderr, args.join(" ")).toBe("");
+      expect(command.stdout, args.join(" ")).toContain(expected);
+    }
+    expect(operationArgv()).toEqual([]);
   });
 
-  it("keeps JSON contract errors on stdout and human diagnostics on stderr", () => {
+  it("keeps JSON contract errors on stdout and human diagnostics on stderr across v4 Apply", () => {
     fixture.behaviors = { status: { stdout: "not-json\n" } };
     persistFixture();
 
@@ -636,11 +569,24 @@ describe("lifecycle CLI process contracts", () => {
     expect(humanStatus.stdout).toBe("");
     expect(humanStatus.stderr).toContain("Error: OpenSpec returned malformed JSON");
 
-    const apply = run("apply", CHANGE, "--store", STORE, "--path", projectRoot, "--json");
+    const apply = run(
+      "apply",
+      CHANGE,
+      "--session",
+      "legacy-session",
+      "--owner",
+      "legacy-agent",
+      "--store",
+      STORE,
+      "--path",
+      projectRoot,
+      "--json",
+    );
     expect(apply.status).toBe(2);
     expect(apply.stderr).toBe("");
     expect(JSON.parse(apply.stdout)).toMatchObject({
-      status: "contract_error",
+      schemaVersion: 3,
+      status: "error",
       error: { code: "invalid_json" },
     });
   });

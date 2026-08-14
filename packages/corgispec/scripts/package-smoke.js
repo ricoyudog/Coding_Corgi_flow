@@ -13,7 +13,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, resolve } from "node:path";
+import { delimiter, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -21,6 +21,27 @@ const temporaryRoot = mkdtempSync(resolve(tmpdir(), "corgispec-package-smoke-"))
 const packDirectory = resolve(temporaryRoot, "pack");
 const consumerDirectory = resolve(temporaryRoot, "consumer");
 const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+const REQUIRED_KNOWLEDGE_PATHS = [
+  "memory/MEMORY.md",
+  "memory/session-bridge.md",
+  "memory/pitfalls.md",
+  "wiki/hot.md",
+  "wiki/index.md",
+  "wiki/schema.md",
+  "wiki/architecture/_index.md",
+  "wiki/architecture/implicit-contracts.md",
+  "wiki/research/_index.md",
+  "wiki/patterns/_index.md",
+  "wiki/decisions/_index.md",
+  "wiki/guides/_index.md",
+  "wiki/questions/_index.md",
+  "wiki/deliveries/_index.md",
+  "wiki/meta/_index.md",
+  "rfcs/README.md",
+  "rfcs/RFC-0001-project-foundation/rfc.md",
+  "rfcs/RFC-0001-project-foundation/rfc.yaml",
+  "rfcs/RFC-0001-project-foundation/delivery.yaml",
+];
 
 function fail(message) {
   throw new Error(`Package smoke failed: ${message}`);
@@ -41,22 +62,6 @@ function run(command, args, options = {}) {
     fail(`${command} ${args.join(" ")} exited with ${result.status}`);
   }
 
-  return result.stdout.trim();
-}
-
-function runExpectStatus(command, args, expectedStatus, options = {}) {
-  const result = spawnSync(command, args, {
-    cwd: packageRoot,
-    encoding: "utf8",
-    env: process.env,
-    ...options,
-  });
-  if (result.error) fail(`${command} could not start: ${result.error.message}`);
-  if (result.status !== expectedStatus) {
-    process.stderr.write(result.stdout ?? "");
-    process.stderr.write(result.stderr ?? "");
-    fail(`${command} ${args.join(" ")} exited with ${result.status}; expected ${expectedStatus}`);
-  }
   return result.stdout.trim();
 }
 
@@ -121,24 +126,46 @@ function verifyAssetManifest(assetsDirectory) {
     "skills/molecules/corgispec-propose/SKILL.md",
     "skills/molecules/corgispec-gh-propose/SKILL.md",
     "skills/molecules/corgispec-update/SKILL.md",
-    "skills/molecules/corgispec-converge/SKILL.md",
+    "skills/molecules/corgispec-lint/SKILL.md",
+    "skills/molecules/corgispec-rfc/SKILL.md",
+    "skills/molecules/corgispec-verify/SKILL.md",
+    "skills/molecules/corgispec-review/SKILL.md",
+    "skills/molecules/corgispec-human-qa/SKILL.md",
+    "skills/molecules/corgispec-archive-change/SKILL.md",
     "skills/compounds/corgispec-apply/SKILL.md",
+    "memory-init/templates/memory/MEMORY.md",
+    "memory-init/templates/memory/session-bridge.md",
+    "memory-init/templates/wiki/hot.md",
+    "memory-init/templates/wiki/schema.md",
+    "memory-init/templates/wiki/deliveries/_index.md",
+    "commands/opencode/corgi-rfc.md",
     "commands/opencode/corgi-propose.md",
     "commands/opencode/corgi-ready.md",
     "commands/opencode/corgi-update.md",
-    "commands/opencode/corgi-converge.md",
+    "commands/opencode/corgi-lint.md",
     "commands/opencode/corgi-apply.md",
+    "commands/opencode/corgi-verify.md",
+    "commands/opencode/corgi-review.md",
+    "commands/opencode/corgi-human-qa.md",
+    "commands/opencode/corgi-archive.md",
+    "commands/claude/corgi/rfc.md",
     "commands/claude/corgi/propose.md",
     "commands/claude/corgi/ready.md",
     "commands/claude/corgi/update.md",
-    "commands/claude/corgi/converge.md",
+    "commands/claude/corgi/lint.md",
     "commands/claude/corgi/apply.md",
+    "commands/claude/corgi/verify.md",
+    "commands/claude/corgi/review.md",
+    "commands/claude/corgi/human-qa.md",
+    "commands/claude/corgi/archive.md",
   ]) {
     if (!declaredFiles.includes(required)) fail(`required asset ${required} is missing`);
   }
   for (const retired of [
     "commands/opencode/corgi-loop.md",
+    "commands/opencode/corgi-converge.md",
     "commands/claude/corgi/loop.md",
+    "commands/claude/corgi/converge.md",
   ]) {
     if (declaredFiles.includes(retired)) fail(`retired asset ${retired} is still packaged`);
   }
@@ -146,6 +173,7 @@ function verifyAssetManifest(assetsDirectory) {
     "skills/molecules/corgispec-apply-change/",
     "skills/molecules/corgispec-gh-apply/",
     "skills/compounds/corgispec-loop/",
+    "skills/molecules/corgispec-converge/",
   ]) {
     if (declaredFiles.some((path) => path.startsWith(retiredPrefix))) {
       fail(`retired skill ${retiredPrefix} is still packaged`);
@@ -187,7 +215,7 @@ function writeRc1ManagedFixture(projectDirectory, installedRoot, includeClaudeHo
     version: 1,
     installedAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
-    sourceRepo: "corgispec@3.0.0-rc.1",
+    sourceRepo: "corgispec@legacy-v3",
     schema: "github-tracked",
     isolation: { mode: "none" },
     files: Object.fromEntries(
@@ -275,19 +303,50 @@ function verifyMirroredFiles(sourceRoot, targetRoot, label) {
   }
 }
 
-function createSmokeProject(name = "project") {
-  const projectDirectory = resolve(consumerDirectory, name);
-  const homeDirectory = resolve(temporaryRoot, "home");
-  const changeRoot = resolve(projectDirectory, "openspec/changes/smoke-change");
-  mkdirSync(changeRoot, { recursive: true });
-  mkdirSync(homeDirectory, { recursive: true });
-  writeFileSync(
-    resolve(projectDirectory, "openspec/config.yaml"),
-    "schema: github-tracked\ncorgi:\n  tracking:\n    provider: none\n  taskArtifactId: tasks\n",
-  );
-  writeFileSync(resolve(changeRoot, "proposal.md"), "# Smoke proposal\n");
-  writeFileSync(resolve(changeRoot, "tasks.md"), "## 1. Smoke\n- [ ] 1.1 Verify packaged CLI\n");
+function verifyKnowledgeInitialization(projectDirectory, label) {
+  for (const requiredKnowledgePath of REQUIRED_KNOWLEDGE_PATHS) {
+    const path = resolve(projectDirectory, requiredKnowledgePath);
+    if (!existsSync(path)) {
+      fail(`${label} omitted mandatory knowledge path ${requiredKnowledgePath}`);
+    }
+    if (readFileSync(path, "utf8").trim().length === 0) {
+      fail(`${label} created an empty knowledge path ${requiredKnowledgePath}`);
+    }
+  }
+}
 
+function verifyFoundationContract(projectDirectory, label, integrationBranch) {
+  const config = readFileSync(resolve(projectDirectory, "openspec/config.yaml"), "utf8");
+  for (const expected of [
+    "schema: github-tracked",
+    "contract: rfc-v1",
+    "rfcRoot: rfcs",
+    "foundation: RFC-0001-project-foundation",
+    `integrationBranch: ${integrationBranch}`,
+  ]) {
+    if (!config.includes(expected)) fail(`${label} omitted config field ${expected}`);
+  }
+
+  const foundationDirectory = resolve(projectDirectory, "rfcs/RFC-0001-project-foundation");
+  const metadata = readFileSync(resolve(foundationDirectory, "rfc.yaml"), "utf8");
+  for (const expected of [
+    "id: RFC-0001-project-foundation",
+    "type: foundation",
+    "status: draft",
+  ]) {
+    if (!metadata.includes(expected)) fail(`${label} wrote invalid Foundation metadata: ${expected}`);
+  }
+  const delivery = readFileSync(resolve(foundationDirectory, "delivery.yaml"), "utf8");
+  for (const expected of [
+    "rfcId: RFC-0001-project-foundation",
+    "S-01-project-foundation",
+    "status: unbound",
+  ]) {
+    if (!delivery.includes(expected)) fail(`${label} wrote invalid Foundation delivery: ${expected}`);
+  }
+}
+
+function createFakeOpenSpec() {
   const fakeScript = resolve(temporaryRoot, "fake-openspec.cjs");
   writeFileSync(
     fakeScript,
@@ -305,7 +364,7 @@ const artifactPaths = {
 function output(value, code = 0) { process.stdout.write(JSON.stringify(value) + "\\n"); process.exitCode = code; }
 if (args[0] === "--version") process.stdout.write("1.6.0\\n");
 else if (args[0] === "schema" && args[1] === "validate") output({ valid: true, issues: [] });
-else if (args[0] === "list") output({ changes: [{ name: "smoke-change", completedTasks: 0, totalTasks: 1, lastModified: "2026-01-01T00:00:00Z", status: "active" }], root: { path: root, source: "repo" } });
+else if (args[0] === "list") output({ changes: [], root: { path: root, source: "repo" } });
 else if (args[0] === "status") output({
   changeName: "smoke-change", schemaName: "github-tracked",
   planningHome: { kind: "repo", root, changesDir: path.resolve(root, "openspec/changes"), defaultSchema: "github-tracked" },
@@ -320,23 +379,120 @@ else output({ status: [{ level: "error", message: "unsupported smoke invocation:
 `,
   );
 
-  let executable = fakeScript;
   if (process.platform === "win32") {
-    executable = resolve(temporaryRoot, "fake-openspec.cmd");
+    const executable = resolve(temporaryRoot, "fake-openspec.cmd");
     writeFileSync(executable, `@echo off\r\n"${process.execPath}" "%~dp0fake-openspec.cjs" %*\r\n`);
+    return executable;
+  }
+
+  chmodSync(fakeScript, 0o755);
+  return fakeScript;
+}
+
+function createFakeGitHubCliDirectory() {
+  const binDirectory = resolve(temporaryRoot, "fake-gh-bin");
+  mkdirSync(binDirectory, { recursive: true });
+  const script = resolve(binDirectory, "fake-gh.cjs");
+  writeFileSync(
+    script,
+    `#!/usr/bin/env node
+const args = process.argv.slice(2);
+if (args[0] === "--version") process.stdout.write("gh version 2.0.0\\n");
+else if (args[0] === "auth" && args[1] === "status") process.exitCode = 0;
+else { process.stderr.write("unsupported fake gh invocation: " + args.join(" ") + "\\n"); process.exitCode = 1; }
+`,
+  );
+
+  if (process.platform === "win32") {
+    writeFileSync(resolve(binDirectory, "gh.cmd"), `@echo off\r\n"${process.execPath}" "%~dp0fake-gh.cjs" %*\r\n`);
   } else {
-    chmodSync(fakeScript, 0o755);
+    const executable = resolve(binDirectory, "gh");
+    writeFileSync(executable, readFileSync(script));
+    chmodSync(executable, 0o755);
+  }
+
+  return binDirectory;
+}
+
+function smokeEnvironment(homeDirectory, githubAvailable = false) {
+  const env = {
+    ...process.env,
+    CORGISPEC_OPENSPEC_BIN: createFakeOpenSpec(),
+    HOME: homeDirectory,
+    USERPROFILE: homeDirectory,
+    XDG_CONFIG_HOME: resolve(homeDirectory, ".config"),
+  };
+  if (githubAvailable) {
+    env.PATH = [createFakeGitHubCliDirectory(), process.env.PATH]
+      .filter(Boolean)
+      .join(delimiter);
+  }
+  return env;
+}
+
+function createFreshSmokeProject(name = "fresh-project") {
+  const projectDirectory = resolve(consumerDirectory, name);
+  const homeDirectory = resolve(temporaryRoot, `${name}-home`);
+  mkdirSync(projectDirectory, { recursive: true });
+  mkdirSync(homeDirectory, { recursive: true });
+  run("git", ["init", "-q", "-b", "main"], { cwd: projectDirectory });
+
+  const initialEntries = readdirSync(projectDirectory).sort();
+  if (initialEntries.length !== 1 || initialEntries[0] !== ".git") {
+    fail("fresh bootstrap fixture is not an empty Git project");
   }
 
   return {
     projectDirectory,
-    env: {
-      ...process.env,
-      CORGISPEC_OPENSPEC_BIN: executable,
-      HOME: homeDirectory,
-      USERPROFILE: homeDirectory,
-      XDG_CONFIG_HOME: resolve(homeDirectory, ".config"),
-    },
+    env: smokeEnvironment(homeDirectory, true),
+  };
+}
+
+function createSmokeProject(name = "project") {
+  const projectDirectory = resolve(consumerDirectory, name);
+  const homeDirectory = resolve(temporaryRoot, "home");
+  const openspecRoot = resolve(projectDirectory, "openspec");
+  mkdirSync(openspecRoot, { recursive: true });
+  mkdirSync(homeDirectory, { recursive: true });
+  writeFileSync(
+    resolve(openspecRoot, "config.yaml"),
+    "schema: github-tracked\ncorgi:\n  tracking:\n    provider: none\n  taskArtifactId: tasks\n",
+  );
+  mkdirSync(resolve(projectDirectory, "memory"), { recursive: true });
+  mkdirSync(resolve(projectDirectory, "wiki/sessions"), { recursive: true });
+  mkdirSync(resolve(projectDirectory, "wiki/research"), { recursive: true });
+  writeFileSync(
+    resolve(projectDirectory, "memory/session-bridge.md"),
+    "# Session Bridge\n\n## Active opsx Change\n- **Change**: none\n- **Branch**: main\n- **Phase**: idle\n\n## Done (last session completed)\n- Preserve this v3 checkpoint.\n\n## Waiting (next steps / blockers)\n- Human decision remains.\n\n## New Discoveries\n- Preserve this discovery.\n\n## New Pitfalls\n- Preserve this promotion candidate.\n",
+  );
+  writeFileSync(
+    resolve(projectDirectory, "wiki/hot.md"),
+    "# Hot Memory\n\n## Recent Decisions\n- Preserve this project decision.\n",
+  );
+  writeFileSync(
+    resolve(projectDirectory, "wiki/index.md"),
+    "# Wiki Index\n\n- [Legacy research](research/legacy.md)\n",
+  );
+  writeFileSync(
+    resolve(projectDirectory, "wiki/research/legacy.md"),
+    "# Legacy Research\n\nPreserve this research note.\n",
+  );
+  writeFileSync(
+    resolve(projectDirectory, "wiki/sessions/legacy.md"),
+    "# Legacy Session\n\nRead-only history must survive migration.\n",
+  );
+  writeFileSync(
+    resolve(projectDirectory, "wiki/log.md"),
+    "# Legacy Log\n\nRead-only log history must survive migration.\n",
+  );
+  writeFileSync(
+    resolve(projectDirectory, "AGENTS.md"),
+    "# Project Instructions\n\nKeep this custom instruction.\n\n## Session Memory Protocol\n\n### Startup (every session)\nRead `memory/session-bridge.md`, `wiki/hot.md`, then `wiki/index.md`.\n",
+  );
+
+  return {
+    projectDirectory,
+    env: smokeEnvironment(homeDirectory),
   };
 }
 
@@ -376,27 +532,32 @@ try {
 
   const help = run(process.execPath, [binPath, "--help"], { cwd: consumerDirectory });
   for (const command of [
+    "bootstrap",
+    "rfc",
     "list",
     "graph",
     "status",
     "instructions",
     "propose",
+    "apply",
+    "verify",
     "review",
+    "human-qa",
     "archive",
+    "change",
     "doctor",
+    "lint",
     "update",
     "ready",
-    "converge",
   ]) {
     if (!new RegExp(`(?:^|\\s)${command}(?:\\s|$)`, "m").test(help)) {
       fail(`top-level command ${command} is missing from --help`);
     }
     run(process.execPath, [binPath, command, "--help"], { cwd: consumerDirectory });
   }
-  if (/^\s+apply\b/m.test(help)) fail("internal apply command is visible in top-level help");
+  if (!/^\s+apply\b/m.test(help)) fail("public v4 apply command is missing from top-level help");
   if (/^\s+loop\b/m.test(help)) fail("internal loop command is visible in top-level help");
-  run(process.execPath, [binPath, "apply", "--help"], { cwd: consumerDirectory });
-  run(process.execPath, [binPath, "loop", "--help"], { cwd: consumerDirectory });
+  if (/^\s+converge\b/m.test(help)) fail("internal converge command is visible in top-level help");
 
   const skills = JSON.parse(
     run(process.execPath, [binPath, "list", "--skills", "--json", "--path", installedRoot], {
@@ -408,15 +569,47 @@ try {
     "corgispec-propose",
     "corgispec-gh-propose",
     "corgispec-update",
-    "corgispec-converge",
+    "corgispec-lint",
+    "corgispec-rfc",
     "corgispec-apply",
+    "corgispec-verify",
+    "corgispec-review",
+    "corgispec-human-qa",
+    "corgispec-archive-change",
   ]
     .every((slug) => skills.some((skill) => skill.slug === slug))) {
-    fail("packaged skill inventory is missing a 3.0 lifecycle skill");
+    fail("packaged skill inventory is missing an RFC-first v4 lifecycle skill");
   }
   run(process.execPath, [binPath, "validate", "--path", resolve(installedRoot, "assets/skills")], {
     cwd: consumerDirectory,
   });
+
+  const fresh = createFreshSmokeProject();
+  const freshBootstrap = JSON.parse(
+    run(process.execPath, [
+      binPath,
+      "bootstrap",
+      "--target",
+      fresh.projectDirectory,
+      "--mode",
+      "auto",
+      "--scope",
+      "local",
+      "--yes",
+      "--json",
+    ], { cwd: fresh.projectDirectory, env: fresh.env }),
+  );
+  if (freshBootstrap.status !== "success" || freshBootstrap.mode !== "fresh") {
+    fail(`packaged fresh bootstrap returned ${String(freshBootstrap.status)}/${String(freshBootstrap.mode)}`);
+  }
+  verifyKnowledgeInitialization(fresh.projectDirectory, "packaged fresh bootstrap");
+  verifyFoundationContract(fresh.projectDirectory, "packaged fresh bootstrap", "main");
+  if (
+    existsSync(resolve(fresh.projectDirectory, "wiki/sessions"))
+    || existsSync(resolve(fresh.projectDirectory, "wiki/log.md"))
+  ) {
+    fail("packaged fresh bootstrap created retired sessions/log knowledge paths");
+  }
 
   const smoke = createSmokeProject();
   run(process.execPath, [binPath, "install"], {
@@ -444,12 +637,55 @@ try {
       "--platform",
       "claude,opencode,codex",
       "--yes",
-      "--no-memory",
+      "--migrate-v4",
       "--json",
     ], { cwd: smoke.projectDirectory, env: smoke.env }),
   );
   if (bootstrap.status !== "success") {
     fail(`packaged bootstrap upgrade returned ${String(bootstrap.status)}`);
+  }
+
+  verifyKnowledgeInitialization(smoke.projectDirectory, "packaged migration");
+  if (readFileSync(resolve(smoke.projectDirectory, "wiki/sessions/legacy.md"), "utf8")
+      !== "# Legacy Session\n\nRead-only history must survive migration.\n"
+      || readFileSync(resolve(smoke.projectDirectory, "wiki/log.md"), "utf8")
+      !== "# Legacy Log\n\nRead-only log history must survive migration.\n") {
+    fail("packaged migration changed legacy sessions/log history");
+  }
+  const migratedConfig = readFileSync(resolve(smoke.projectDirectory, "openspec/config.yaml"), "utf8");
+  for (const expected of [
+    "contract: rfc-v1",
+    "rfcRoot: rfcs",
+    "foundation: RFC-0001-project-foundation",
+    "integrationBranch:",
+  ]) {
+    if (!migratedConfig.includes(expected)) fail(`packaged migration omitted config field ${expected}`);
+  }
+  const migratedBridge = readFileSync(resolve(smoke.projectDirectory, "memory/session-bridge.md"), "utf8");
+  for (const expected of [
+    "RFC Revision",
+    "Slice",
+    "Phase at Checkpoint",
+    "Observed Run Revision",
+    "Last Verified HEAD",
+    "Preserve this v3 checkpoint.",
+    "Human decision remains.",
+  ]) {
+    if (!migratedBridge.includes(expected)) fail(`packaged migration omitted bridge content ${expected}`);
+  }
+  const protocol = readFileSync(resolve(smoke.projectDirectory, "AGENTS.md"), "utf8");
+  const bridgeIndex = protocol.indexOf("memory/session-bridge.md");
+  const memoryIndex = protocol.indexOf("memory/MEMORY.md");
+  const hotIndex = protocol.indexOf("wiki/hot.md");
+  if (!(bridgeIndex >= 0 && bridgeIndex < memoryIndex && memoryIndex < hotIndex)) {
+    fail("packaged bootstrap installed the wrong startup memory order");
+  }
+  if (!protocol.includes("Keep this custom instruction.")) {
+    fail("packaged migration replaced custom AGENTS.md content");
+  }
+  const migratedHot = readFileSync(resolve(smoke.projectDirectory, "wiki/hot.md"), "utf8");
+  if (!migratedHot.includes("Preserve this project decision.")) {
+    fail("packaged migration replaced custom wiki/hot.md content");
   }
 
   const upgradedManifest = JSON.parse(
@@ -538,7 +774,7 @@ try {
       "--platform",
       "claude",
       "--yes",
-      "--no-memory",
+      "--migrate-v4",
       "--json",
     ], { cwd: hookless.projectDirectory, env: hookless.env }),
   );
@@ -558,84 +794,6 @@ try {
   if (!Array.isArray(doctor) || doctor.some((check) => check.passed !== true)) {
     fail("packaged doctor did not pass in an isolated project");
   }
-  const update = JSON.parse(
-    run(process.execPath, [binPath, "update", "smoke-change", "--path", smoke.projectDirectory, "--json"], {
-      cwd: smoke.projectDirectory,
-      env: smoke.env,
-    }),
-  );
-  if (update.status !== "ready") fail(`packaged update returned ${String(update.status)}`);
-  const ready = JSON.parse(
-    run(process.execPath, [binPath, "ready", "smoke-change", "--strict", "--path", smoke.projectDirectory, "--json"], {
-      cwd: smoke.projectDirectory,
-      env: smoke.env,
-    }),
-  );
-  if (ready.status !== "ready") fail(`packaged ready returned ${String(ready.status)}`);
-
-  writeFileSync(resolve(smoke.projectDirectory, ".gitignore"), ".corgi/loop/\n");
-  run("git", ["init", "-b", "main"], { cwd: smoke.projectDirectory, env: smoke.env });
-  run("git", ["config", "user.email", "package-smoke@corgispec.test"], {
-    cwd: smoke.projectDirectory,
-    env: smoke.env,
-  });
-  run("git", ["config", "user.name", "CorgiSpec Package Smoke"], {
-    cwd: smoke.projectDirectory,
-    env: smoke.env,
-  });
-  run("git", ["add", "-A"], { cwd: smoke.projectDirectory, env: smoke.env });
-  run("git", ["commit", "-m", "package smoke baseline"], {
-    cwd: smoke.projectDirectory,
-    env: smoke.env,
-  });
-  const initialized = JSON.parse(
-    run(process.execPath, [
-      binPath,
-      "loop",
-      "init",
-      "smoke-change",
-      "--session",
-      "package-smoke-session",
-      "--owner",
-      "package-smoke",
-      "--mode",
-      "hook-driven",
-      "--path",
-      smoke.projectDirectory,
-      "--json",
-    ], { cwd: smoke.projectDirectory, env: smoke.env }),
-  );
-  if (initialized.status !== "ok" || initialized.state?.schemaVersion !== 2) {
-    fail("packaged loop init did not create a Run Contract v2 state");
-  }
-  const inspected = JSON.parse(
-    run(process.execPath, [
-      binPath,
-      "loop",
-      "inspect",
-      "smoke-change",
-      "--path",
-      smoke.projectDirectory,
-      "--json",
-    ], { cwd: smoke.projectDirectory, env: smoke.env }),
-  );
-  if (inspected.state?.runId !== initialized.state.runId) {
-    fail("packaged loop inspect did not return the initialized run");
-  }
-  const convergence = JSON.parse(
-    runExpectStatus(process.execPath, [
-      binPath,
-      "converge",
-      "smoke-change",
-      "--path",
-      smoke.projectDirectory,
-      "--json",
-    ], 1, { cwd: smoke.projectDirectory, env: smoke.env }),
-  );
-  if (convergence.status !== "blocked") {
-    fail(`packaged converge expected an evidence blocker, got ${String(convergence.status)}`);
-  }
-
   const assetCount = verifyAssetManifest(resolve(installedRoot, "assets"));
   console.log(
     `✓ Packed and installed corgispec@${version}; CLI and ${assetCount} asset checksum(s) verified`

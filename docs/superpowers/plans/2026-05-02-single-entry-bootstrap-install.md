@@ -397,7 +397,7 @@ const TEMPLATE_FILES = [
   "wiki/architecture/implicit-contracts.md",
   "wiki/patterns/_index.md",
   "wiki/research/_index.md",
-  "wiki/sessions/_index.md",
+  "wiki/deliveries/_index.md",
   "wiki/decisions/_index.md",
   "wiki/questions/_index.md",
   "wiki/meta/_index.md",
@@ -671,7 +671,7 @@ Required behavior:
 - stop on `inconsistent`
 - create backups before legacy migration
 - stop on locally modified managed files during managed update
-- initialize memory unless `--no-memory` is set
+- initialize mandatory Memory/Wiki with no opt-out
 - write `.corgi-install.json` and `.corgi-install-report.md`
 
 - [ ] **Step 5: Reuse existing lower-level logic instead of shelling everything out**
@@ -741,7 +741,6 @@ export function createBootstrapCommand(): Command {
     .option("--schema <schema>", "Schema to use (gitlab-tracked or github-tracked)")
     .option("--mode <mode>", "Bootstrap mode (auto, fresh, update, legacy, verify)", "auto")
     .option("--yes", "Approve non-interactive safe prompts")
-    .option("--no-memory", "Skip memory initialization")
     .option("--json", "Output machine-readable JSON")
     .action(async (opts) => {
       const result = await runBootstrap({
@@ -955,7 +954,7 @@ Expected: all Vitest suites pass, including the new bootstrap/install-assets/mem
 - [ ] **Step 3: Run a focused manual smoke test for the bootstrap help surface**
 
 Run: `cd packages/corgispec && node dist/corgispec.js bootstrap --help`
-Expected: help output documents `--target`, `--schema`, `--mode`, `--yes`, `--no-memory`, and `--json`.
+Expected: help output documents `--target`, `--schema`, `--mode`, `--yes`, and `--json`; Memory/Wiki is mandatory.
 
 - [ ] **Step 4: Run a focused manual smoke test for dry-run style JSON output**
 

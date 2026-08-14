@@ -1,9 +1,7 @@
 ---
-description: Validate and archive a CorgiSpec change using its authoritative store paths
+description: Execute strong RFC-first Archive closeout with canonical evidence, knowledge, and single-Issue recovery
 ---
 
-1. Resolve the change and isolated worktree, then run `corgispec status "<change>" --json`.
-2. Require `changeRoot`, `artifactPaths`, `contextFiles`, `taskArtifactId`, `trackingProvider`, and `trackingProviderSource`. If absent, stop and request a CLI upgrade.
-3. Route only by normalized `trackingProvider`: `github` → **corgispec-gh-archive**; `gitlab` or `none` → **corgispec-archive-change**.
-4. Pass all input and CLI context through unchanged. Never route by `schemaName` or construct a planning/archive path.
-5. Verify CLI blockers, actual archived root, tracker closeout, knowledge extraction, and worktree cleanup before reporting completion.
+Follow **corgispec-archive-change** only from `ready_for_archive`.
+
+Require unchanged contract digests, all Task Group commits/checkpoints, Verify PASS, Human Review approval, and Human QA PASS/valid skip. Starting with the QA JSON token, invoke one phase at a time with the exact four CAS flags: `--begin`, then `--local`, then tracked providers use `--confirm-tracker`, then `--finish`; copy each returned token into the next call and retry the same phase/token after an unknown outcome. `corgispec archive --local` is the sole writer of archive-derived delivery, hot, architecture, pattern, MEMORY, pitfall, and bridge provenance; skills may only prepare or verify it read-only. The CLI archives OpenSpec, CAS-closes the Slice, closes the Issue, and removes the worktree only after success. Never call `gh`/`glab` directly.

@@ -1,10 +1,10 @@
 {
   "slug": "corgispec-propose",
   "tier": "molecule",
-  "version": "1.0.0",
-  "description": "Generate planning artifacts and create one tracked GitLab Issue",
+  "version": "4.0.0-rc1",
+  "description": "Create an RFC-first planning package while the CLI owns the single Issue and source contract",
   "depends_on": [],
-  "platform": "gitlab",
+  "platform": "universal",
   "tags": [
     "lifecycle",
     "propose"

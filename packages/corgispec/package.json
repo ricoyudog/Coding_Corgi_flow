@@ -1,7 +1,7 @@
 {
   "name": "corgispec",
-  "version": "3.0.1",
-  "description": "Unified CLI for Corgi workflow — skill management, validation, and AI instruction generation",
+  "version": "4.0.0-rc1",
+  "description": "RFC-first engineering workflow with traceable delivery, evidence, and AI session continuity",
   "type": "module",
   "bin": {
     "corgispec": "./dist/corgispec.js"

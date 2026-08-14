@@ -1,25 +1,23 @@
 ---
-description: Migrate existing project knowledge into memory/wiki structure from docs, archived changes, agent configs, and vault files
+description: Migrate source-backed knowledge after transactional v4 bootstrap while preserving legacy vault data
 ---
 
 Migrate existing project knowledge into the memory/wiki structure.
 
-**Input**: Optionally specify flags: `--auto-only` (skip interactive phases), `--phase N` (run single phase).
+**Input**: Optionally specify a target project path. Migration remains idempotent and source-cited.
 
 **Steps**
 
 1. **Check preconditions**
 
-   Verify `memory/` and `wiki/` directories exist. If not, instruct the user to run `/corgi-memory-init` first.
+   Verify the v4 bootstrap migration record and complete mandatory Memory/Wiki structure. If absent, run `corgispec bootstrap --migrate-v4` first.
 
-2. **Determine platform**
-
-   Read `openspec/config.yaml` and check the `schema` field.
-
-3. **Dispatch to skill**
+2. **Dispatch to skill**
 
    Follow the instructions in the **corgispec-memory-migrate** skill.
 
-4. **Pass through all input**
+3. **Pass through all input**
 
-   Forward the user's input (flags, phase selection) to the skill as-is.
+   Forward the target and any read-only inventory options to the skill as-is.
+
+Never create or append to `wiki/sessions/` or `wiki/log.md`; preserve existing legacy content byte-for-byte.

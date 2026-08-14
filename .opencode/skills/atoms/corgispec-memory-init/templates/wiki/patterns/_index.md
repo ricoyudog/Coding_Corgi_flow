@@ -5,8 +5,13 @@ updated: {{DATE}}
 
 # Patterns Index
 
-> Reusable approaches extracted from completed changes.
+> Reusable approaches verified by completed deliveries. `corgispec archive --local` alone writes archive-derived delivery provenance.
 
 ## Patterns
 
-(No patterns extracted yet — these are created during opsx archive)
+(No verified patterns extracted yet.)
+
+## Verified Delivery Sources
+<!-- corgi:managed:start pattern-deliveries -->
+- none
+<!-- corgi:managed:end pattern-deliveries -->

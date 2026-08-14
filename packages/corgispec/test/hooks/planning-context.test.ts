@@ -239,7 +239,7 @@ describe("authoritative hook planning context", () => {
 });
 
 describe("session context and authoritative write matching", () => {
-  it("gathers session context from only the current worktree", async () => {
+  it("queries planning in the current worktree while discovering runs in linked worktrees", async () => {
     const primary = tempRoot("gather-current-primary");
     const sibling = tempRoot("gather-current-sibling");
     writeFileSync(
@@ -250,9 +250,7 @@ describe("session context and authoritative write matching", () => {
     const calls: string[] = [];
     const dependencies: HookPlanningDependencies = {
       currentBranch: () => "feature/current",
-      listWorktrees: () => {
-        throw new Error(`Session context must not enumerate ${sibling}`);
-      },
+      listWorktrees: () => [primary, sibling],
       createAdapter: (cwd) => ({
         listChanges: async () => {
           calls.push(cwd);
@@ -269,6 +267,48 @@ describe("session context and authoritative write matching", () => {
       activeChanges: [{ name: "shared-change", worktreePath: "." }],
     });
     expect(calls).toEqual([primary]);
+  });
+
+  it("includes a nonterminal Run Contract v3 stored in a linked worktree", async () => {
+    const primary = tempRoot("gather-linked-run-primary");
+    const delivery = tempRoot("gather-linked-run-delivery");
+    const runRoot = resolve(delivery, ".corgi/loop/delivery-change/runs/run-linked");
+    mkdirSync(runRoot, { recursive: true });
+    writeFileSync(
+      resolve(delivery, ".corgi/loop/delivery-change/current.json"),
+      JSON.stringify({ schemaVersion: 3, runId: "run-linked" }),
+    );
+    writeFileSync(
+      resolve(runRoot, "state.json"),
+      JSON.stringify({
+        schemaVersion: 3,
+        changeName: "delivery-change",
+        runId: "run-linked",
+        phase: "awaiting_verify",
+        stateRevision: 4,
+        currentGroupId: null,
+        baselineRevision: "baseline-linked",
+      }),
+    );
+    const dependencies: HookPlanningDependencies = {
+      currentBranch: () => "main",
+      listWorktrees: () => [primary, delivery],
+      createAdapter: () => ({
+        listChanges: async () => list(primary, []),
+        getStatus: unusedStatus,
+      }),
+    };
+
+    const context = await gatherSessionContext(primary, {}, dependencies);
+
+    expect(context?.runContracts).toMatchObject([{
+      changeName: "delivery-change",
+      runId: "run-linked",
+      worktreePath: delivery,
+      phase: "awaiting_verify",
+      stateRevision: 4,
+      nextAction: "run canonical Verify",
+    }]);
   });
 
   it("returns null without a project config and gathers Store-backed custom task context", async () => {
@@ -485,10 +525,28 @@ describe("hook utility contracts", () => {
       ],
       currentBranch: "feature/change-a",
       worktreePath: ".",
+      memoryStartup: [
+        "memory/session-bridge.md",
+        "memory/MEMORY.md",
+        "wiki/hot.md",
+      ],
+      runContracts: [{
+        changeName: "change-a",
+        runId: "run-1",
+        phase: "awaiting_verify",
+        stateRevision: 7,
+        currentGroupId: null,
+        headRevision: "commit-2",
+        nextAction: "run canonical Verify",
+      }],
+      bridgeDrift: ["checkpoint phase applying; live phase awaiting_verify"],
     };
     const markdown = formatContextMarkdown(active);
     expect(markdown).toContain("change-a → .worktrees/change-a (Group 2 in-progress)");
     expect(markdown).toContain("planning-only → no worktree (planning)");
+    expect(markdown).toContain("session-bridge.md → memory/MEMORY.md → wiki/hot.md");
+    expect(markdown).toContain("change-a: awaiting_verify; group none; revision 7");
+    expect(markdown).toContain("checkpoint phase applying; live phase awaiting_verify");
     expect(JSON.parse(formatHookOutput("SessionStart", active))).toEqual({
       hookSpecificOutput: {
         hookEventName: "SessionStart",
@@ -499,6 +557,68 @@ describe("hook utility contracts", () => {
     expect(formatContextMarkdown({ ...active, activeChanges: [] })).toContain(
       "**Active changes**: (none)",
     );
+  });
+
+  it("synthesizes live Run Contract v3 state and reports bridge checkpoint drift", async () => {
+    const root = tempRoot("runtime-bridge-drift");
+    const runRoot = resolve(root, ".corgi/loop/change-a/runs/run-1");
+    mkdirSync(runRoot, { recursive: true });
+    writeFileSync(
+      resolve(root, ".corgi/loop/change-a/current.json"),
+      JSON.stringify({ schemaVersion: 3, runId: "run-1" }),
+    );
+    writeFileSync(
+      resolve(runRoot, "state.json"),
+      JSON.stringify({
+        schemaVersion: 3,
+        changeName: "change-a",
+        runId: "run-1",
+        phase: "awaiting_human_review",
+        stateRevision: 9,
+        currentGroupId: "2",
+        baselineRevision: "baseline-1",
+        groups: {
+          "1": { ordinal: 1, commitRevision: "commit-1" },
+          "2": { ordinal: 2, commitRevision: "commit-2" },
+        },
+      }),
+    );
+    mkdirSync(resolve(root, "memory"), { recursive: true });
+    writeFileSync(
+      resolve(root, "memory/session-bridge.md"),
+      [
+        "# Session Bridge",
+        "- **Change**: change-a",
+        "- **Phase at Checkpoint**: awaiting_verify",
+        "- **Task Group at Checkpoint**: 1",
+        "- **Observed Run Revision**: 8",
+        "- **Last Verified HEAD**: commit-1",
+      ].join("\n"),
+    );
+    const dependencies: HookPlanningDependencies = {
+      currentBranch: () => "feature/change-a",
+      createAdapter: () => ({
+        listChanges: async () => list(root, []),
+        getStatus: unusedStatus,
+      }),
+    };
+
+    const context = await gatherSessionContext(root, {}, dependencies);
+
+    expect(context?.runContracts).toMatchObject([{
+      changeName: "change-a",
+      phase: "awaiting_human_review",
+      stateRevision: 9,
+      currentGroupId: "2",
+      headRevision: "commit-2",
+      nextAction: "request the human Review decision",
+    }]);
+    expect(context?.bridgeDrift).toEqual([
+      "checkpoint phase awaiting_verify; live phase awaiting_human_review",
+      "checkpoint group 1; live group 2",
+      "checkpoint revision 8; live revision 9",
+      "checkpoint HEAD commit-1; live HEAD commit-2",
+    ]);
   });
 
   it("honors the hooks-disable environment switch", () => {
@@ -516,7 +636,7 @@ describe("hook utility contracts", () => {
     }
   });
 
-  it("enforces worktree write roots while preserving none and portable separators", () => {
+  it("allows only the current registered delivery worktree", () => {
     const root = tempBareRoot("write-target");
     expect(validateWriteTarget("src/index.ts", root, { schema: "custom" })).toBeNull();
     expect(validateWriteTarget("src/index.ts", root, {
@@ -527,13 +647,29 @@ describe("hook utility contracts", () => {
       schema: "custom",
       isolation: { mode: "worktree", root: ".worktrees" },
     };
-    expect(validateWriteTarget(".worktrees/change-a/src.ts", root, config)).toBeNull();
-    expect(validateWriteTarget(".worktrees\\change-a\\src.ts", root, config)).toBeNull();
-    expect(validateWriteTarget("src/index.ts", root, config)).toContain("outside the worktree root");
-    expect(validateWriteTarget("src/index.ts", root, {
-      schema: "custom",
-      isolation: { mode: "worktree" },
-    })).toContain('root ".worktrees"');
+    const delivery = resolve(root, ".worktrees/change-a");
+    const sibling = resolve(root, ".worktrees/change-b");
+    const dependencies = { listWorktrees: () => [root, delivery, sibling] };
+    expect(validateWriteTarget("src/index.ts", delivery, config, dependencies)).toBeNull();
+    expect(validateWriteTarget("src\\portable.ts", delivery, config, dependencies)).toBeNull();
+    expect(validateWriteTarget(
+      resolve(sibling, "src/index.ts"),
+      delivery,
+      config,
+      dependencies,
+    )).toContain("targets sibling worktree");
+    expect(validateWriteTarget(
+      resolve(root, "src/index.ts"),
+      delivery,
+      config,
+      dependencies,
+    )).toContain("outside the active delivery worktree");
+    expect(validateWriteTarget(
+      resolve(delivery, "src/index.ts"),
+      root,
+      config,
+      dependencies,
+    )).toContain("not a registered delivery worktree");
   });
 
   it.each([

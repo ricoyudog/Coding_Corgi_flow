@@ -17,6 +17,10 @@ import {
   type OpenSpecCommandOptions,
 } from "./openspec-adapter.js";
 import type { ParsedTaskGroup } from "./task-groups.js";
+import {
+  summarizeChangeContract,
+  type ContractSummary,
+} from "./change-contract.js";
 
 export interface InstructionDependencies {
   adapter?: OpenSpecAdapter;
@@ -42,6 +46,7 @@ export interface LifecycleCompatibility {
   changeRoot: string;
   artifactPaths: ResolvedChangeArtifacts["artifactPaths"];
   planningRevision: string;
+  contract: ContractSummary | null;
   planningComplete: boolean;
   implementationComplete: boolean;
   /** @deprecated Use planningComplete and implementationComplete. */
@@ -111,6 +116,7 @@ function services(
 }
 
 function compatibility(
+  cwd: string,
   resolved: ResolvedChangeArtifacts,
   tasks: TaskGroupSummary,
 ): LifecycleCompatibility {
@@ -119,6 +125,7 @@ function compatibility(
     changeRoot: resolved.changeRoot,
     artifactPaths: resolved.artifactPaths,
     planningRevision: resolved.planningRevision,
+    contract: resolved.contract ? summarizeChangeContract(resolved.contract, cwd) : null,
     planningComplete: resolved.planningComplete,
     implementationComplete: tasks.implementationComplete,
     isComplete: resolved.planningComplete && tasks.implementationComplete,
@@ -186,11 +193,11 @@ export async function resolveArtifactInstruction(
     existingOutputPaths: upstream.existingOutputPaths,
     dependencies: dependencyIds,
     dependencyDetails: upstream.dependencies,
-    contextFiles: [...new Set(contextFiles)].sort(),
+    contextFiles: [...new Set([...contextFiles, ...contractContextFiles(resolved)])].sort(),
     projectContext: config.context ?? "",
     rules: config.rules?.[artifactId] ?? [],
     actionContext: resolved.actionContext,
-    ...compatibility(resolved, tasks),
+    ...compatibility(cwd, resolved, tasks),
   };
 }
 
@@ -353,7 +360,11 @@ export async function resolveApplyInstruction(
   await assertApplyInstructionContract(changeName, upstream, resolved);
   const config = loadConfigFromDir(cwd);
   const tasks = taskSummary(cwd, resolved, true);
-  const contextFiles = [...new Set(Object.values(upstream.contextFiles).flat())].sort();
+  const contractFiles = contractContextFiles(resolved);
+  const contextFiles = [...new Set([
+    ...Object.values(upstream.contextFiles).flat(),
+    ...contractFiles,
+  ])].sort();
 
   return {
     changeName: upstream.changeName,
@@ -363,12 +374,15 @@ export async function resolveApplyInstruction(
     taskArtifactId: tasks.taskArtifactId,
     instruction: upstream.instruction,
     contextFiles,
-    contextFilesByArtifact: upstream.contextFiles,
+    contextFilesByArtifact: {
+      ...upstream.contextFiles,
+      ...(contractFiles.length > 0 ? { "corgi-contract": contractFiles } : {}),
+    },
     projectContext: config.context ?? "",
     progress: upstream.progress,
     tasks: upstream.tasks,
     actionContext: resolved.actionContext,
-    ...compatibility(resolved, tasks),
+    ...compatibility(cwd, resolved, tasks),
   };
 }
 
@@ -431,7 +445,7 @@ export async function resolveReviewInstruction(
   const resolved = await resolver.resolve(changeName, options);
   const tasks = taskSummary(cwd, resolved);
   const completedGroups = tasks.groups.filter((group) => group.status === "done");
-  const contextFiles = flattenArtifactFiles(resolved.artifactPaths);
+  const contextFiles = allContextFiles(resolved);
   const artifacts = Object.entries(resolved.artifactPaths)
     .filter(([, artifact]) => artifact.existingOutputPaths.length > 0)
     .map(([artifactId]) => artifactId)
@@ -445,7 +459,7 @@ export async function resolveReviewInstruction(
     instruction: `Review completed task groups against the authoritative planning artifacts.\n\nCompleted groups: ${completedGroups.map((group) => `${group.number}. ${group.name}`).join(", ") || "none"}\nTotal progress: ${tasks.completedTasks}/${tasks.totalTasks} tasks`,
     contextFiles,
     actionContext: resolved.actionContext,
-    ...compatibility(resolved, tasks),
+    ...compatibility(cwd, resolved, tasks),
   };
 }
 
@@ -474,9 +488,9 @@ export async function resolveArchiveInstruction(
     instruction: isReady
       ? "Archive this completed change with OpenSpec, preserving strict validation and scenario-drift guards."
       : reason!,
-    contextFiles: flattenArtifactFiles(resolved.artifactPaths),
+    contextFiles: allContextFiles(resolved),
     actionContext: resolved.actionContext,
-    ...compatibility(resolved, tasks),
+    ...compatibility(cwd, resolved, tasks),
   };
 }
 
@@ -485,4 +499,17 @@ function dependencyId(value: Record<string, unknown>): string | null {
     if (typeof value[key] === "string" && value[key].trim()) return value[key];
   }
   return null;
+}
+
+function contractContextFiles(resolved: ResolvedChangeArtifacts): string[] {
+  return resolved.contract
+    ? [resolved.contract.sourcePath, resolved.contract.traceabilityPath]
+    : [];
+}
+
+function allContextFiles(resolved: ResolvedChangeArtifacts): string[] {
+  return [...new Set([
+    ...flattenArtifactFiles(resolved.artifactPaths),
+    ...contractContextFiles(resolved),
+  ])].sort();
 }

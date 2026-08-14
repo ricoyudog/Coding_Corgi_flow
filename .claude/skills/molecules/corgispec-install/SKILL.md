@@ -153,10 +153,9 @@ Use when the target project has no managed fileset and no manifest.
    - If yes: ask for `isolation.root` (default: `.worktrees`) and `isolation.branch_prefix` (default: `feat/`)
    - Do NOT auto-enable worktree isolation without asking
 
-4b. **Ask whether to initialize memory structure**
-   - Prompt: "Initialize memory structure for cross-session continuity? (yes/no — default: yes)"
-   - If user passes `--no-memory` flag: skip this prompt and do not initialize memory
-   - Record the choice for Step 10
+4b. **Require the v4 Memory/Wiki contract**
+   - Memory/Wiki is mandatory; do not offer an opt-out prompt or skip path
+   - Record that Step 10 must verify the complete structure and startup protocol
 
 5. **Copy project-local managed fileset from source repo to target**
 
@@ -206,14 +205,12 @@ Use when the target project has no managed fileset and no manifest.
 
    Write the report with mode, timestamp, source repo, target project, and per-check status. See [Verification Report](#verification-report).
 
-10. **Initialize memory structure (unless opted out)**
+10. **Verify mandatory Memory/Wiki**
 
-    If the user chose to initialize memory in Step 4b (or did not pass `--no-memory`):
-    - Invoke the **corgispec-memory-init** skill against the target project
-    - This creates `memory/` and `wiki/` directories with template files
-    - It also injects the Session Memory Protocol into the project's agent config file
-    - If memory-init reports files skipped (already exist), include that in the install report
-    - If `--no-memory` was specified or user declined: skip this step entirely
+    - Invoke the **corgispec-memory-init** contract against the target project
+    - Require the complete v4 structure and `session-bridge → MEMORY → hot` startup protocol
+    - If initialization or migration is needed, delegate to transactional `corgispec bootstrap`; do not write a partial structure
+    - Include created, preserved, and conflicted files in the install report
 
 ---
 
@@ -383,7 +380,7 @@ The manifest at `openspec/.corgi-install.json`:
 - Skipping the backup step before legacy migration
 - Forgetting to check `gh auth status` or `glab auth status` before a write operation
 - Forgetting that `corgispec-*` skills are user-level prerequisites, not project-local managed files
-- Running memory-init when `--no-memory` was specified
-- Auto-initializing memory without asking the user first (unless default-yes prompt is used)
+- Offering a Memory/Wiki opt-out in a v4 project
+- Creating only part of the mandatory Memory/Wiki structure outside transactional bootstrap
 - Installing user-level commands but **not** installing project-local ones (project-local overrides won't work)
 - Forgetting to refresh user-level commands on update — user-level commands are NOT hash-tracked, always refresh them

@@ -1,6 +1,6 @@
 ---
 name: corgispec-archive-change
-description: Validate and archive a completed CorgiSpec change, extract durable knowledge, and optionally close GitLab tracking. Use when archiving a change whose normalized tracking provider is GitLab or none.
+description: Execute the strong, provider-neutral Archive transaction for an RFC-first Run Contract v3 delivery, materialize evidence, close knowledge and delivery state, reconcile the single Issue, and remove the worktree only after success.
 hooks:
   PreToolUse:
     - matcher: "Edit|Write"
@@ -9,47 +9,37 @@ hooks:
           command: "corgispec hook pre-write"
 ---
 
-# Archive a change
+# Archive an RFC-first Delivery
 
 **Context Gate**: If session context already contains ALL of: `isolation.mode`, active changes with worktree paths, current branch, reuse it; otherwise read configuration and discover worktrees.
 
-Archive through the CLI/upstream instruction and never construct an archive path.
+Archive only from `ready_for_archive`. The CLI owns the durable archive intent, evidence materialization, OpenSpec move, RFC delivery CAS, tracker outbox, and final Run Contract transitions. Never construct archive paths or call provider CLIs directly.
 
-## Resolve and validate
+## Strong Gate
 
-1. Resolve the change and isolated worktree with [references/worktree-discovery.md](references/worktree-discovery.md) when required.
-2. Run `corgispec status "<change>" --json`, the internal read-only query `corgispec apply "<change>" --json`, and `corgispec archive "<change>" --json` from the selected worktree.
-3. Require matching `changeRoot` and the fields `artifactPaths`, `contextFiles`, `taskArtifactId`, `trackingProvider`, and `trackingProviderSource`. Stop and request a CLI upgrade when absent.
-4. Accept `trackingProvider: "gitlab"` or `"none"`. Route `"github"` to `corgispec-gh-archive`; never infer provider from `schemaName`.
-5. Use `taskArtifactId` and CLI task status to warn about incomplete work. Use returned `contextFiles` for QA/review evidence; never guess an evidence filename.
-6. Treat an external store `changeRoot` as valid. Do not prepend the repository path.
+Require:
 
-## Canonical loop ownership gate
+- clean final HEAD and unchanged RFC/source/traceability/planning bindings;
+- every Task Group commit, local evidence, and tracker checkpoint;
+- canonical Verify PASS with full automated AC coverage;
+- explicit Human Review approval;
+- Human QA PASS or a valid human-confirmed no-runtime skip;
+- exactly one Slice binding, Change, archive destination, and single Issue/provider-none binding.
 
-Before any archive action, task-artifact edit, or local/remote tracker write, inspect only the resolved change:
+Any blocker stops before mutation.
 
-```bash
-corgispec loop inspect "<change>" --json
-```
+## Transaction
 
-- When the result has `status: "ok"` and a non-terminal `state.phase` (`action.type` is not `terminal`), an active canonical loop owns this change. Stop without archiving, editing planning/task artifacts, or invoking `gh`/`glab`.
-- Report the returned `action.type` and require the user to explicitly continue the apply workflow. In particular, `sync_tracker` must be performed through `corgispec loop sync-tracker ...`, and `finalize` through `corgispec loop finalize ...`; never run either action on the user's behalf.
-- If the result is `not_found` or has `action.type: "terminal"`, continue this skill. For any other inspect error or ambiguous response, stop before mutation and report it. An active loop for a different change does not block this workflow.
+1. From the Human QA JSON token, run `corgispec archive "<change>" --begin --run-id "<runId>" --session "<sessionId>" --state-revision "<revision>" --nonce "<nonce>" --json`.
+2. Copy the newly returned four-field token unchanged into `corgispec archive "<change>" --local --run-id "<runId>" --session "<sessionId>" --state-revision "<revision>" --nonce "<nonce>" --json`. Retry that exact operation/token after an unknown outcome.
+3. For GitHub/GitLab, use the next token with `--confirm-tracker`; provider `none` skips this operation. Then use the latest token with `--finish`. Each invocation performs exactly one resumable phase; never reuse a superseded token.
+4. Require canonical evidence materialized into the archived Change, including manifest, per-group evidence, whole-change Verify, Human Review, Human QA, and run binding.
+5. Require the actual OpenSpec archived root returned by the CLI; never guess or overwrite it.
+6. `corgispec archive --local` is the sole write transaction for the immutable `wiki/deliveries/<RFC-ID>-<Slice-ID>.md`, managed hot/architecture/pattern regions, MEMORY/pitfall provenance, and the archive bridge checkpoint. Use **corgispec-memory-extract** only for read-only preparation or verification; never use it to create, promote, or repair those files.
+7. Require RFC `delivery.yaml` archive evidence and local archive closeout commit.
+8. Let the CLI outbox move the one Issue to done and close it idempotently. Never invoke `gh`/`glab`.
+9. Require `--finish` to report worktree cleanup only after local and tracker closeout succeed. Preserve the branch by default.
 
-When this inspection found a terminal canonical loop and tracking is enabled, archive is final-only: before the archive action or tracker closeout, verify the existing managed dashboard already shows all task checkboxes complete and every Group row `done`. Never rebuild, refresh, or backfill task checkboxes or Group progress. If that verification fails, stop without archiving or tracker mutation; if it succeeds, tracker closeout may only post the final summary and apply the final label/close policy.
+If local archive succeeds but tracker closeout fails, keep the intent and worktree and resume tracker closeout without repeating the local archive or rewriting history.
 
-## Archive
-
-1. Before moving anything, read GitLab tracker state at `<changeRoot>/.gitlab.yaml` when enabled. Require `issue.iid`/`issue.url`; if legacy `parent` or `groups` keys exist, stop before archival or remote mutation with the manual single-issue conversion guidance. When the loop inspection was terminal, verify the existing managed dashboard already has every task checkbox complete and every Group row `done`; never correct it here.
-2. Present incomplete-task, readiness, validation, and artifact-drift warnings. Require explicit confirmation when the CLI marks any warning as overridable; stop on a blocker.
-3. Execute only the archive action returned by `corgispec archive --json`. Let OpenSpec synchronize applicable deltas and choose the destination.
-4. Capture the actual archived root from CLI/upstream output. Verify the full change payload moved and no conflicting destination was overwritten.
-
-## Close out
-
-- Extract durable session knowledge from returned planning artifacts, implementation evidence, and Git history without assuming an artifact name.
-- When GitLab tracking is enabled, read the live single Issue, require exactly one ordered dashboard marker pair, verify the existing dashboard already has every task checkbox complete and every Group row `done`, and preserve all content outside the markers. Never rebuild, refresh, or backfill task checkboxes or Group progress; post only `## Archive Summary`, move the Issue to `workflow::done`, and apply the existing close/open policy to that one Issue. Skip all tracker operations for provider none.
-- Remove the worktree only after archive and tracker closeout succeed; preserve its branch unless the user explicitly requests deletion.
-- Report old `changeRoot`, actual archived root, validation/warnings, knowledge extraction, tracker result, and worktree cleanup.
-
-Never construct planning/archive paths, route by schema, overwrite an archive, or archive with unresolved blockers.
+Report archived root, evidence manifest, delivery page, promoted knowledge, archive commit, Issue result, final `archived` phase, worktree cleanup, and any retained branch.

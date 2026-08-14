@@ -98,6 +98,14 @@ describe("validateSkill", () => {
     expect(issues).toEqual([]);
   });
 
+  it("accepts a semantic prerelease version", () => {
+    createValidSkill(TEST_DIR, "release-candidate", { version: "4.0.0-rc1" });
+    const skills = discoverSkills(TEST_DIR);
+    const allSkills = new Map(skills.map((skill) => [skill.slug, skill.meta.tier] as [string, string]));
+
+    expect(validateSkill(skills[0]!, allSkills)).toEqual([]);
+  });
+
   it("reports missing SKILL.md", () => {
     const skillDir = resolve(TEST_DIR, "no-md");
     mkdirSync(skillDir, { recursive: true });

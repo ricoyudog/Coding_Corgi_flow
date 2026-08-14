@@ -5,8 +5,8 @@ updated: {{DATE}}
 
 # Implicit Contracts
 
-> Unwritten rules discovered during development. Each entry explains what breaks if violated.
+> Verified unwritten rules in the current system. Each entry cites evidence and explains what breaks if violated.
 
 ## Contracts
 
-(No implicit contracts discovered yet — these are added during Corgi Loop sessions when hidden dependencies or assumptions are found)
+(No verified implicit contracts yet.)

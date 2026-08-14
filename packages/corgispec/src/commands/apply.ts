@@ -51,6 +51,7 @@ export function createApplyCommand(
           config,
           false,
           { store: opts.store },
+          cwd,
         );
         if (report.status !== "ready") {
           if (opts.json) {

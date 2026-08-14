@@ -5,23 +5,29 @@ tags: [hot, entry]
 pinned: true
 ---
 
-# Hot — {{PROJECT_NAME}} Latest
+# Hot — {{PROJECT_NAME}}
 
-> ~500 words | Hard cap 600 words | Updated every session | First entry point for humans and AI
+> Current project pulse. Target 500 words, hard cap 600.
 
-## Active Changes
-- (No active change yet — run `/corgi-propose`)
+## Active RFCs
+<!-- corgi:managed:start active-rfcs -->
+- `RFC-0001-project-foundation` — draft; human review required
+<!-- corgi:managed:end active-rfcs -->
 
-## Recent Decisions
-- Initialized memory structure
+## Active Deliveries
+<!-- corgi:managed:start active-deliveries -->
+- none
+<!-- corgi:managed:end active-deliveries -->
+
+## Recently Shipped
+<!-- corgi:managed:start recently-shipped -->
+- none
+<!-- corgi:managed:end recently-shipped -->
+
+## Research Queue
+- none
 
 ## Architecture Pulse
 - **Stable**: {{STABLE_COMPONENTS}}
 - **Evolving**: {{EVOLVING_COMPONENTS}}
 - **Legacy**: {{LEGACY_COMPONENTS}}
-
-## Recent Pitfalls
-- (none yet — see [[memory/pitfalls]])
-
-## Recently Shipped
-- (none yet)

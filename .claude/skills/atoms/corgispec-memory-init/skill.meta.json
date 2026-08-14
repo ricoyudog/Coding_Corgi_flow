@@ -1,8 +1,8 @@
 {
   "slug": "corgispec-memory-init",
   "tier": "atom",
-  "version": "1.0.0",
-  "description": "Initialize 3-layer memory structure (memory/ + wiki/) with templates and session protocol injection",
+  "version": "4.0.0-rc1",
+  "description": "Define and verify mandatory RFC-first Memory/Wiki structure and startup continuity",
   "depends_on": [],
   "platform": "universal",
   "tags": [

@@ -79,6 +79,11 @@ describe("GitWorkspaceV2", () => {
     expect(acknowledged.clean).toBe(true);
     expect(acknowledged.headRevision).not.toBe(baselineRevision);
     expect(acknowledged.commitTreeFingerprint).toBe(observedWorkspaceFingerprint);
+    expect(await workspace.changedPaths(baselineRevision, acknowledged.headRevision)).toEqual([
+      "README.md",
+      "new file.txt",
+    ]);
+    expect(await workspace.commitParents(acknowledged.headRevision)).toEqual([baselineRevision]);
   });
 
   it("binds a tested deletion to the commit tree that omits the deleted path", async () => {

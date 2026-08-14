@@ -11,15 +11,17 @@ import { createGraphCommand } from "../commands/graph.js";
 import { createStatusCommand } from "../commands/status.js";
 import { createInstructionsCommand } from "../commands/instructions.js";
 import { createProposeCommand } from "../commands/propose.js";
-import { createApplyCommand } from "../commands/apply.js";
-import { createReviewCommand } from "../commands/review.js";
-import { createArchiveCommand } from "../commands/archive.js";
+import { createApplyV3Command } from "../commands/apply-v3.js";
+import { createVerifyCommand } from "../commands/verify-v3.js";
+import { createReviewV3Command } from "../commands/review-v3.js";
+import { createHumanQaCommand } from "../commands/human-qa-v3.js";
+import { createArchiveV3Command } from "../commands/archive-v3.js";
+import { createChangeV3Command } from "../commands/change-v3.js";
 import { createReadyCommand } from "../commands/ready.js";
 import { createUpdateCommand } from "../commands/update.js";
-import { createLoopV2Command } from "../commands/loop-v2.js";
-import { createConvergeCommand } from "../commands/converge.js";
 import { createInitCommand } from "../commands/init.js";
 import { createDoctorCommand } from "../commands/doctor.js";
+import { createLintCommand } from "../commands/lint.js";
 import { createHookSessionStartCommand } from "../commands/hooks/session-start.js";
 import { createHookPostCompactCommand } from "../commands/hooks/post-compact.js";
 import { createHookPreWriteCommand } from "../commands/hooks/pre-write.js";
@@ -28,6 +30,7 @@ import { createHookPostWriteCommand } from "../commands/hooks/post-write.js";
 import { createHookStopCheckCommand } from "../commands/hooks/stop-check.js";
 import { createHookCommand } from "../commands/hooks/index.js";
 import { createHooksGenerateCommand } from "../commands/hooks/generate.js";
+import { createRfcCommand } from "../commands/rfc.js";
 
 // Guard: exit early if Node version is too low
 checkNodeVersion();
@@ -42,7 +45,7 @@ const program = new Command();
 program
   .name("corgispec")
   .description(
-    "Unified CLI for Corgi workflow — skill management, validation, and AI instruction generation"
+    "RFC-first engineering workflow with traceable delivery, evidence, and AI session continuity"
   )
   .version(pkg.version)
   .option("--no-color", "Disable color output");
@@ -57,6 +60,8 @@ program.addCommand(createBootstrapCommand());
 program.addCommand(createInstallCommand());
 program.addCommand(createInitCommand());
 program.addCommand(createDoctorCommand());
+program.addCommand(createLintCommand());
+program.addCommand(createRfcCommand());
 program.addCommand(createValidateCommand());
 program.addCommand(createListCommand());
 program.addCommand(createGraphCommand());
@@ -65,13 +70,14 @@ program.addCommand(createGraphCommand());
 program.addCommand(createStatusCommand());
 program.addCommand(createInstructionsCommand());
 program.addCommand(createProposeCommand());
-program.addCommand(createApplyCommand(), { hidden: true });
-program.addCommand(createReviewCommand());
-program.addCommand(createArchiveCommand());
+program.addCommand(createApplyV3Command());
+program.addCommand(createVerifyCommand());
+program.addCommand(createReviewV3Command());
+program.addCommand(createHumanQaCommand());
+program.addCommand(createArchiveV3Command());
+program.addCommand(createChangeV3Command());
 program.addCommand(createUpdateCommand());
 program.addCommand(createReadyCommand());
-program.addCommand(createLoopV2Command(), { hidden: true });
-program.addCommand(createConvergeCommand());
 
 // Hook subcommands (corgispec hook <name>)
 program.addCommand(createHookCommand());

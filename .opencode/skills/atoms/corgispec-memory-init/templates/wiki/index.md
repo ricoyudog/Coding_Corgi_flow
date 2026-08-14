@@ -5,7 +5,7 @@ updated: {{DATE}}
 
 # {{PROJECT_NAME}} Wiki Index
 
-> AI-maintained long-term knowledge navigation. Hard cap 80 lines. Click wikilinks to jump to source.
+> Long-term knowledge navigation. Read on demand; hard cap 80 lines.
 
 ## Architecture Insights
 - [[wiki/architecture/_index|Architecture Index]]
@@ -20,8 +20,14 @@ updated: {{DATE}}
 ## Decisions
 - [[wiki/decisions/_index|Decisions Index]]
 
-## Session History
-- [[wiki/sessions/_index|Session Index]]
+## Guides
+- [[wiki/guides/_index|Guides Index]]
 
 ## Questions
 - [[wiki/questions/_index|Questions Index]]
+
+## Deliveries
+- [[wiki/deliveries/_index|Delivery Index]]
+
+## Meta
+- [[wiki/meta/_index|Meta Index]]

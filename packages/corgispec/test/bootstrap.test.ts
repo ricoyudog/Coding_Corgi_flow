@@ -141,7 +141,7 @@ describe("bootstrap library", () => {
     const output = execSync(`node ${CLI} --help`, { encoding: "utf-8" });
 
     expect(output).toContain("bootstrap");
-    expect(output).not.toMatch(/^\s+apply\b/mu);
+    expect(output).toMatch(/^\s+apply\b/mu);
     expect(output).not.toMatch(/^\s+loop\b/mu);
   });
 
@@ -151,7 +151,7 @@ describe("bootstrap library", () => {
 
     const command = spawnSync(
       process.execPath,
-      [CLI, "bootstrap", "--target", targetDir, "--scope", "local", "--yes", "--no-memory", "--json"],
+      [CLI, "bootstrap", "--target", targetDir, "--scope", "local", "--yes", "--json"],
       {
         encoding: "utf-8",
         env: bootstrapEnv(`${fakeBin}:${process.env["PATH"] ?? ""}`),
@@ -189,7 +189,7 @@ describe("bootstrap library", () => {
 
     try {
       execSync(
-        `node ${CLI} bootstrap --target ${JSON.stringify(targetDir)} --mode update --no-memory`,
+        `node ${CLI} bootstrap --target ${JSON.stringify(targetDir)} --mode update`,
         {
           encoding: "utf-8",
           env: bootstrapEnv(`${fakeBin}:${process.env["PATH"] ?? ""}`),
@@ -815,7 +815,7 @@ describe("bootstrap library", () => {
     const env = bootstrapEnv(`${fakeBin}:${process.env["PATH"] ?? ""}`);
 
     execSync(
-      `node ${CLI} bootstrap --target ${JSON.stringify(targetDir)} --platform claude,opencode --scope local --yes --no-memory --json`,
+      `node ${CLI} bootstrap --target ${JSON.stringify(targetDir)} --platform claude,opencode --scope local --yes --json`,
       { encoding: "utf-8", env },
     );
 

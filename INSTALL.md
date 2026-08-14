@@ -1,135 +1,92 @@
-# CorgiSpec 3.0 — Agent Bootstrap
+# CorgiSpec 4.0 — RFC-first Bootstrap
 
-Use this file as the entry point when an LLM agent installs or upgrades CorgiSpec in a target project. CorgiSpec and OpenSpec are separate CLIs: install and validate both before bootstrap writes managed files.
+Use this entry point to install or migrate a project to the single CorgiSpec v4 workflow.
 
-## Runtime requirements
+## Requirements
 
 - Node.js >=20.19.0
-- `corgispec@3.0.1`
+- `corgispec@4.0.0-rc1`
 - `@fission-ai/openspec` >=1.6.0 <2.0.0
-
-OpenSpec 1.3–1.5 are unsupported; do not continue with a compatibility fallback.
+- `gh` or `glab` only when the configured tracker provider is enabled
 
 ```bash
-node --version
 npm install -g @fission-ai/openspec@^1.6.0
-npm install -g corgispec
-openspec --version
-corgispec --version
+npm install -g corgispec@4.0.0-rc1
+corgispec doctor --path /path/to/project
 ```
 
-The unqualified package, `corgispec@latest`, and `corgispec@next` resolve to stable `3.0.1`. Use `npm install -g corgispec@3.0.1` when an exact, reproducible version is required.
+## Fresh Bootstrap
 
-## Fresh bootstrap
+```bash
+corgispec bootstrap --target /path/to/project --mode auto
+```
 
-1. Ask for the target project path if it was not supplied.
-2. Run the environment and OpenSpec contract checks without making project changes:
+Bootstrap is the sole transactional writer for configuration, managed assets, RFC scaffolding, mandatory Memory/Wiki, and the Session Memory Protocol. There is no Memory/Wiki opt-out.
 
-   ```bash
-   corgispec doctor --path /path/to/project
-   ```
-
-3. Bootstrap the project:
-
-   ```bash
-   corgispec bootstrap --target /path/to/project --mode auto
-   ```
-
-   For a bundled workflow, add `--schema github-tracked` or `--schema gitlab-tracked`. For a custom OpenSpec schema, initialize it explicitly and identify its task artifact:
-
-   ```bash
-   corgispec init /path/to/project \
-     --schema product-delivery \
-     --tracking-provider none \
-     --task-artifact execution-plan
-   ```
-
-4. Read `openspec/.corgi-install-report.md` in the target project and report whether bootstrap succeeded, stopped, or failed. If it stopped on a modified, malformed, or ambiguously owned asset, report the backup paths and require manual resolution before rerunning.
-
-## Managed updates and automatic repair
-
-`corgispec bootstrap --mode auto` and `--mode update` preflight all selected Corgi-managed surfaces before writing. Within the selected scope they update outdated project commands/schema/config/manifest, synchronize user-level skills and Claude Code/OpenCode commands, restore missing managed files, remove or replace only legacy assets with a verifiable Corgi signature, and migrate hooks that Corgi previously installed.
-
-Scope controls the managed surface:
-
-| Scope | Managed assets |
-|---|---|
-| `local` | Project commands, schema, config, manifest, and existing hooks |
-| `global` | User-level skills for the selected platforms, plus Claude Code and OpenCode user commands |
-| `both` | Preflight and update the local and global surfaces together |
-
-Use `--platform <claude|opencode|codex>` (comma-separated when selecting more than one) to restrict detection, repair, and hook migration to those platforms. Without the flag, bootstrap keeps the normal all-platform behavior.
-
-Missing managed files are restored automatically. Locally modified files, malformed structured configuration, and assets whose Corgi ownership cannot be established are backed up and stop the update; bootstrap never force-merges or silently overwrites them. Backups are stored at:
-
-- Project assets: `openspec/.corgi-backups/<timestamp>/project/`
-- User-level assets: `~/.corgispec/backups/<timestamp>/<platform>/`
-
-Hookless projects remain opt-in: bootstrap does not create hooks where Corgi hooks have never been installed. Existing Corgi hooks are migrated with the same generators used by `corgispec hooks generate`:
-
-- Claude Code replaces only Corgi hook commands and preserves permissions, unrelated settings, and non-Corgi hooks.
-- OpenCode consolidates recognized legacy Corgi plugin files into the current plugin and preserves unrelated plugins.
-- Codex migrates legacy hook JSON to TOML plus Node `.cjs` wrappers and preserves MCP, approval, feature, and non-Corgi hook settings.
-
-After bootstrap, rerun `corgispec doctor --path /path/to/project`. Doctor verifies Claude Code, OpenCode, and Codex hook health independently; a valid configuration on one platform does not hide stale or missing managed state on another.
-
-## Upgrade from CorgiSpec 2.x
-
-Keep the existing OpenSpec schema, but separate tracker selection from the schema in `openspec/config.yaml`:
+The generated contract includes:
 
 ```yaml
-schema: github-tracked
 corgi:
-  tracking:
-    provider: github       # github | gitlab | none
-  taskArtifactId: tasks    # use the schema's executable task artifact id
+  contract: rfc-v1
+  rfcRoot: rfcs
+  foundation: RFC-0001-project-foundation
+  governance:
+    integrationBranch: main
 ```
 
-`github-tracked` and `gitlab-tracked` still infer their matching provider for migration, but `corgispec doctor` recommends the explicit setting. An arbitrary custom schema defaults to tracking `none`; if its executable checklist is not the conventional `tasks` artifact, `corgi.taskArtifactId` is required.
+Read `openspec/.corgi-install-report.md` and report created, preserved, backed-up, and conflicted files. Rerun doctor after bootstrap.
 
-Then validate every active change:
+## Explicit v3 Cutover
+
+v4 does not resume active v3 Changes or nonterminal v2 runs. Finish, archive, or withdraw them first, then run:
 
 ```bash
-corgispec doctor --path /path/to/project
-corgispec ready <change> --path /path/to/project --strict --json
+corgispec bootstrap --target /path/to/project --migrate-v4 --dry-run
+corgispec bootstrap --target /path/to/project --migrate-v4
 ```
 
-Exit code `0` means ready, `1` means the planning contract has blockers, and `2` means an environment or OpenSpec contract error. Resolve blockers before apply, then use `/corgi:apply` (Claude Code), `/corgi-apply` (OpenCode), or `$corgispec-apply` (Codex). Apply runs every Task Group through the internal Run Contract v2 loop engine and requires a dedicated acknowledged commit before advancing.
+Migration preserves unrelated dirty files and all user knowledge. Existing `wiki/sessions/` and `wiki/log.md` remain byte-for-byte legacy read-only data. Old documents may inform the Foundation RFC, but nothing is auto-accepted.
 
-## Planning updates and OpenSpec Stores
+Review `RFC-0001-project-foundation`, validate it, and let a human accept it interactively. Commit and merge the accepted RFC into the configured integration branch before Propose.
 
-OpenSpec 1.6 JSON is authoritative for `planningHome`, `changeRoot`, artifact DAGs, glob-expanded `artifactPaths`, and `actionContext`. Never reconstruct paths such as `openspec/changes/<name>` or assume `tasks.md`.
+## RFC-first Delivery
 
 ```bash
-# Read-only reconciliation context
-corgispec update <change> --path /path/to/project --json
+# Human-authored governance
+corgispec rfc new data-export
+corgispec rfc validate RFC-0002-data-export
+corgispec rfc accept RFC-0002-data-export --approver <human-id>
 
-# Store-backed change (its authoritative root may be outside the repository)
-corgispec update <change> --path /path/to/project --store <store-id> --json
-corgispec ready <change> --path /path/to/project --store <store-id> --strict --json
+# After the accepted RFC commit is merged
+corgispec propose data-export --from RFC-0002-data-export/S-01-data-export --json
+# Complete planning + traceability, then finalize the same source command
+corgispec propose data-export --from RFC-0002-data-export/S-01-data-export --finalize --json
+
+# Quality chain
+/corgi-apply data-export
+/corgi-verify data-export
+/corgi-review data-export
+/corgi-human-qa data-export
+/corgi-archive data-export
 ```
 
-The `update` CLI does not edit files. Use `/corgi:update <change>` (Claude Code), `/corgi-update <change>` (OpenCode), or `$corgispec-update` (Codex) to reconcile planning artifacts; the skill must show and confirm each artifact-scoped diff. Follow it with the platform's ready skill or `corgispec ready`. `update` returns `1` when an active or recovery-pending loop blocks planning changes and `2` for contract errors.
+The CLI creates or recovers one Issue per Slice and owns tracker mutations. Skills never invoke provider CLIs directly and Task Groups never become Issues.
 
-Evaluate implementation convergence only while planning, Git, and evidence revisions are fresh:
+Apply uses Run Contract v3, gives each Task Group one checked commit, and stops at `awaiting_verify`. Verify covers the whole Change and all ACs; Human Review records approve/reject/amendment; Human QA verifies real user paths; Archive materializes canonical evidence and performs delivery/knowledge/tracker closeout.
+
+## Managed Updates and Hooks
+
+`bootstrap --mode auto|update` preflights the selected local/global surfaces, preserves user modifications, and backs up conflicts before stopping. Use `--platform <claude|opencode|codex>` and `--scope <local|global|both>` to restrict the managed surface.
+
+Hookless projects remain opt-in. Generate hooks explicitly:
 
 ```bash
-corgispec converge <change> --path /path/to/project --json
+corgispec hooks generate --platform <claude|opencode|codex>
 ```
 
-The first call is read-only. If it reports an implementation gap, the matching platform skill presents the evidence and a proposed successor Task Group for confirmation. A confirmed operation appends only that new group and can be resumed idempotently with its `confirmationToken`; it never rewrites old groups.
+SessionStart/PostCompact emit the fixed startup order `session-bridge → MEMORY → hot`, synthesize live Run Contract state, and report bridge drift.
 
-## Optional lifecycle hooks
-
-The hook CLI has two entry points: generate platform configuration with `corgispec hooks generate --platform <claude|opencode|codex>`, and invoke a generated bridge with `corgispec hook <name>`. Codex generation writes TOML plus Node `.cjs` wrappers; it does not require Python. Generic generated stop handling keeps session-bound `loop-check`; `stop-check` remains available only where an active Corgi lifecycle scopes it.
-
-Use `hooks generate` to opt a hookless project in. Later `bootstrap --mode auto|update` runs detect and repair that existing hook installation; they do not opt in other platforms automatically.
-
-OpenCode 1.18.x has no awaited stop hook. Its TypeScript plugin observes `session.idle`, preserves hook stdout/stderr, and uses `session.promptAsync` to re-enter an interactive session when canonical work remains. Treat `corgispec ready` and `corgispec loop ...` as the hard gates. For one-shot `opencode run` automation, inspect those CLI results explicitly because process teardown can race the asynchronous re-entry.
-
-## Clean source and package verification
-
-When validating this repository or preparing a release, start from a clean checkout and run:
+## Release Verification
 
 ```bash
 cd packages/corgispec
@@ -138,11 +95,6 @@ npm run release:check
 npm pack
 ```
 
-The release check rebuilds bundled assets, builds and typechecks the package, runs the complete test and coverage gates, creates a temporary npm tarball, installs it into a temporary project, and smoke-tests the packaged CLI and asset checksums. The optional final `npm pack` writes `corgispec-3.0.1.tgz` for release verification or offline installation; normal consumers install the stable package with `corgispec`.
+The release gate must validate canonical/mirror/bundled skills, all mandatory templates, fresh and migrated package smoke, tests, coverage, typecheck, and the packed asset manifest. The RC tarball is `corgispec-4.0.0-rc1.tgz`.
 
-## Rules
-
-- Do not bypass failed Node, OpenSpec runtime, schema, ready, test, coverage, or package-smoke checks.
-- Do not infer change or artifact paths when OpenSpec JSON provides authoritative paths.
-- Do not run separate user-level and project-level install steps unless bootstrap explicitly reports a missing component.
-- Do not bypass a stopped migration or overwrite its backups. Resolve modified, malformed, or ambiguous assets before rerunning bootstrap.
+Never bypass a stopped migration, contract blocker, failed evidence gate, or package check.

@@ -151,6 +151,59 @@ process.exit(9);
     expect(output).toBe("");
   });
 
+  it("defers task postconditions when a linked worktree owns an active v3 run", () => {
+    writeFileSync(
+      resolve(tempDir, "openspec/config.yaml"),
+      "schema: github-tracked\nisolation:\n  mode: worktree\n  root: .worktrees\n",
+    );
+    execFileSync("git", ["init"], { cwd: tempDir, stdio: "ignore" });
+    execFileSync("git", ["add", "openspec/config.yaml"], { cwd: tempDir, stdio: "ignore" });
+    execFileSync(
+      "git",
+      ["-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "-m", "initial"],
+      { cwd: tempDir, stdio: "ignore" },
+    );
+    const delivery = resolve(tempDir, ".worktrees/active-delivery");
+    mkdirSync(resolve(tempDir, ".worktrees"), { recursive: true });
+    execFileSync("git", ["worktree", "add", "-b", "active-delivery", delivery], {
+      cwd: tempDir,
+      stdio: "ignore",
+    });
+    const runRoot = resolve(delivery, ".corgi/loop/active-change/runs/run-active");
+    mkdirSync(runRoot, { recursive: true });
+    writeFileSync(
+      resolve(delivery, ".corgi/loop/active-change/current.json"),
+      JSON.stringify({ schemaVersion: 3, runId: "run-active" }),
+    );
+    writeFileSync(
+      resolve(runRoot, "state.json"),
+      JSON.stringify({
+        schemaVersion: 3,
+        changeName: "active-change",
+        runId: "run-active",
+        phase: "applying",
+        stateRevision: 1,
+      }),
+    );
+    const change = setupFakeChange({
+      projectRoot: tempDir,
+      changeName: "partial-primary-change",
+      taskContent: "## 1. Work\n\n- [x] 1.1 Started\n- [ ] 1.2 Incomplete\n",
+    });
+    openspec.writeData({
+      listRoot: change.planningRoot,
+      statuses: { "partial-primary-change": change.status },
+    });
+
+    const output = execSync(`node ${CLI} hook stop-check --path ${tempDir}`, {
+      encoding: "utf-8",
+      input: JSON.stringify({}),
+      env: openspec.env,
+    });
+
+    expect(output).toBe("");
+  });
+
   it("exits 0 after a completed group when the next group is untouched", () => {
     const change = setupFakeChange({
       projectRoot: tempDir,

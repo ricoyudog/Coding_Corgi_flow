@@ -1,9 +1,10 @@
 ---
-description: Verify completed CorgiSpec Task Groups with reproducible evidence
+description: Submit canonical whole-change checks and complete RFC AC automated evidence
 ---
 
-1. Resolve the change and isolated worktree, then run `corgispec status "<change>" --json`.
-2. Require `changeRoot`, `artifactPaths`, `contextFiles`, `taskArtifactId`, `trackingProvider`, and `trackingProviderSource`. If absent, stop and request a CLI upgrade.
-3. Follow **corgispec-verify** and pass the normalized provider plus every authoritative path unchanged.
-4. Never infer provider from `schemaName`, reconstruct planning paths, or select artifacts by filename.
-5. Verify that the report contains commands, exit codes, requirement evidence, verdict, optional tracker posting, `changeRoot`, and worktree, with no state changes.
+Follow **corgispec-verify** only when Run Contract v3 is `awaiting_verify`.
+
+- Run full test/build/lint/integration checks against the clean final HEAD.
+- Cover every source AC and bind evidence to the unchanged planning/source/traceability digests.
+- Submit `corgispec verify "<change>" --report "<verify-report.json>" --run-id "<runId>" --session "<sessionId>" --state-revision "<revision>" --nonce "<nonce>" --json`, copying the final Apply token unchanged; do not edit implementation or call tracker CLIs.
+- PASS advances to `awaiting_human_review`; FAIL requires an implementation repair successor.

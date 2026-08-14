@@ -9,4 +9,4 @@ updated: {{DATE}}
 
 ## Reports
 
-(No lint reports yet — run `/corgi-lint` to generate one)
+(No reports yet. Run `/corgi-lint --report` to persist a lint report.)

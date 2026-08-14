@@ -98,6 +98,19 @@ export class GitWorkspaceV2 {
     );
   }
 
+  async commitParents(revision = "HEAD"): Promise<string[]> {
+    await this.assertRepository();
+    const line = nonEmpty(
+      await this.git(["rev-list", "--parents", "-n", "1", revision]),
+      `${revision} commit parents`,
+    );
+    const [commit, ...parents] = line.trim().split(/\s+/u);
+    if (!commit) {
+      throw new GitWorkspaceError("Git returned an invalid commit parent record", "git_command_failed");
+    }
+    return parents;
+  }
+
   async statusPorcelain(): Promise<string> {
     await this.assertRepository();
     return await this.git([
@@ -109,6 +122,23 @@ export class GitWorkspaceV2 {
       ".",
       ":(exclude).corgi/loop/**",
     ]);
+  }
+
+  async changedPaths(fromRevision: string, toRevision = "HEAD"): Promise<string[]> {
+    await this.assertRepository();
+    if (!fromRevision.trim() || !toRevision.trim()) {
+      throw new GitWorkspaceError("Git diff revisions must be non-empty", "git_command_failed");
+    }
+    const output = await this.git([
+      "diff",
+      "--name-only",
+      "-z",
+      `${fromRevision}..${toRevision}`,
+      "--",
+      ".",
+      ":(exclude).corgi/loop/**",
+    ]);
+    return parseNulPaths(output).map(portable);
   }
 
   async isClean(): Promise<boolean> {

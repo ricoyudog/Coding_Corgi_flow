@@ -4,6 +4,7 @@ node_modules/
 # Orchestration state
 .omx/
 .corgi/loop/
+.corgi/transactions/
 
 # Playwright MCP
 .playwright-mcp/
@@ -32,16 +33,24 @@ Thumbs.db
 .omo/
 
 # AI platform skill mirrors & plugins (product is shipped via npm/plugin marketplace)
-.claude/
+/.claude/*
+!/.claude/commands/
+!/.claude/commands/corgi/
+!/.claude/commands/corgi/rfc.md
+!/.claude/skills/
+!/.claude/skills/molecules/
+!/.claude/skills/molecules/corgispec-rfc/
+!/.claude/skills/molecules/corgispec-rfc/SKILL.md
+!/.claude/skills/molecules/corgispec-rfc/skill.meta.json
 .claude-plugin/
 .codex/
 .codex-plugin/
 
 # Dev workspace & memory
 .obsidian/
-memory/
-openspec/
-wiki/
+/memory/
+/openspec/
+/wiki/
 
 # Dev instructions
 AGENTS.md

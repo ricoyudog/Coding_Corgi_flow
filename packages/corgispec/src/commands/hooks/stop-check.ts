@@ -5,6 +5,8 @@ import {
   isHooksDisabled,
   findProjectRoot,
   readStdinJson,
+  discoverHookProjectRoots,
+  readHookRunContractContexts,
   checkTaskGroupPostconditions,
   resolveHookChanges,
   type HookPlanningDependencies,
@@ -35,25 +37,32 @@ export function createHookStopCheckCommand(
       try {
         await readStdinJson();
 
-        // Check for active loop state — if any loop is running, defer to loop-check hook
+        // Any nonterminal v3 Run in a registered worktree is authoritative.
+        // Defer to loop-check instead of applying task-checkbox postconditions.
+        if (readHookRunContractContexts(projectRoot, dependencies).length > 0) {
+          process.exitCode = 0; return;
+        }
+
+        // Legacy state remains advisory here; loop-check owns its validation.
         const loopStateDirs = [".claude/corgi-loop", ".opencode/corgi-loop"];
-        for (const dir of loopStateDirs) {
-          const loopDir = resolve(projectRoot, dir);
-          if (existsSync(loopDir)) {
-            try {
-              const entries = readdirSync(loopDir, { withFileTypes: true });
-              for (const entry of entries) {
-                if (!entry.isDirectory()) continue;
-                const statePath = resolve(loopDir, entry.name, "state.json");
-                if (!existsSync(statePath)) continue;
-                const raw = readFileSync(statePath, "utf-8");
-                const state = JSON.parse(raw) as { active?: unknown };
-                if (state.active === true) {
-                  // Loop is active — skip stop-check, let loop-check handle it
-                  process.exitCode = 0; return;
+        for (const worktreeRoot of discoverHookProjectRoots(projectRoot, dependencies)) {
+          for (const dir of loopStateDirs) {
+            const loopDir = resolve(worktreeRoot, dir);
+            if (existsSync(loopDir)) {
+              try {
+                const entries = readdirSync(loopDir, { withFileTypes: true });
+                for (const entry of entries) {
+                  if (!entry.isDirectory()) continue;
+                  const statePath = resolve(loopDir, entry.name, "state.json");
+                  if (!existsSync(statePath)) continue;
+                  const raw = readFileSync(statePath, "utf-8");
+                  const state = JSON.parse(raw) as { active?: unknown };
+                  if (state.active === true) {
+                    process.exitCode = 0; return;
+                  }
                 }
-              }
-            } catch { /* legacy state is advisory here; loop-check owns validation */ }
+              } catch { /* legacy state is advisory here; loop-check owns validation */ }
+            }
           }
         }
 

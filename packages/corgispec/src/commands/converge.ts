@@ -1267,6 +1267,7 @@ async function inspectConvergencePlanningDefault(
     config,
     true,
     { store },
+    projectRoot,
   );
   const taskPaths = resolved.artifactPaths[report.taskArtifactId]?.existingOutputPaths ?? [];
   return {

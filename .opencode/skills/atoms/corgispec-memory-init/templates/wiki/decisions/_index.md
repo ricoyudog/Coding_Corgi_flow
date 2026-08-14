@@ -5,8 +5,8 @@ updated: {{DATE}}
 
 # Decisions Index
 
-> Key decisions made during reviews and implementation.
+> ADRs made within an accepted RFC boundary. RFCs remain the source of product scope and ACs.
 
 ## Decisions
 
-(No decisions recorded yet — these are created when reviews approve significant choices)
+(No ADRs recorded yet.)

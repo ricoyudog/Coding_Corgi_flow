@@ -16,6 +16,14 @@ import {
   type ParsedTaskGroup,
   type TaskGroupParseResult,
 } from "./task-groups.js";
+import {
+  summarizeChangeContract,
+  validateChangeTraceability,
+} from "./change-contract.js";
+import {
+  validateContractProvenance,
+  type ContractProvenanceOptions,
+} from "./contract-provenance.js";
 
 export interface TaskGroupSummary extends TaskGroupParseResult {
   taskArtifactId: string;
@@ -178,6 +186,8 @@ export async function buildLifecycleReadyReport(
   config: OpenSpecConfig,
   strictWarnings: boolean,
   options: OpenSpecCommandOptions = {},
+  projectDir: string,
+  provenanceOptions: ContractProvenanceOptions = {},
 ): Promise<ReadyLifecycleResult> {
   let validation: OpenSpecValidationResponse;
   try {
@@ -201,6 +211,61 @@ export async function buildLifecycleReadyReport(
     taskArtifactId,
     strict: strictWarnings,
   });
+  const contractRequired =
+    (config.corgi as (typeof config.corgi & { contract?: string }) | undefined)?.contract ===
+    "rfc-v1";
+  if (!resolved.contract) {
+    report.checks.push({
+      code: "CHANGE_CONTRACT_PRESENT",
+      status: contractRequired ? "fail" : "pass",
+      severity: contractRequired ? "error" : "info",
+      message: contractRequired
+        ? "RFC-first changes require corgi/source.yaml and corgi/traceability.yaml"
+        : "No RFC-first change contract is required by this legacy project",
+    });
+  } else {
+    report.contract = summarizeChangeContract(resolved.contract, projectDir);
+    report.checks.push({
+      code: "CHANGE_CONTRACT_PRESENT",
+      status: "pass",
+      severity: "info",
+      message: `Change is bound to ${resolved.contract.source.deliveryRef}`,
+      paths: [resolved.contract.sourcePath, resolved.contract.traceabilityPath],
+    });
+    const traceabilityFailures = validateChangeTraceability(
+      resolved.contract,
+      resolved.changeRoot,
+      resolved.artifactPaths,
+      report.taskGroups,
+    );
+    report.checks.push({
+      code: "TRACEABILITY_COMPLETE",
+      status: traceabilityFailures.length === 0 ? "pass" : "fail",
+      severity: traceabilityFailures.length === 0 ? "info" : "error",
+      message:
+        traceabilityFailures.length === 0
+          ? "Every acceptance criterion maps to planning artifacts and Task Groups"
+          : traceabilityFailures.map((failure) => failure.message).join("; "),
+      paths: [resolved.contract.traceabilityPath],
+    });
+    const provenanceFailures = projectDir
+      ? validateContractProvenance(projectDir, resolved.changeName, resolved.contract, provenanceOptions)
+      : [];
+    report.checks.push({
+      code: "SOURCE_PROVENANCE_CURRENT",
+      status: provenanceFailures.length === 0 ? "pass" : "fail",
+      severity: provenanceFailures.length === 0 ? "info" : "error",
+      message: provenanceFailures.length === 0
+        ? "RFC acceptance, branch ancestry, Slice binding, and tracker source are current"
+        : provenanceFailures.map((failure) => failure.message).join("; "),
+      paths: [...new Set(provenanceFailures.flatMap((failure) => failure.paths))],
+    });
+  }
+  report.status = report.checks.some(
+    (item) => item.status === "fail" || (strictWarnings && item.status === "warning"),
+  )
+    ? "not_ready"
+    : "ready";
   return { report, resolved };
 }
 

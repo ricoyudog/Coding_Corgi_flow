@@ -114,6 +114,24 @@ describe("computePlanningRevision", () => {
     }
   });
 
+  it("orders equivalent mixed-separator artifact paths deterministically", async () => {
+    const paths = [
+      "C:\\Store\\Change\\specs\\a.md",
+      "C:/Store/Change/specs/a.md",
+    ];
+    const revision = async (existingOutputPaths: string[]) =>
+      await computePlanningRevision(
+        {
+          changeRoot: "C:\\Store\\Change",
+          schemaName: "portable-order",
+          artifactPaths: { specs: artifact("specs/*.md", existingOutputPaths) },
+        },
+        { async read() { return Buffer.from("a"); } }
+      );
+
+    await expect(revision(paths)).resolves.toBe(await revision([...paths].reverse()));
+  });
+
   it("binds schema, manifest path, relative file name, and bytes", async () => {
     const base = {
       changeRoot: "/store/change",
@@ -159,6 +177,42 @@ describe("computePlanningRevision", () => {
     ).resolves.toMatch(/^sha256:[a-f0-9]{64}$/);
   });
 
+  it("changes when RFC source or traceability bytes change", async () => {
+    const files = new Map<string, Uint8Array>([
+      ["/store/change/corgi/source.yaml", Buffer.from("source: one")],
+      ["/store/change/corgi/traceability.yaml", Buffer.from("trace: one")],
+    ]);
+    const input = {
+      changeRoot: "/store/change",
+      schemaName: "custom",
+      artifactPaths: {},
+      contractPaths: [...files.keys()],
+    };
+    const reader = { async read(path: string) { return files.get(path)!; } };
+    const before = await computePlanningRevision(input, reader);
+    files.set("/store/change/corgi/source.yaml", Buffer.from("source: two"));
+    await expect(computePlanningRevision(input, reader)).resolves.not.toBe(before);
+  });
+
+  it("fails closed for a contract path outside changeRoot", async () => {
+    await expect(
+      computePlanningRevision(
+        {
+          changeRoot: "/store/change",
+          schemaName: "custom",
+          artifactPaths: {},
+          contractPaths: ["/store/secret.yaml"],
+        },
+        { async read() { return Buffer.from("secret"); } }
+      )
+    ).rejects.toEqual(
+      expect.objectContaining<Partial<PlanningRevisionError>>({
+        code: "path_outside_change",
+        filePath: "/store/secret.yaml",
+      })
+    );
+  });
+
   it("fails closed for a path outside changeRoot", async () => {
     await expect(
       computePlanningRevision(
@@ -193,6 +247,62 @@ describe("computePlanningRevision", () => {
       code: "file_read_failed",
       filePath: "/store/change/proposal.md",
       cause,
+    });
+  });
+
+  it("preserves non-Error artifact causes and contract read causes", async () => {
+    const artifactPath = "/store/change/proposal.md";
+    const contractPath = "/store/change/corgi/source.yaml";
+
+    await expect(
+      computePlanningRevision(
+        {
+          changeRoot: "/store/change",
+          schemaName: "custom",
+          artifactPaths: { proposal: artifact("proposal.md", [artifactPath]) },
+        },
+        { async read() { throw "artifact denied"; } }
+      )
+    ).rejects.toMatchObject({
+      code: "file_read_failed",
+      filePath: artifactPath,
+      message: expect.stringContaining("artifact denied"),
+      cause: "artifact denied",
+    });
+
+    const contractError = new Error("contract denied");
+    await expect(
+      computePlanningRevision(
+        {
+          changeRoot: "/store/change",
+          schemaName: "custom",
+          artifactPaths: {},
+          contractPaths: [contractPath],
+        },
+        { async read() { throw contractError; } }
+      )
+    ).rejects.toMatchObject({
+      code: "file_read_failed",
+      filePath: contractPath,
+      message: expect.stringContaining("contract denied"),
+      cause: contractError,
+    });
+
+    await expect(
+      computePlanningRevision(
+        {
+          changeRoot: "/store/change",
+          schemaName: "custom",
+          artifactPaths: {},
+          contractPaths: [contractPath],
+        },
+        { async read() { throw "contract string denial"; } }
+      )
+    ).rejects.toMatchObject({
+      code: "file_read_failed",
+      filePath: contractPath,
+      message: expect.stringContaining("contract string denial"),
+      cause: "contract string denial",
     });
   });
 });

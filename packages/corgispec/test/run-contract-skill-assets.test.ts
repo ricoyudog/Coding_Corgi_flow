@@ -2,7 +2,6 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { createLoopV2Command } from "../src/commands/loop-v2.js";
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const REPO_ROOT = resolve(PACKAGE_ROOT, "../..");
@@ -11,140 +10,111 @@ function read(relativePath: string): string {
   return readFileSync(resolve(REPO_ROOT, relativePath), "utf8");
 }
 
-describe("Run Contract v2 skill guardrails", () => {
-  const openCodeApply = read(".opencode/skills/compounds/corgispec-apply/SKILL.md");
-  const claudeApply = read(".claude/skills/compounds/corgispec-apply/SKILL.md");
-  const bundledApply = read("packages/corgispec/assets/skills/compounds/corgispec-apply/SKILL.md");
-  const reviewLoop = read(".opencode/skills/molecules/corgispec-review-loop/SKILL.md");
+describe("Run Contract v3 public skill chain", () => {
+  const apply = read(".opencode/skills/compounds/corgispec-apply/SKILL.md");
+  const verify = read(".opencode/skills/molecules/corgispec-verify/SKILL.md");
+  const review = read(".opencode/skills/molecules/corgispec-review/SKILL.md");
+  const qa = read(".opencode/skills/molecules/corgispec-human-qa/SKILL.md");
+  const archive = read(".opencode/skills/molecules/corgispec-archive-change/SKILL.md");
+  const memoryExtract = read(".opencode/skills/atoms/corgispec-memory-extract/SKILL.md");
+  const groupReview = read(".opencode/skills/molecules/corgispec-review-loop/SKILL.md");
 
-  it("keeps the platform-independent apply contract while requiring explicit invocation", () => {
-    expect(claudeApply).toBe(openCodeApply);
-    expect(bundledApply).toBe(openCodeApply);
-    expect(openCodeApply).toContain("Run Contract v2 CLI as the lifecycle authority");
-    expect(openCodeApply).toContain("only user-facing implementation entry");
-    expect(openCodeApply).toContain('opencode/autoinvoke: "false"');
-    expect(openCodeApply).toContain("disable-model-invocation: true");
-    expect(openCodeApply).toContain("Never create, edit, rename, or delete `.corgi/loop/**` files");
-    expect(openCodeApply).toContain("stateRevision");
-    expect(openCodeApply).toContain("nonce");
-    expect(openCodeApply).toContain("corgispec loop submit");
-    expect(openCodeApply).toContain("corgispec loop ack-commit");
-    expect(openCodeApply).toContain("corgispec loop sync-tracker");
-    expect(openCodeApply).toContain("they never run `sync-tracker`, `gh`, `glab`");
-    expect(openCodeApply).toContain("corgispec loop finalize");
-    expect(openCodeApply).toContain("Prefer a safe evidence draft");
-    expect(openCodeApply).toContain("Omit evidence bindings, entry bindings");
-    expect(openCodeApply).toContain("never send a partial binding or hash claim");
-    expect(openCodeApply).toContain("Give every approved Task Group its own new commit");
-    expect(openCodeApply).toContain("Never combine multiple Task Groups in one commit");
-    expect(openCodeApply).toContain("Passing evaluation does not complete a group");
-    expect(openCodeApply).toContain("Do not run tracker sync or begin another group before acknowledgement succeeds");
+  it("keeps Apply as the explicit implementation entry with per-group commits", () => {
+    expect(read(".claude/skills/compounds/corgispec-apply/SKILL.md")).toBe(apply);
+    expect(read("packages/corgispec/assets/skills/compounds/corgispec-apply/SKILL.md")).toBe(apply);
+    expect(apply).toContain("Run Contract v3");
+    expect(apply).toContain("only public implementation entry");
+    expect(apply).toContain('opencode/autoinvoke: "false"');
+    expect(apply).toContain("disable-model-invocation: true");
+    expect(apply).toContain("Never combine multiple Task Groups in one commit");
+    expect(apply).toContain("stateRevision");
+    expect(apply).toContain("nonce");
+    expect(apply).toContain("planning-baseline commit");
+    expect(apply).toContain("planning artifacts, including task checkboxes, are frozen");
+    expect(apply).toContain("Do not broaden RFC scope, edit `source.yaml`, or modify planning artifacts/task checkboxes after the planning-baseline commit");
+    expect(apply).toContain("Run Contract v3 is the lifecycle authority and the CLI-managed Issue dashboard is the tracker view of progress");
+    expect(apply).toContain("awaiting_verify");
+    expect(apply).toContain('--session "<session-id>" --owner "<agent-id>"');
+    expect(apply).toContain('--evidence "<JSON-file>" --run-id "<runId>"');
+    expect(apply).not.toContain("[--tracker-checkpoint");
+    expect(apply).toContain("Do not run final Verify, human Review, Human QA, Archive");
   });
 
-  it("documents only valid lifecycle argv and complete CAS tokens", () => {
-    expect(openCodeApply).toContain(
-      'corgispec loop init "<change>" --owner "<actor>" --session "<session>" --mode "<self-driven|hook-driven>" --json',
-    );
-    expect(openCodeApply).toContain('corgispec loop inspect "<change>" --json');
-
-    for (const operation of ["submit", "ack-commit", "sync-tracker", "finalize", "invalidate", "resume"]) {
-      const invocation = openCodeApply
-        .split("\n")
-        .find((line) => line.includes(`corgispec loop ${operation} "<change>"`));
-      expect(invocation, `${operation} invocation should be documented`).toBeDefined();
-      expect(invocation).toContain('--run-id "<runId>"');
-      expect(invocation).toContain("--session");
-      expect(invocation).toContain("--state-revision <n>");
-      expect(invocation).toContain('--nonce "<nonce>"');
-      expect(invocation).toContain("--json");
+  it("separates the canonical whole-change gates", () => {
+    expect(verify).toContain("complete project test/build/lint/integration suite");
+    expect(verify).toContain("For every source AC");
+    expect(verify).toContain("awaiting_human_review");
+    expect(verify).toContain('--report "<verify-report.json>" --run-id "<runId>"');
+    expect(review).toContain("--reject-implementation");
+    expect(review).toContain("--require-rfc-amendment");
+    expect(review).toContain('--approve --reviewer "<human-id>" --run-id "<runId>"');
+    expect(review).toContain("Only a human may choose");
+    expect(qa).toContain("real user paths");
+    expect(qa).toContain('--report "<qa-report.json>" --run-id "<runId>"');
+    expect(qa).toContain("human reviewer explicitly supplies identity and reason");
+    expect(archive).toContain("ready_for_archive");
+    expect(archive).toContain("canonical evidence materialized");
+    expect(archive).toContain("wiki/deliveries/<RFC-ID>-<Slice-ID>.md");
+    expect(archive).toContain("`corgispec archive --local` is the sole write transaction");
+    for (const operation of ["--begin", "--local", "--confirm-tracker", "--finish"]) {
+      expect(archive).toContain(operation);
     }
-
-    expect(openCodeApply).toContain('--reason "<reason>"');
-    expect(openCodeApply).toContain('--new-session "<newSessionId>"');
-    expect(openCodeApply).toContain('--push-status pushed --remote-revision "<revision>"');
-    expect(openCodeApply).not.toContain("--commit");
   });
 
-  it("keeps documented lifecycle options aligned with the Commander surface", () => {
-    const loop = createLoopV2Command();
-    const optionsFor = (name: string): Set<string> => {
-      const command = loop.commands.find((candidate) => candidate.name() === name);
-      expect(command, `${name} should exist on the loop CLI`).toBeDefined();
-      return new Set(command!.options.map((option) => option.long));
-    };
-    const expectOptions = (name: string, expected: string[]): void => {
-      const options = optionsFor(name);
-      for (const option of expected) expect(options).toContain(option);
-    };
-
-    expectOptions("init", [
-      "--session", "--owner", "--mode", "--run-id", "--path", "--json",
-    ]);
-    expectOptions("inspect", [
-      "--run-id", "--path", "--json",
-    ]);
-
-    const casOptions = ["--run-id", "--session", "--state-revision", "--nonce"];
-    for (const operation of ["submit", "ack-commit", "sync-tracker", "finalize", "invalidate", "resume"]) {
-      expectOptions(operation, casOptions);
-    }
-
-    expect(optionsFor("submit")).toContain("--bundle");
-    expect(optionsFor("ack-commit")).toContain("--push-status");
-    expect(optionsFor("ack-commit")).toContain("--remote-revision");
-    expect(optionsFor("ack-commit")).not.toContain("--commit");
-    expect(optionsFor("invalidate")).toContain("--reason");
-    expect(optionsFor("resume")).toContain("--new-session");
-    expect(optionsFor("resume")).toContain("--target-phase");
-    expect(optionsFor("resume")).toContain("--max-attempts");
-  });
-
-  it("ships Codex discovery metadata and universal installation targets", () => {
-    const openAiMetadata = read(
-      ".opencode/skills/compounds/corgispec-apply/agents/openai.yaml",
+  it("keeps archive knowledge materialization in the CLI and extraction read-only", () => {
+    const packagedExtract = read(
+      "packages/corgispec/assets/skills/atoms/corgispec-memory-extract/SKILL.md",
     );
-    expect(read(".claude/skills/compounds/corgispec-apply/agents/openai.yaml"))
-      .toBe(openAiMetadata);
-    expect(read("packages/corgispec/assets/skills/compounds/corgispec-apply/agents/openai.yaml"))
-      .toBe(openAiMetadata);
-    expect(openAiMetadata).toContain("$corgispec-apply");
-    expect(openAiMetadata).toContain("allow_implicit_invocation: false");
 
-    const metadata = JSON.parse(
-      read(".opencode/skills/compounds/corgispec-apply/skill.meta.json"),
-    );
-    expect(metadata.version).toBe("2.1.0");
-    expect(metadata.installation.targets).toEqual(["opencode", "claude", "codex"]);
-    expect(metadata.depends_on).not.toContain("corgispec-apply-change");
-    expect(metadata.depends_on).not.toContain("corgispec-gh-apply");
+    expect(read(".claude/skills/atoms/corgispec-memory-extract/SKILL.md")).toBe(memoryExtract);
+    expect(packagedExtract).toBe(memoryExtract);
+    expect(memoryExtract).toContain("read-only preflight before `corgispec archive --local`");
+    expect(memoryExtract).toContain("`corgispec archive --local` is the sole writer");
+    expect(memoryExtract).toContain("Do not repair it manually after the closeout commit is sealed");
+    expect(memoryExtract).not.toContain("## Write the Delivery Page");
+    expect(memoryExtract).not.toContain("## Promote Knowledge");
+    expect(memoryExtract).not.toContain("## Close the Bridge");
   });
 
-  it("prohibits direct review artifact and human-triage writes", () => {
-    expect(reviewLoop).toContain("Never read or write `.corgi/loop/**`");
-    expect(reviewLoop).toContain("do not persist them yourself");
-    expect(reviewLoop).toContain("Do not assign fingerprints");
-    expect(reviewLoop).toContain("no finding was triaged");
+  it("documents frozen planning checkboxes in public READMEs", () => {
+    const english = read("README.md");
+    const traditionalChinese = read("README.zh-TW.md");
+
+    expect(english).toContain("Do not modify planning artifacts or task checkboxes after the planning baseline");
+    expect(english).toContain("Run Contract v3 records lifecycle progress");
+    expect(english).not.toContain("Mark tasks as [x] when done.");
+    expect(traditionalChinese).toContain("planning baseline 後不得修改 planning artifact 或 task checkbox");
+    expect(traditionalChinese).toContain("Run Contract v3 記錄 lifecycle progress");
+    expect(traditionalChinese).not.toContain("完成後將 tasks 標記為 [x]");
   });
 
-  it("routes both apply wrappers to the v2 skill", () => {
+  it("keeps automated Task Group review distinct from human review", () => {
+    expect(groupReview).toContain("automated review findings");
+    expect(groupReview).toContain("this is not canonical whole-change Verify or Human Review");
+    expect(groupReview).toContain("no file was changed");
+  });
+
+  it("routes public wrappers through the explicit quality chain", () => {
     expect(read(".opencode/commands/corgi-apply.md")).toContain("**corgispec-apply**");
     expect(read(".claude/commands/corgi/apply.md")).toContain("**corgispec-apply**");
-    expect(read(".opencode/commands/corgi-apply.md")).toContain("sole user-facing implementation entry");
-    expect(read(".claude/commands/corgi/apply.md")).toContain("sole user-facing implementation entry");
-    expect(read(".opencode/commands/corgi-apply.md")).toContain("own acknowledged commit");
-    expect(read(".claude/commands/corgi/apply.md")).toContain("own acknowledged commit");
-    expect(read("packages/corgispec/assets/commands/opencode/corgi-apply.md"))
-      .toBe(read(".opencode/commands/corgi-apply.md"));
-    expect(read("packages/corgispec/assets/commands/claude/corgi/apply.md"))
-      .toBe(read(".claude/commands/corgi/apply.md"));
+    expect(read(".opencode/commands/corgi-verify.md")).toContain("**corgispec-verify**");
+    expect(read(".opencode/commands/corgi-review.md")).toContain("**corgispec-review**");
+    expect(read(".opencode/commands/corgi-human-qa.md")).toContain("**corgispec-human-qa**");
+    expect(read(".opencode/commands/corgi-archive.md")).toContain("**corgispec-archive-change**");
   });
 
-  it("publishes apply as the only implementation command", () => {
-    for (const path of ["README.md", "README.zh-TW.md", "INSTALL.md"]) {
-      const content = read(path);
-      expect(content, path).not.toMatch(/\/corgi(?:-|:)loop\b/u);
+  it("ships v4 metadata and Codex discovery policy", () => {
+    const metadata = JSON.parse(read(".opencode/skills/compounds/corgispec-apply/skill.meta.json"));
+    expect(metadata.version).toBe("4.0.0-rc1");
+    expect(metadata.installation.targets).toEqual(["opencode", "claude", "codex"]);
+    const openAi = read(".opencode/skills/compounds/corgispec-apply/agents/openai.yaml");
+    expect(openAi).toContain("$corgispec-apply");
+    expect(openAi).toContain("allow_implicit_invocation: false");
+  });
+
+  it("contains no public Run Contract v2 workflow claim", () => {
+    for (const path of ["README.md", "README.zh-TW.md", "INSTALL.md", ".opencode/INSTALL.md"]) {
+      expect(read(path), path).not.toContain("Run Contract v2");
     }
-    expect(read("README.md")).toContain("only public implementation entry");
-    expect(read("README.zh-TW.md")).toContain("唯一公開的實作入口");
   });
 });

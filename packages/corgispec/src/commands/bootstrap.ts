@@ -18,10 +18,12 @@ interface BootstrapCommandOptions {
   schema?: SchemaType;
   mode?: BootstrapMode;
   yes?: boolean;
-  memory?: boolean;
   json?: boolean;
   platform?: string;
   scope?: string;
+  migrateV4?: boolean;
+  dryRun?: boolean;
+  integrationBranch?: string;
 }
 
 export function createBootstrapCommand(): Command {
@@ -35,7 +37,9 @@ export function createBootstrapCommand(): Command {
     .option("--platform <platforms>", "Comma-separated platforms to install for (claude, opencode, codex)")
     .option("--scope <scope>", "Install scope (global, local, both)")
     .option("--yes", "Approve destructive legacy migration steps")
-    .option("--no-memory", "Skip initializing project memory files")
+    .option("--migrate-v4", "Explicitly migrate a v3 project to the RFC-first v4 contract")
+    .option("--dry-run", "Inspect and report the complete bootstrap plan without writing")
+    .option("--integration-branch <branch>", "Persist the RFC governance integration branch")
     .option("--json", "Output bootstrap result as JSON")
     .action(async (opts: BootstrapCommandOptions) => {
       const isInteractive = !opts.json && !opts.yes && process.stdin.isTTY;
@@ -71,8 +75,10 @@ export function createBootstrapCommand(): Command {
         schema: schema.value,
         mode: mode.value,
         yes: opts.yes ?? false,
-        noMemory: opts.memory === false,
         json: opts.json ?? false,
+        migrateV4: opts.migrateV4 ?? false,
+        dryRun: opts.dryRun ?? false,
+        integrationBranch: opts.integrationBranch,
         assetsRoot: resolveBootstrapAssetsRoot(),
         platforms: platforms.value,
         scope: scope.value,

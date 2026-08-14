@@ -86,6 +86,21 @@ describe("bundle-assets", () => {
       "memory-init/templates/wiki/hot.md",
       resolve(REPO_ROOT, ".opencode/skills/atoms/corgispec-memory-init/templates/wiki/hot.md")
     );
+    expectBundledFile(
+      bundleRoot,
+      "memory-init/templates/wiki/schema.md",
+      resolve(REPO_ROOT, ".opencode/skills/atoms/corgispec-memory-init/templates/wiki/schema.md")
+    );
+    expectBundledFile(
+      bundleRoot,
+      "memory-init/templates/wiki/deliveries/_index.md",
+      resolve(
+        REPO_ROOT,
+        ".opencode/skills/atoms/corgispec-memory-init/templates/wiki/deliveries/_index.md"
+      )
+    );
+    expect(existsSync(resolve(bundleRoot, "memory-init/templates/wiki/sessions"))).toBe(false);
+    expect(existsSync(resolve(bundleRoot, "memory-init/templates/wiki/log.md"))).toBe(false);
 
     expectBundledFile(
       bundleRoot,
@@ -440,27 +455,40 @@ isolation:
     ]);
   });
 
-  it("retires only signature-proven project-local loop commands", () => {
+  it("retires only signature-proven project-local loop and converge commands", () => {
     const opencodeLoop = LEGACY_PROJECT_ASSET_CATALOG.find(
       (entry) => entry.path === ".opencode/commands/corgi-loop.md"
     )!;
     const claudeLoop = LEGACY_PROJECT_ASSET_CATALOG.find(
       (entry) => entry.path === ".claude/commands/corgi/loop.md"
     )!;
+    const opencodeConverge = LEGACY_PROJECT_ASSET_CATALOG.find(
+      (entry) => entry.path === ".opencode/commands/corgi-converge.md"
+    )!;
+    const claudeConverge = LEGACY_PROJECT_ASSET_CATALOG.find(
+      (entry) => entry.path === ".claude/commands/corgi/converge.md"
+    )!;
     writeFile(
       resolve(caseDir, opencodeLoop.path),
       "Run the corgispec-loop workflow with state in .corgi/loop.\n",
     );
     writeFile(resolve(caseDir, claudeLoop.path), "# custom loop command\n");
+    writeFile(
+      resolve(caseDir, opencodeConverge.path),
+      "Run corgispec-converge with a confirmation token.\n",
+    );
+    writeFile(resolve(caseDir, claudeConverge.path), "# custom converge command\n");
 
     const classifications = classifyManagedProjectFiles({
       targetDir: caseDir,
       expectedFiles: [],
-      obsoleteCandidates: [opencodeLoop, claudeLoop],
+      obsoleteCandidates: [opencodeLoop, claudeLoop, opencodeConverge, claudeConverge],
     });
 
     expect(classifications).toMatchObject([
+      { path: claudeConverge.path, state: "ambiguous" },
       { path: claudeLoop.path, state: "ambiguous" },
+      { path: opencodeConverge.path, state: "obsolete" },
       { path: opencodeLoop.path, state: "obsolete" },
     ]);
   });

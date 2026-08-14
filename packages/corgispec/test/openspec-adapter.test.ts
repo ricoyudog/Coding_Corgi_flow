@@ -171,6 +171,15 @@ describe("OpenSpecAdapter command contract", () => {
           schema: "custom-delivery",
         },
       }),
+      json({
+        archive: {
+          change: "new-change",
+          archivedAs: "2026-08-14-new-change",
+          path: "/store/openspec/changes/archive/2026-08-14-new-change",
+          specsUpdated: true,
+          totals: { added: 1, modified: 0, removed: 0, renamed: 0 },
+        },
+      }),
     ]);
     const adapter = createOpenSpecAdapter("/workspace", runner, {
       verifyRuntime: false,
@@ -192,6 +201,9 @@ describe("OpenSpecAdapter command contract", () => {
         goal: "Ship safely",
       })
     ).resolves.toMatchObject({ change: { id: "new-change" } });
+    await expect(adapter.archiveChange("new-change")).resolves.toMatchObject({
+      archive: { archivedAs: "2026-08-14-new-change" },
+    });
 
     expect(runner.requests.map((request) => request.args)).toEqual([
       ["list", "--json", "--store", "shared-product"],
@@ -230,6 +242,7 @@ describe("OpenSpecAdapter command contract", () => {
         "--schema",
         "custom-delivery",
       ],
+      ["archive", "new-change", "--json", "--yes", "--store", "shared-product"],
     ]);
   });
 

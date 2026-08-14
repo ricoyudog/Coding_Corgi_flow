@@ -1,17 +1,18 @@
 ---
-description: Create a complete CorgiSpec planning package and optional tracker handoff
+description: Build one RFC-first planning package from an accepted Slice or closed maintenance exemption
 ---
 
-**Input**: Accept a change name or a description from which to derive one.
+**Input**: Require a change name plus exactly one source:
 
-1. **Context Gate**: If session context already contains `isolation.mode`, active changes with worktree paths, and the current branch, reuse it. Otherwise read isolation configuration. Create or reuse the required worktree before change creation and run subsequent commands there.
-2. Run `corgispec propose "<change>" --json`, then `corgispec status "<change>" --json`.
-3. Require `changeRoot`, `artifactPaths`, `contextFiles`, `taskArtifactId`, `trackingProvider`, and `trackingProviderSource`. If absent, stop and request a CLI upgrade.
-4. Route only by normalized `trackingProvider`:
-   - `github`: follow **corgispec-gh-propose**.
-   - `gitlab` or `none`: follow **corgispec-propose**; skip tracker closeout for none.
-5. Pass the CLI JSON and user intent through unchanged. Never route by `schemaName` or reconstruct a planning path.
-6. Verify strict readiness, authoritative `changeRoot`, artifact completion, tracker result, and worktree before reporting completion.
+- Feature: `--from RFC-0001-slug/S-01-slug`
+- Maintenance: `--maintenance --description "<bounded work>"` and contract references when required
+
+1. Create or reuse the configured delivery worktree before change creation.
+2. Run `corgispec propose "<change>" <source flags> --json`. Do not call `gh` or `glab`; the CLI creates or recovers the one Issue, writes `corgi/source.yaml` and initial `corgi/traceability.yaml`, and binds the delivery.
+3. Follow **corgispec-propose** with the CLI JSON. Refuse free-form Feature prose without an accepted, merged, unbound RFC Slice.
+4. Complete only CLI-authorized planning artifacts and traceability anchors. Use `corgispec ready "<change>" --strict --json` as a diagnostic.
+5. Re-run the exact same source command with `--finalize --json`. Only CLI finalize may enforce strict ready, write the managed dashboard, and move the Issue to todo.
+6. Report RFC/Slice or exemption, Change, worktree, single Issue/provider-none binding, planning revision, AC coverage, and finalized todo handoff.
 
 ## Terminal handoff boundary
 

@@ -6,7 +6,7 @@ description: Investigate a CorgiSpec change, its planning context, implementatio
 # Explore a GitHub-tracked change
 
 1. Resolve the change and isolated worktree with [references/worktree-discovery.md](references/worktree-discovery.md) when required.
-2. Run `corgispec status "<change>" --json` and the internal read-only query `corgispec apply "<change>" --json` from the selected worktree.
+2. Run `corgispec status "<change>" --json` and use SessionStart/loop-check context for any current Run Contract; `apply` is a mutating command and must never be used as a status query.
 3. Require matching `changeRoot` plus `artifactPaths`, `contextFiles`, `taskArtifactId`, `trackingProvider`, and `trackingProviderSource`. Stop and request a CLI upgrade when absent.
 4. Require `trackingProvider: "github"`; never infer provider from `schemaName`.
 5. Read planning material only from returned concrete paths. Accept an external store root and never reconstruct a path or artifact role.

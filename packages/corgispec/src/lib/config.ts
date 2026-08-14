@@ -17,9 +17,19 @@ export interface TrackingConfig {
   provider: TrackingProvider;
 }
 
+export type CorgiContract = "rfc-v1";
+
+export interface GovernanceConfig {
+  integrationBranch: string;
+}
+
 export interface CorgiConfig {
   tracking?: TrackingConfig;
   taskArtifactId?: string;
+  contract?: CorgiContract;
+  rfcRoot?: string;
+  foundation?: string;
+  governance?: GovernanceConfig;
 }
 
 /**
@@ -191,6 +201,67 @@ function validateConfig(raw: RawConfig): OpenSpecConfig {
       corgi.taskArtifactId = corgiRaw.taskArtifactId.trim();
     }
 
+    if (corgiRaw.contract !== undefined && corgiRaw.contract !== null) {
+      if (corgiRaw.contract !== "rfc-v1") {
+        throw new ConfigError("Field 'corgi.contract' must be 'rfc-v1'");
+      }
+      corgi.contract = "rfc-v1";
+    }
+
+    if (corgiRaw.rfcRoot !== undefined && corgiRaw.rfcRoot !== null) {
+      if (!isSafeRelativePath(corgiRaw.rfcRoot)) {
+        throw new ConfigError("Field 'corgi.rfcRoot' must be a safe relative path");
+      }
+      corgi.rfcRoot = corgiRaw.rfcRoot.trim();
+    }
+
+    if (corgiRaw.foundation !== undefined && corgiRaw.foundation !== null) {
+      if (corgiRaw.foundation !== "RFC-0001-project-foundation") {
+        throw new ConfigError(
+          "Field 'corgi.foundation' must be 'RFC-0001-project-foundation'"
+        );
+      }
+      corgi.foundation = "RFC-0001-project-foundation";
+    }
+
+    if (corgiRaw.governance !== undefined && corgiRaw.governance !== null) {
+      if (!isMapping(corgiRaw.governance)) {
+        throw new ConfigError("Field 'corgi.governance' must be a mapping");
+      }
+      const integrationBranch = corgiRaw.governance.integrationBranch;
+      if (
+        typeof integrationBranch !== "string" ||
+        integrationBranch.trim().length === 0 ||
+        /[\u0000-\u001f\u007f]/.test(integrationBranch) ||
+        [" ", "~", "^", ":", "?", "*", "[", "\\"].some((character) =>
+          integrationBranch.includes(character)
+        ) ||
+        integrationBranch.includes("..") ||
+        integrationBranch.startsWith("-") ||
+        integrationBranch.endsWith("/") ||
+        integrationBranch.endsWith(".") ||
+        integrationBranch.includes("//") ||
+        integrationBranch.includes("@{")
+      ) {
+        throw new ConfigError(
+          "Field 'corgi.governance.integrationBranch' must be a valid non-empty branch name"
+        );
+      }
+      corgi.governance = { integrationBranch: integrationBranch.trim() };
+    }
+
+    if (corgi.contract === "rfc-v1") {
+      for (const [field, value] of [
+        ["rfcRoot", corgi.rfcRoot],
+        ["foundation", corgi.foundation],
+        ["governance", corgi.governance],
+      ] as const) {
+        if (value === undefined) {
+          throw new ConfigError(`Field 'corgi.${field}' is required for contract 'rfc-v1'`);
+        }
+      }
+    }
+
     config.corgi = corgi;
   }
 
@@ -288,4 +359,14 @@ export function resolveTaskArtifactId(
 
 function isMapping(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isSafeRelativePath(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const trimmed = value.trim();
+  return trimmed.length > 0
+    && !trimmed.startsWith("/")
+    && !trimmed.startsWith("\\")
+    && !/^[A-Za-z]:/.test(trimmed)
+    && !trimmed.split(/[\\/]+/).includes("..");
 }

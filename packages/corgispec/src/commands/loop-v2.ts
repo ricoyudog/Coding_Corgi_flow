@@ -1286,6 +1286,7 @@ async function inspectPlanningDefault(
     config,
     true,
     { store },
+    projectRoot,
   );
   const tracking = {
     binding: await resolveLoopTrackerBindingV2({

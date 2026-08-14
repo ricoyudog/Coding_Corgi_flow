@@ -126,6 +126,22 @@ export interface OpenSpecCreateChangeResponse {
   [key: string]: unknown;
 }
 
+export interface OpenSpecArchiveResponse {
+  archive: {
+    change: string;
+    archivedAs: string;
+    path: string;
+    specsUpdated: boolean;
+    totals?: {
+      added: number;
+      modified: number;
+      removed: number;
+      renamed: number;
+    };
+  };
+  root?: OpenSpecRoot;
+}
+
 export interface OpenSpecValidationItem extends Record<string, unknown> {
   id: string;
   type: "change" | "spec";
@@ -320,6 +336,20 @@ export class OpenSpecAdapter {
 
     const value = await this.runJson(args);
     return requireResponse(value, isCreateChangeResponse, "OpenSpec create-change response");
+  }
+
+  async archiveChange(
+    changeName: string,
+    options: Pick<OpenSpecCommandOptions, "store"> = {}
+  ): Promise<OpenSpecArchiveResponse> {
+    const value = await this.runJson([
+      "archive",
+      requireNonEmpty(changeName, "change name"),
+      "--json",
+      "--yes",
+      ...this.selectorArgs(options),
+    ]);
+    return requireResponse(value, isArchiveResponse, "OpenSpec archive response");
   }
 
   private selectorArgs(options: OpenSpecCommandOptions): string[] {
@@ -588,6 +618,25 @@ function isCreateChangeResponse(value: unknown): value is OpenSpecCreateChangeRe
     typeof value.change.metadataPath === "string" &&
     typeof value.change.schema === "string"
   );
+}
+
+function isArchiveResponse(value: unknown): value is OpenSpecArchiveResponse {
+  if (!isRecord(value) || !isRecord(value.archive)) return false;
+  const archive = value.archive;
+  if (
+    typeof archive.change !== "string"
+    || typeof archive.archivedAs !== "string"
+    || typeof archive.path !== "string"
+    || typeof archive.specsUpdated !== "boolean"
+  ) {
+    return false;
+  }
+  if (archive.totals === undefined) return true;
+  if (!isRecord(archive.totals)) return false;
+  return typeof archive.totals.added === "number"
+    && typeof archive.totals.modified === "number"
+    && typeof archive.totals.removed === "number"
+    && typeof archive.totals.renamed === "number";
 }
 
 function isValidationResponse(value: unknown): value is OpenSpecValidationResponse {

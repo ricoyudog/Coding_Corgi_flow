@@ -1,8 +1,8 @@
 {
   "slug": "corgispec-gh-propose",
   "tier": "molecule",
-  "version": "1.0.0",
-  "description": "Generate planning artifacts and create one tracked GitHub Issue",
+  "version": "4.0.0-rc1",
+  "description": "Compatibility route to provider-neutral RFC-first Propose for GitHub",
   "depends_on": [],
   "platform": "github",
   "tags": [

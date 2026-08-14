@@ -42,15 +42,15 @@ Coding Corgi Flow 是 [OpenSpec](https://github.com/Fission-AI/OpenSpec)（由 [
 
 | 超能力 | 為什麼你需要 |
 |---|---|
-| 📌 **自動 Issue 追蹤** | 每個 change 只建立一張 GitLab 或 GitHub Issue，Task Dashboard 自動同步 |
+| 📌 **自動 Issue 追蹤** | 每個 RFC Slice 只建立一張 GitLab 或 GitHub Issue，Task Dashboard 由 CLI 管理 |
 | 🛑 **逐 Group Commit Checkpoint** | Apply 驗證並 commit 每個 Task Group 後才推進 |
 | ✅ **自動驗證關卡** | Lint、build、tests、spec coverage — 未通過就阻擋 review |
-| 🔍 **五軸審查** | 架構 · 安全 · 效能 · 品質 · 完整度 |
-| 🧠 **跨 Session 記憶** | 三層系統 — AI 能在多次 session 間記住上下文（啟動 ≤3000 token） |
-| 🌿 **Worktree 隔離** | 平行處理多個 change，各自在獨立 git worktree（opt-in） |
+| 🔍 **Human Review + QA** | 明確的整體變更決策，再驗證真實使用者路徑 |
+| 🧠 **跨 Session 記憶** | 強制 Memory/Wiki，durable bridge 與已驗證知識提升 |
+| 🌿 **Worktree 隔離** | RFC governance 與 delivery 使用獨立 git worktree |
 | 🧩 **可組合 Skill** | Atoms → Molecules → Compounds，附帶驗證過的 metadata |
 | 🪝 **Session Hooks** | 生命週期 hooks（pre-write、pre-bash、session-start…）搭配 context gates |
-| 🔄 **自動化 Apply 管線** | Run Contract v2 管理每個 group 的實作、evidence、review、commit 與 crash 復原 |
+| 🔄 **RFC-first 品質鏈** | Apply → Verify → Human Review → Human QA → Archive |
 | 📦 **一行指令安裝** | `npm i -g corgispec` → `corgispec bootstrap` → 完成 |
 
 以 npm CLI（`corgispec`）、Claude Code / Codex plugin，以及 OpenCode、Claude Code、Codex 的 slash command 形式發佈。
@@ -62,7 +62,7 @@ Coding Corgi Flow 是 [OpenSpec](https://github.com/Fission-AI/OpenSpec)（由 [
 ### 先決條件
 
 - **Node.js >=20.19.0**
-- **OpenSpec CLI >=1.6.0 <2.0.0** — CorgiSpec 3 不支援 OpenSpec 1.3–1.5
+- **OpenSpec CLI >=1.6.0 <2.0.0** — CorgiSpec 4 不支援 OpenSpec 1.3–1.5
 - **LLM Agent** — OpenCode、Claude Code、Cursor、AmpCode 等
 - **`gh` CLI**（GitHub）或 **`glab` CLI**（GitLab），僅在啟用 issue tracking 時需要
 
@@ -79,7 +79,7 @@ corgispec doctor --path /path/to/your-project
 corgispec bootstrap --target /path/to/your-project --schema github-tracked
 ```
 
-未加版本的 `corgispec`、`latest` 與 `next` 都會解析為穩定版 `3.0.1`。若要可重現的安裝，請使用 `npm install -g corgispec@3.0.1` 鎖定版本。
+v4 一次性 cutover 的候選版本為 `corgispec@4.0.0-rc1`。若要可重現的安裝，請鎖定 `npm install -g corgispec@4.0.0-rc1`。
 
 可使用 `--platform <platforms>`（claude、opencode、codex；預設全部）與 `--scope <scope>`（global、local、both；預設 both）。`local` 管理專案 commands、schema、config、manifest 與已存在的 hooks；`global` 管理所選平台的 user-level skills，以及 Claude Code/OpenCode 的 user commands；`both` 會先一起 preflight，再更新兩個範圍。指定 `--platform` 時，只偵測及修復列出的平台。
 
@@ -124,13 +124,15 @@ Fetch and follow instructions from https://raw.githubusercontent.com/ricoyudog/C
 
 ```text
 # OpenCode
-/corgi-propose Add user authentication with JWT and refresh tokens
+/corgi-rfc new user-auth
+/corgi-propose add-auth --from RFC-0002-user-auth/S-01-auth
 
 # Claude Code
-/corgi:propose Add user authentication with JWT and refresh tokens
+/corgi:rfc new user-auth
+/corgi:propose add-auth --from RFC-0002-user-auth/S-01-auth
 ```
 
-`propose` 返回後，先審閱並明確批准規劃 package。Propose 會在此 handoff 停止；只有後續明確呼叫 `apply` 才能開始實作。Apply 會依序實作、驗證、審查並 commit 每個 Task Group；run 完成後再執行 `human-qa` → `archive`。
+人類必須先完成、validate、accept、commit 並 merge RFC。Propose 只建立與 finalize 單一 Issue 的 planning handoff；後續流程固定為 `apply` → whole-change `verify` → human `review` → `human-qa` → `archive`。
 
 ---
 
@@ -138,25 +140,25 @@ Fetch and follow instructions from https://raw.githubusercontent.com/ricoyudog/C
 
 | 指令 | 功能 |
 |---|---|
-| `/corgi-propose` | 產生規劃 artifact 與 issue，然後停止並等待實作前的明確審閱 |
+| `/corgi-rfc` | Scaffold、validate、inspect、renumber，或由人類 accept RFC |
+| `/corgi-propose` | 從 accepted Slice 或 maintenance exemption 建立 planning/traceability，並 finalize 單一 Issue |
 | `/corgi-update` | 雙向協調既有規劃 artifact，每次確認一個 artifact 範圍的 diff |
 | `/corgi-ready` | Apply 前執行確定性的 planning integrity 檢查 |
-| `/corgi-verify` | 自動化品質關卡 — lint、build、tests、spec coverage |
-| `/corgi-review` | 五軸審查，蒐集證據，approve/reject/discuss |
-| `/corgi-apply` | 唯一實作入口 — 以 CAS 保護逐 Group 實作、evidence、review、commit、復原與 finalize |
-| `/corgi-converge` | 比對新鮮的 planning、Git 與 evidence；實作有缺口時，確認後只附加一個 successor Task Group |
+| `/corgi-verify` | Canonical whole-change lint/build/tests/integration 與完整 AC coverage |
+| `/corgi-review` | 明確的人類 approve/reject-implementation/require-amendment 決策 |
+| `/corgi-apply` | 唯一實作入口 — 以 CAS 保護逐 Group 實作、local checks、automated review 與獨立 commit |
 | `/corgi-human-qa` | 人工 QA 關卡 — 路由至專業 QA atom（smoke、UI、API、CLI、backend、exploratory） |
-| `/corgi-archive` | 關閉 issue、同步 delta spec、萃取知識、清理 |
+| `/corgi-archive` | 強 CLI closeout：evidence、archive-derived knowledge provenance、單一 Issue 與清理 |
 | `/corgi-explore` | 思考夥伴 — 探索想法、釐清需求 |
 | `/corgi-install` | 安裝、更新或驗證 project-local 資產 |
-| `/corgi-memory-init` | 初始化三層記憶（`memory/` + `wiki/`） |
+| `/corgi-memory-init` | 驗證強制 Memory/Wiki；初始化委託 transactional bootstrap |
 | `/corgi-migrate` | 將既有知識匯入 memory/wiki |
 | `/corgi-lint` | 14 項記憶健康檢查 |
 | `/corgi-ask` | 從 vault 中以預算感知檢索回答問題 |
 
 > Claude Code 使用 `/corgi:<command>` 格式（如 `/corgi:propose`）。平台從 `config.yaml` 自動偵測。
 
-### 3.0 的 Planning Integrity
+### v4 RFC-first Planning Integrity
 
 OpenSpec 1.6 JSON 是 artifact 相依、glob 展開檔案、instructions 與位置的唯一真相來源。Corgi 使用 OpenSpec 回傳的 `planningHome`、`changeRoot`、`artifactPaths` 與 `actionContext`；不再假設 change 位於本地 `openspec/changes/<name>`，也不再寫死 artifact 檔名。因此，透過 OpenSpec Store 選取的 change 可以位於目前 repository 之外。
 
@@ -170,13 +172,11 @@ corgispec ready add-auth --strict --json
 # 需要時明確選取 OpenSpec Store。
 corgispec ready add-auth --store shared-product --strict --json
 
-# 唯讀 convergence 評估；確認是另一次綁定 token 的呼叫。
-corgispec converge add-auth --json
 ```
 
-經確認的 converge 操作可從 crash 復原。若確認呼叫中斷，以相同的 `confirmationToken` 重跑；CLI 會冪等地恢復 durable intent，且仍是 planning 與 loop state 的唯一 writer。
+Verify、Review 或 QA 失敗後，只能用 `corgispec change repair` 建立 implementation successor；公共契約需要修改時，接受 Amendment RFC 後使用 `corgispec change adopt-amendment`。v4 CLI 與發布資產不再暴露已退役的 v2 Loop 或 Converge 命令。
 
-`ready` 的退出碼：`0` 表示 ready、`1` 表示規劃 blocker、`2` 表示環境或 contract 錯誤。`update` 的退出碼：`0` 表示可開始協調、`1` 表示 active 或待復原的 loop 阻擋規劃修改、`2` 表示 contract 錯誤。在 agent session 中，Claude Code 使用 `/corgi:update`、`/corgi:ready`、`/corgi:converge`；OpenCode 使用對應的 dash 命名指令；Codex 使用已安裝的對應 skills。
+`ready` 的退出碼：`0` 表示 ready、`1` 表示規劃 blocker、`2` 表示環境或 contract 錯誤。`update` 的退出碼：`0` 表示可開始協調、`1` 表示 active 或 legacy run 阻擋規劃修改、`2` 表示 contract 錯誤。
 
 ---
 
@@ -190,7 +190,7 @@ corgispec converge add-auth --json
     </td>
     <td width="50%">
       <b>📌 自動 Issue 追蹤</b><br/>
-      每個 change 只建立一張 GitLab 或 GitHub Issue；受管 dashboard 同步 Task Group 與 checkbox，生命週期證據保留在 comments。
+      每個 RFC Slice 只建立一張 GitLab 或 GitHub Issue；受管 dashboard 與生命週期證據由 CLI 管理。
     </td>
   </tr>
   <tr>
@@ -213,7 +213,7 @@ corgispec converge add-auth --json
 
 ## 🧠 跨 Session 記憶
 
-AI session 預設是無狀態的。Corgi Flow 加入 **三層記憶系統** — 啟動 ≤2900 token、自動壓縮、Obsidian 相容。
+AI session 預設是無狀態的。CorgiSpec v4 加入強制的 RFC-first Memory/Wiki continuity，並保持 `.corgi/loop` 為唯一即時生命週期權威。RFC Slice closeout 時，只有 `corgispec archive --local` 可以寫入 archive-derived 的 delivery 與提升知識 provenance；skill 只能 read-only 地準備或驗證結果。
 
 <p align="center">
   <img src="docs/assets/corgi_knowledge_vault.png" alt="3-layer memory system" width="80%"/>
@@ -224,20 +224,19 @@ AI session 預設是無狀態的。Corgi Flow 加入 **三層記憶系統** — 
 
 ```mermaid
 flowchart LR
-    subgraph "Layer 1: memory/（每次必讀）"
-        A["MEMORY.md"] --- B["session-bridge.md"] --- C["pitfalls.md"]
+    subgraph "啟動（固定順序）"
+        B["session-bridge.md"] --> A["MEMORY.md"] --> D["hot.md"]
     end
-    subgraph "Layer 2: wiki/（按需取用）"
-        D["hot.md"] --- E["index.md"] --- F["patterns/ sessions/ decisions/ ..."]
+    subgraph "Wiki（按需取用）"
+        E["index.md"] --> F["architecture / research / patterns / decisions / guides / questions / deliveries"]
     end
-    subgraph "Layer 3: docs/（不動）"
-        G["既有文件"]
+    subgraph "交付權威"
+        G["accepted RFC/Slice"] --> H["Change overlays"] --> I[".corgi/loop"]
     end
 
-    B -.->|"啟動讀取"| D
-    D -.->|"導航"| E
+    D -.->|"需要時導航"| E
     E -.->|"wikilinks"| F
-    F -.->|"參照"| G
+    B -.->|"durable checkpoint mirror"| I
 ```
 
 </details>
@@ -247,9 +246,10 @@ flowchart LR
 | 情境 | 指令 |
 |---|---|
 | 新專案 | 貼上 Quick Start prompt → `corgispec bootstrap` |
-| 既有專案加入記憶 | `/corgi-memory-init` |
-| 遷移既有知識庫 | `/corgi-migrate` |
-| 健康檢查 | `/corgi-lint` |
+| v3 → v4 cutover | `corgispec bootstrap --migrate-v4` |
+| 豐富既有知識庫 | `/corgi-migrate` |
+| Read-only 健康檢查 | `/corgi-lint` |
+| 寫入健康報告 | `/corgi-lint --report` |
 
 → **[完整記憶文件](docs/cross-session-memory.zh-TW.md)**
 
@@ -274,11 +274,11 @@ Hooks 讓你對 AI session 擁有 **生命週期控制** — 在執行前驗證�
 | `pre-write` | 檔案寫入前 | 保護路徑、強制模式 |
 | `post-write` | 檔案寫入後 | 觸發 lint、同步鏡像 |
 | `pre-bash` | Shell 指令前 | 阻擋破壞性操作、強制白名單 |
-| `post-compact` | 上下文壓縮後 | 確保 session-bridge 已更新 |
-| `stop-check` | Session 結束前 | 驗證關閉狀態、flush 記憶 |
-| `loop-check` | Apply 驅動的 session 結束前 | 檢查 canonical Run Contract v2 state，回傳必須執行的下一個 action |
+| `post-compact` | 上下文壓縮後 | 重新輸出即時 Run Contract 上下文並回報 bridge drift |
+| `stop-check` | Session 結束前 | 驗證 Task Group postconditions |
+| `loop-check` | Apply 驅動的 session 結束前 | 檢查 canonical Run Contract v3 state，回傳必須執行的下一個 action |
 
-Claude Code 與 Codex 提供可 awaited 的 lifecycle hook，因此 `stop-check` 或 `loop-check` 非零退出碼可直接阻擋完成。OpenCode 1.18.x 沒有可 awaited 的 stop hook：產生的 plugin 會在 `session.idle` 觀察狀態、保留 hook stdout/stderr，並在尚有工作時透過 `session.promptAsync` 重入互動 session。真正的硬關卡仍是 `corgispec ready` 與 canonical `corgispec loop ...` 狀態轉換。單次 `opencode run` 可能在異步重入完成前就 teardown，所以自動化應明確檢查 ready/loop CLI 結果，不能把 idle 當作完成。
+Claude Code 與 Codex 提供可 awaited 的 lifecycle hook，因此 `stop-check` 或 `loop-check` 非零退出碼可直接阻擋完成。OpenCode 1.18.x 沒有可 awaited 的 stop hook：產生的 plugin 會在 `session.idle` 觀察狀態、保留 hook stdout/stderr，並在尚有工作時透過 `session.promptAsync` 重入互動 session。正式硬關卡是 `ready` 與公開 Run Contract v3 Apply/Verify/Review/QA/Archive 命令；自動化必須檢查 lifecycle JSON，不能把 idle 當作完成。
 
 ### Context Gates
 
@@ -298,20 +298,27 @@ Hooks 是 **opt-in** — 現有專案不需要 hooks 也能正常運作。執行
 
 ## 🔄 自動化管線（Apply）
 
-**Corgi Apply 是唯一公開的實作入口。** 它在內部使用 Run Contract v2 loop engine；一次呼叫會驅動所有 Task Group，逐一完成實作、驗證、review evidence 與獨立 commit。
+**Corgi Apply 是唯一公開的實作入口。** Run Contract v3 為每個 Task Group 建立通過檢查的獨立 commit，然後在 `awaiting_verify` 停止。Whole-change Verify、Human Review、Human QA 與 Archive 是獨立 canonical gates。
 
 ```text
-# 一條指令搞定一切：
+# 實作 gate：
 /corgi:apply <change-name>
+
+# 之後明確執行品質鏈：
+/corgi:verify <change-name>
+/corgi:review <change-name>
+/corgi:human-qa <change-name>
+/corgi:archive <change-name>
 ```
 
-**功能說明：** 每次呼叫執行一個有邊界的 **Task Group attempt**（實作 → verify → review evidence），再提交給確定性的 Run Contract v2 CLI。Skill 不會直接寫入 lifecycle 檔案；檔案鎖、CAS、event replay、evidence 驗證、commit acknowledgement 與 finalization 都由 CLI 掌控。
+**Apply 功能：** 每次處理一個有邊界的 Task Group，執行 local checks 與 automated review，建立獨立 commit，並透過 CLI checkpoint 同一張 Slice Issue。Skill 不會直接寫入 lifecycle 檔案。
 
 | 模式 | 行為 |
 |---|---|
-| **必要的 Group commit** | 乾淨的 evidence/review → `awaiting_group_commit`；建立一個獨立且匹配的 commit 後才推進 |
-| **自動修復迴圈** | 自驅模式失敗且仍有 retry budget → `fixing`；hook-driven 或重試用盡時確定性終止 |
-| **Crash 復原** | 將已 fsync 的 event replay 到 atomic snapshot；只有被截斷的最後一筆 JSONL 可自動修復 |
+| **必要的 Group commit** | 每個 Task Group 必須有通過檢查且匹配的獨立 commit |
+| **Whole-change evidence** | Apply 完成後，Verify 覆蓋所有 checks 與每個 RFC AC |
+| **Human gates** | Review 記錄 accept/reject/amendment；QA 驗證真實使用者路徑 |
+| **Crash 復原** | CAS-bound events 與 durable intents 避免重複 Issue 或 Archive 工作 |
 
 **平台差異：**
 
@@ -321,7 +328,7 @@ Hooks 是 **opt-in** — 現有專案不需要 hooks 也能正常運作。執行
 | 失敗處理 | 立即停止 | 自動重試最多 3 次 |
 | 指令 | `/corgi:apply <name>` | `/corgi-apply <name>` |
 
-Canonical state 儲存在 `.corgi/loop/<change>/`，每個 run 使用 atomic snapshot 與 append-only event/triage log。每次修改都帶有 `stateRevision + nonce`；stale token 或衝突 session 不會改動檔案系統。
+Canonical state 儲存在 `.corgi/loop/<change>/`。每次修改都帶有 `stateRevision + nonce`；stale token、contract drift 或衝突 session 不會改動 authoritative state。
 
 **設計原則：** *Hard Logic Orchestrates, LLM Executes.* CLI 掌控狀態轉換、驗證、evidence identity、檔案鎖、復原與熔斷。LLM skill 只執行有邊界的工作，並透過 CLI 提交真實 evidence。
 
@@ -367,14 +374,14 @@ Schema 定義 artifact pipeline。CorgiSpec 接受任何 OpenSpec schema 名稱�
 | **提案** | `proposal.md` | 動機、範圍、能力項目、影響 |
 | **規格** | `specs/<capability>/spec.md` | 正式 WHEN/THEN 情境（每個 capability 一份） |
 | **設計** | `design.md` | 技術決策、架構、風險、取捨 |
-| **任務** | `tasks.md` | 附 checkbox 的編號 Task Group，同步到單一 Issue dashboard |
+| **任務** | `tasks.md` | 編號 Task Group；checkbox 是 planning syntax，planning baseline 後凍結，進度由 CLI-managed Issue dashboard 顯示 |
 
 流程：`proposal → specs → design → tasks → apply`
 
 關鍵設計：
 - **Capability 驅動規格** — 每個 capability 獨立 spec 檔案，可追溯
 - **Delta spec 模型** — ADDED/MODIFIED/REMOVED/RENAMED 操作，累積成 canonical spec
-- **Task Group 即 checkpoint** — 每個 `## N. Group` = 一個 dashboard 區段、一個 apply checkpoint、一個獨立 commit
+- **Task Group 即 checkpoint** — 每個 `## N. Group` = 一個 dashboard 區段、一個 apply checkpoint、一個獨立 commit；planning baseline 後不修改 planning checkbox
 
 <details>
 <summary>建立自訂 schema</summary>
@@ -410,7 +417,7 @@ artifacts:
     description: 實作清單
     template: tasks.md
     instruction: |
-      將實作拆成附 checkbox 的編號 Task Group。
+      將實作拆成附 checkbox 的編號 Task Group。checkbox 只是 planning syntax，planning-baseline commit 後即凍結。
     requires:
       - proposal
 
@@ -419,7 +426,7 @@ apply:
     - tasks
   tracks: tasks.md
   instruction: |
-    一次執行一個 Task Group。完成後將 tasks 標記為 [x]。
+    一次執行一個 Task Group。planning baseline 後不得修改 planning artifact 或 task checkbox；Run Contract v3 記錄 lifecycle progress，CLI-managed Issue dashboard 記錄 tracker progress。
 ```
 
 在 `config.yaml` 設定 `schema: my-schema`。
@@ -432,9 +439,9 @@ apply:
 
 | 能力 | 原生 OpenSpec | Coding Corgi Flow |
 |---|---|---|
-| Issue 追蹤 | 無 | 每個 change 一張 Issue，透過 `gh` 或 `glab` |
+| Issue 追蹤 | 無 | 每個 RFC Slice 一張 CLI-managed Issue |
 | 實作行為 | 一次全部 | Apply 逐一驗證、審查並 commit 每個 group，再自動推進 |
-| 進度同步 | 僅本地 checkbox | 一個受管 dashboard 加生命週期 comments |
+| 進度同步 | 僅本地 checkbox | Run Contract v3 管理 lifecycle，加上一個 CLI-managed Issue dashboard；planning checkbox 保持凍結 |
 | 工作流標籤 | 無 | `backlog → todo → in-progress → review → done` |
 | 審查 | 無 | 五軸自動檢查 + verify gate + 決策循環 |
 | 人工 QA | 無 | 結構化 QA，含 6 個專業 atom（smoke、UI、API、CLI、backend、exploratory） |
@@ -445,7 +452,7 @@ apply:
 | 記憶健康 | 無 | 14 項 lint（新鮮度、上限、連結、萃取） |
 | Skill 架構 | 扁平檔案 | Atoms → Molecules → Compounds + schema 驗證 |
 | Session hooks | 無 | 生命週期 hooks（pre-write、pre-bash、session-start…）+ context gates |
-| 自動化管線 | 無 | Run Contract v2：每個 group 的 CAS、evidence、review、commit acknowledgement 與 crash 復原 |
+| 自動化管線 | 無 | Run Contract v3：Apply → Verify → Human Review → Human QA → Archive |
 | Plugin 市集 | 無 | Claude Code `/plugin install` + Codex marketplace |
 
 ---
@@ -484,14 +491,17 @@ rules:
 
 `schema` 現在只選擇 OpenSpec workflow，不再選擇 issue tracker。只有 schema 確實提供 id 為 `tasks` 的 artifact 時，才能省略 `corgi.taskArtifactId`。Task Group 檢查與 ready 要求該 artifact 解析成唯一一個具體檔案。Installer 會保留專案自行維護的 `context` 與 `rules`。
 
-### 從 CorgiSpec 2.x 遷移
+### 從 CorgiSpec v3 遷移
 
-1. 升級至 Node >=20.19.0 與 OpenSpec >=1.6.0 <2.0.0，再安裝 `corgispec`（穩定版 `3.0.1`），或精確鎖定 `corgispec@3.0.1`。`latest` 與 `next` 會解析為相同的穩定版本。
+1. 先完成、歸檔或撤回所有 active v3 Change/Run，再安裝 `corgispec@4.0.0-rc1` 並執行 `corgispec bootstrap --migrate-v4 --target .`。
 2. 保留既有 schema 名稱，但明確寫出原先推斷的 tracker：
 
    ```yaml
    schema: github-tracked
    corgi:
+     contract: rfc-v1
+     rfcRoot: rfcs
+     foundation: RFC-0001-project-foundation
      tracking:
        provider: github
      taskArtifactId: tasks

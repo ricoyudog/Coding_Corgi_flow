@@ -3,14 +3,14 @@ type: memory
 updated: {{DATE}}
 ---
 
-# Pitfalls
+# Verified Pitfalls
 
-> Cross-change pitfall log. Each entry links to its source change. Max 20 active entries.
+> Cross-delivery pitfalls only. Every entry cites verified evidence. Maximum 20 active entries. `corgispec archive --local` alone writes archive-derived entries.
 
 ## Active
 
-(No pitfalls yet — these accumulate during Corgi Loop sessions)
+(No verified pitfalls yet.)
 
 ## Archive
 
-(No archived pitfalls yet — oldest entries rotate here when Active exceeds 20)
+(No archived pitfalls yet.)

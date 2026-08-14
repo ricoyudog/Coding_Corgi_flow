@@ -2,13 +2,13 @@
 
 ### Startup (every session)
 Read in order, max 3 files:
-1. `memory/session-bridge.md` — last session's state
-2. `wiki/hot.md` — current project context (~500 words, hard cap 600)
-3. `wiki/index.md` — jump to relevant domain page
-Then read `docs/` or code as needed.
+1. `memory/session-bridge.md` — durable delivery checkpoint
+2. `memory/MEMORY.md` — permanent source-backed constraints
+3. `wiki/hot.md` — current project context (~500 words, hard cap 600)
+Then read the active RFC, Slice, `source.yaml`, `traceability.yaml`, and Change artifacts named by the bridge. Read `wiki/index.md` only on demand.
 
 ### Retrieval Budget
-- Startup: max 3 files (session-bridge + hot + index), then on-demand
+- Startup: max 3 files (session-bridge + MEMORY + hot), then active delivery artifacts
 - Per-question: max 2 wiki pages before answering
 - If >5 pages needed: say "this needs a deep session"
 
@@ -20,17 +20,16 @@ Then read `docs/` or code as needed.
 | memory/pitfalls.md | 10 active | 20 active | Rotate oldest 10 |
 | memory/session-bridge.md | 30 lines | 50 lines | Archive old Done items |
 
-### Shutdown (every session end)
-Update `memory/session-bridge.md`: Done / Waiting / New Pitfalls / New Discoveries
+### Durable Checkpoints
+`memory/session-bridge.md` is not a live state machine. Apply updates it only with a planning-baseline commit and immediately before each Task Group commit. `corgispec archive --local` alone writes the archive closeout checkpoint; skills must not repeat that write after the closeout commit is sealed. SessionStart/PostCompact hooks synthesize the live phase and report drift from `.corgi/loop`.
 
-### Corgi Apply → Long-term Memory
-After each Task Group completes:
-- New pitfalls → append to `memory/pitfalls.md` (link source change)
-- New implicit rules → append to `wiki/architecture/implicit-contracts.md`
-- Update `wiki/hot.md` Recent Decisions
+### Knowledge Promotion
+- During Apply, keep discoveries in the bridge Promotion Queue; do not promote unverified claims.
+- At Archive, `corgispec archive --local` creates `wiki/deliveries/<RFC-ID>-<Slice-ID>.md` and is the sole writer of archive-derived hot, architecture, patterns, pitfalls, MEMORY, and bridge provenance. Skills only prepare or verify this work read-only.
+- Do not create new `wiki/sessions/` pages or append to `wiki/log.md`; migrated legacy data stays read-only in place.
 
 ### Compaction Triggers (agent self-maintains)
-- Every archive: compress session-bridge
+- Every archive: clear the completed delivery pointer and compact the bridge
 - pitfalls > 20 entries: rotate oldest 10 to Archive section
 - hot.md > 550 words: trim oldest entries
-- Every 10 opsx sessions: suggest running /corgi-lint
+- Every 10 Corgi sessions: suggest running `/corgi-lint`; lint is read-only unless `--report` is explicit

@@ -1,8 +1,8 @@
 {
   "slug": "corgispec-memory-extract",
   "tier": "atom",
-  "version": "1.0.0",
-  "description": "Extract reusable patterns and session summaries from completed changes into wiki long-term memory",
+  "version": "4.0.0-rc1",
+  "description": "Read-only preparation and verification for RFC Slice archive knowledge closeout",
   "depends_on": [],
   "platform": "universal",
   "tags": [

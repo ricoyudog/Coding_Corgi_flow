@@ -32,6 +32,7 @@ export interface MemoryInitInput {
 export interface MemoryInitResult {
   createdFiles: string[];
   skippedFiles: string[];
+  upgradedFiles: string[];
   injectedSessionMemoryProtocol: boolean;
 }
 
@@ -272,6 +273,162 @@ function appendSessionMemoryProtocol(targetFilePath: string, protocol: string): 
   writeFileSync(targetFilePath, nextContent);
 }
 
+function replaceSessionMemoryProtocol(content: string, protocol: string): string {
+  const heading = /^## Session Memory Protocol\s*$/mu;
+  const match = heading.exec(content);
+  if (!match) return content;
+  const following = /^## (?!Session Memory Protocol\s*$).+$/gmu;
+  following.lastIndex = match.index + match[0].length;
+  const next = following.exec(content);
+  const before = content.slice(0, match.index).trimEnd();
+  const after = next ? content.slice(next.index).trim() : "";
+  return [before, protocol.trim(), after].filter(Boolean).join("\n\n") + "\n";
+}
+
+function sectionBounds(content: string, heading: string): { start: number; bodyStart: number; end: number } | null {
+  const pattern = new RegExp(`^## ${escapeRegExp(heading)}\\s*$`, "mu");
+  const match = pattern.exec(content);
+  if (!match) return null;
+  const bodyStart = match.index + match[0].length;
+  const following = /^## .+$/gmu;
+  following.lastIndex = bodyStart;
+  const next = following.exec(content);
+  return { start: match.index, bodyStart, end: next?.index ?? content.length };
+}
+
+function sectionField(content: string, heading: string, label: string): string | null {
+  const bounds = sectionBounds(content, heading);
+  if (!bounds) return null;
+  const body = content.slice(bounds.bodyStart, bounds.end);
+  const match = body.match(new RegExp(`^- \\*\\*${escapeRegExp(label)}\\*\\*: (.+)$`, "mu"));
+  return match?.[1]?.trim() ?? null;
+}
+
+function ensureSectionFields(
+  content: string,
+  heading: string,
+  fields: Array<[string, string]>,
+): string {
+  let next = content;
+  if (!sectionBounds(next, heading)) next = `${next.trimEnd()}\n\n## ${heading}\n`;
+  for (const [label, value] of fields) {
+    const bounds = sectionBounds(next, heading)!;
+    const body = next.slice(bounds.bodyStart, bounds.end);
+    if (new RegExp(`^- \\*\\*${escapeRegExp(label)}\\*\\*:`, "mu").test(body)) continue;
+    const insertion = `${body.trimEnd()}\n- **${label}**: ${value}\n\n`;
+    next = `${next.slice(0, bounds.bodyStart)}${insertion}${next.slice(bounds.end).trimStart()}`;
+  }
+  return next;
+}
+
+function ensureSection(content: string, heading: string, body: string): string {
+  if (sectionBounds(content, heading)) return content;
+  return `${content.trimEnd()}\n\n## ${heading}\n${body.trim()}\n`;
+}
+
+function upgradeSessionBridge(content: string): string {
+  let next = content;
+  if (!sectionBounds(next, "Delivery Pointer") && sectionBounds(next, "Active opsx Change")) {
+    next = next.replace(/^## Active opsx Change\s*$/mu, "## Delivery Pointer");
+  }
+  if (sectionBounds(next, "Delivery Pointer")) {
+    next = next.replace(/^- \*\*Phase\*\*: (.+)$/mu, "- **Phase at Checkpoint**: $1");
+  }
+  const legacyPhase = sectionField(next, "Delivery Pointer", "Phase at Checkpoint") ?? "none";
+  next = ensureSectionFields(next, "Delivery Pointer", [
+    ["RFC", "none"],
+    ["RFC Revision", "none"],
+    ["Slice", "none"],
+    ["Issue", "none"],
+    ["Change", "none"],
+    ["Worktree", "none"],
+    ["Phase at Checkpoint", legacyPhase],
+    ["Task Group at Checkpoint", "none"],
+    ["Observed Run Revision", "none"],
+    ["Last Verified HEAD", "none"],
+  ]);
+  next = next.replace(/^## Waiting \(next steps \/ blockers\)\s*$/mu, "## Blockers");
+  next = next.replace(/^## New Discoveries\s*$/mu, "## Discoveries");
+  next = next.replace(/^## New Pitfalls\s*$/mu, "## Promotion Queue");
+  next = ensureSection(
+    next,
+    "Next Action",
+    "- Review and accept `RFC-0001-project-foundation` before proposing delivery work.",
+  );
+  next = ensureSection(next, "Blockers", "- Foundation RFC is not yet accepted and merged.");
+  next = ensureSection(next, "Uncommitted Work", "- none");
+  next = ensureSection(next, "Discoveries", "- none");
+  next = ensureSection(
+    next,
+    "Promotion Queue",
+    "- Review legacy discoveries before promoting them to permanent Memory or Architecture.",
+  );
+  return next.endsWith("\n") ? next : `${next}\n`;
+}
+
+function ensureManagedSection(
+  content: string,
+  heading: string,
+  region: string,
+  defaultBody: string,
+): string {
+  const start = `<!-- corgi:managed:start ${region} -->`;
+  const end = `<!-- corgi:managed:end ${region} -->`;
+  const startCount = content.split(start).length - 1;
+  const endCount = content.split(end).length - 1;
+  if (startCount === 1 && endCount === 1 && content.indexOf(start) < content.indexOf(end)) return content;
+  if (startCount !== 0 || endCount !== 0) {
+    throw new Error(`Managed Wiki region '${region}' is incomplete or ambiguous`);
+  }
+  const bounds = sectionBounds(content, heading);
+  if (!bounds) {
+    return `${content.trimEnd()}\n\n## ${heading}\n${start}\n${defaultBody}\n${end}\n`;
+  }
+  const existing = content.slice(bounds.bodyStart, bounds.end).trim();
+  const knownPlaceholder = /^- \((?:No .+|none yet).+\)$/iu.test(existing)
+    || existing === "- (none yet)"
+    || existing === "(No deliveries yet.)";
+  const body = !existing || knownPlaceholder ? defaultBody : existing;
+  const replacement = `\n${start}\n${body}\n${end}\n\n`;
+  return `${content.slice(0, bounds.bodyStart)}${replacement}${content.slice(bounds.end).trimStart()}`;
+}
+
+function upgradeHot(content: string): string {
+  let next = ensureManagedSection(
+    content,
+    "Active RFCs",
+    "active-rfcs",
+    "- `RFC-0001-project-foundation` — draft; human review required",
+  );
+  next = ensureManagedSection(next, "Active Deliveries", "active-deliveries", "- none");
+  next = ensureManagedSection(next, "Recently Shipped", "recently-shipped", "- none");
+  return next.endsWith("\n") ? next : `${next}\n`;
+}
+
+function upgradeWikiIndex(content: string, renderedTemplate: string): string {
+  const links = renderedTemplate.split(/\r?\n/u).filter((line) => /^- \[\[.+\]\]$/u.test(line));
+  const missing = links.filter((line) => !content.includes(line));
+  if (missing.length === 0) return content;
+  return `${content.trimEnd()}\n\n## RFC-first v4 Domains\n${missing.join("\n")}\n`;
+}
+
+function upgradeKnowledgeIndexes(path: string, content: string): string {
+  if (path === "wiki/architecture/_index.md") {
+    return ensureManagedSection(content, "Verified Delivery Sources", "architecture-deliveries", "- none");
+  }
+  if (path === "wiki/patterns/_index.md") {
+    return ensureManagedSection(content, "Verified Delivery Sources", "pattern-deliveries", "- none");
+  }
+  if (path === "memory/MEMORY.md") {
+    return ensureManagedSection(content, "Verified Deliveries", "verified-deliveries", "- none");
+  }
+  return content;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export function extractProjectMemoryContext(targetDir: string): ProjectMemoryContext {
   const readme = readOptionalFile(resolve(targetDir, "README.md"));
   const agents = readOptionalFile(resolve(targetDir, "AGENTS.md"));
@@ -314,6 +471,54 @@ export function initializeMemoryStructure(input: MemoryInitInput): MemoryInitRes
   );
   const createdFiles: string[] = [];
   const skippedFiles: string[] = [];
+  const upgradedFiles: string[] = [];
+
+  const bridgePath = resolve(input.targetDir, "memory/session-bridge.md");
+  if (existsSync(bridgePath)) {
+    const before = readFileSync(bridgePath, "utf8");
+    const after = upgradeSessionBridge(before);
+    if (after !== before) {
+      writeFileSync(bridgePath, after);
+      upgradedFiles.push("memory/session-bridge.md");
+    }
+  }
+  const hotPath = resolve(input.targetDir, "wiki/hot.md");
+  if (existsSync(hotPath)) {
+    const before = readFileSync(hotPath, "utf8");
+    const after = upgradeHot(before);
+    if (after !== before) {
+      writeFileSync(hotPath, after);
+      upgradedFiles.push("wiki/hot.md");
+    }
+  }
+  const indexPath = resolve(input.targetDir, "wiki/index.md");
+  if (existsSync(indexPath)) {
+    const before = readFileSync(indexPath, "utf8");
+    const template = renderTemplate(
+      readFileSync(resolve(templateRoot, "wiki/index.md"), "utf8"),
+      replacements,
+    );
+    const after = upgradeWikiIndex(before, template);
+    if (after !== before) {
+      writeFileSync(indexPath, after);
+      upgradedFiles.push("wiki/index.md");
+    }
+  }
+
+  for (const relativePath of [
+    "wiki/architecture/_index.md",
+    "wiki/patterns/_index.md",
+    "memory/MEMORY.md",
+  ]) {
+    const path = resolve(input.targetDir, relativePath);
+    if (!existsSync(path)) continue;
+    const before = readFileSync(path, "utf8");
+    const after = upgradeKnowledgeIndexes(relativePath, before);
+    if (after !== before) {
+      writeFileSync(path, after);
+      upgradedFiles.push(relativePath);
+    }
+  }
 
   for (const templateFile of listTemplateFiles(templateRoot)) {
     const relativePath = normalizeRelativePath(relative(templateRoot, templateFile));
@@ -337,16 +542,23 @@ export function initializeMemoryStructure(input: MemoryInitInput): MemoryInitRes
   const claudePath = resolve(input.targetDir, "CLAUDE.md");
   const agentsContent = readOptionalFile(agentsPath);
   const claudeContent = readOptionalFile(claudePath);
-  const hasProtocol =
-    agentsContent?.includes(SESSION_MEMORY_PROTOCOL_HEADING) ||
-    claudeContent?.includes(SESSION_MEMORY_PROTOCOL_HEADING);
+  const protocol = renderTemplate(
+    readFileSync(resolve(templateRoot, "session-memory-protocol.md"), "utf-8"),
+    replacements
+  );
+  let hasProtocol = false;
+  for (const [path, content] of [[agentsPath, agentsContent], [claudePath, claudeContent]] as const) {
+    if (!content?.includes(SESSION_MEMORY_PROTOCOL_HEADING)) continue;
+    hasProtocol = true;
+    const upgraded = replaceSessionMemoryProtocol(content, protocol);
+    if (upgraded !== content) {
+      writeFileSync(path, upgraded);
+      upgradedFiles.push(normalizeRelativePath(relative(input.targetDir, path)));
+    }
+  }
 
   let injectedSessionMemoryProtocol = false;
   if (!hasProtocol) {
-    const protocol = renderTemplate(
-      readFileSync(resolve(templateRoot, "session-memory-protocol.md"), "utf-8"),
-      replacements
-    );
     const protocolTarget = existsSync(agentsPath) || !existsSync(claudePath) ? agentsPath : claudePath;
     appendSessionMemoryProtocol(protocolTarget, protocol);
     injectedSessionMemoryProtocol = true;
@@ -355,6 +567,7 @@ export function initializeMemoryStructure(input: MemoryInitInput): MemoryInitRes
   return {
     createdFiles,
     skippedFiles,
+    upgradedFiles,
     injectedSessionMemoryProtocol,
   };
 }

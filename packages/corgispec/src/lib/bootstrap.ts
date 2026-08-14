@@ -39,6 +39,11 @@ import {
   type MigrationSummary,
 } from "./install-assets.js";
 import { initializeMemoryStructure } from "./memory-init.js";
+import {
+  DEFAULT_FOUNDATION_RFC,
+  DEFAULT_RFC_ROOT,
+  ensureFoundationRfc,
+} from "./rfc.js";
 import { type BootstrapCheck, writeInstallManifest, writeInstallReport } from "./bootstrap-report.js";
 import {
   inspectOpenSpecRuntime,
@@ -62,6 +67,7 @@ import {
   type HookMigrationPlan,
   type HookPlatform,
 } from "./hook-install.js";
+import { inspectMigrationWorktreesV4 } from "./migration-preflight-v4.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -70,8 +76,12 @@ export interface BootstrapOptions {
   schema?: SchemaType;
   mode: BootstrapMode;
   yes: boolean;
-  noMemory: boolean;
   json: boolean;
+  migrateV4?: boolean;
+  dryRun?: boolean;
+  integrationBranch?: string;
+  trackingProvider?: TrackingProvider;
+  taskArtifactId?: string;
   assetsRoot?: string;
   userSkillDirs?: Partial<Record<Platform, string>>;
   userCommandDirs?: Partial<Record<CommandPlatform, string>>;
@@ -112,6 +122,9 @@ interface BootstrapContext {
   packageVersion: string;
   migration: MigrationSummary;
   reportOverride?: string;
+  integrationBranch: string;
+  activeChanges: string[];
+  requestedTrackingProvider?: TrackingProvider;
 }
 
 const REQUIRED_PROJECT_ASSET_DIRS = ["commands", "schemas", "skills", "memory-init"] as const;
@@ -130,6 +143,7 @@ export async function runBootstrap(opts: BootstrapOptions): Promise<BootstrapRes
   const packageVersion = opts.packageVersion ?? resolvePackageVersion(assetsRoot);
   const userStateDir = resolve(opts.userStateDir ?? resolve(homedir(), ".corgispec"));
   const userCommandDirs = opts.userCommandDirs ?? deriveUserCommandDirs(opts.userSkillDirs);
+  const integrationBranch = resolveIntegrationBranch(target, opts.integrationBranch);
 
   const context: BootstrapContext = {
     assetsRoot,
@@ -155,6 +169,9 @@ export async function runBootstrap(opts: BootstrapOptions): Promise<BootstrapRes
     reportOverride: localScope
       ? undefined
       : resolve(userStateDir, "install-report.md"),
+    integrationBranch,
+    activeChanges: [],
+    requestedTrackingProvider: opts.trackingProvider,
   };
 
   try {
@@ -177,6 +194,37 @@ export async function runBootstrap(opts: BootstrapOptions): Promise<BootstrapRes
     }
     context.prerequisitesPassed = true;
 
+    const upgradingToV4 = localScope && state.hasConfig && !hasRfcContract(target);
+    const migrationRequested = opts.migrateV4 ?? true;
+    if (upgradingToV4 && !migrationRequested) {
+      return nonMutatingResult(
+        context,
+        target,
+        "stopped",
+        "This project uses the v3 contract. Re-run with --migrate-v4 after completing or withdrawing active changes."
+      );
+    }
+    if (upgradingToV4) {
+      const blockers = await inspectMigrationWorktreesV4(
+        target,
+        process.env["CORGISPEC_OPENSPEC_BIN"] || "openspec",
+      );
+      if (blockers.changes.length > 0 || blockers.runs.length > 0) {
+        const detail = [
+          blockers.changes.length > 0
+            ? `OpenSpec changes: ${blockers.changes.join(", ")}`
+            : "",
+          blockers.runs.length > 0 ? `Run Contracts: ${blockers.runs.join(", ")}` : "",
+        ].filter(Boolean).join("; ");
+        return nonMutatingResult(
+          context,
+          target,
+          "stopped",
+          `v4 migration requires every repository worktree to have no active Change or nonterminal Run Contract. ${detail}`
+        );
+      }
+    }
+
     const explicitModeMismatch = localScope
       ? getExplicitModeMismatch(opts.mode, state.kind)
       : null;
@@ -193,6 +241,9 @@ export async function runBootstrap(opts: BootstrapOptions): Promise<BootstrapRes
       const conflictPaths = [state.configPath, state.manifestPath, ...state.manifestRead.legacyPaths]
         .filter((entry): entry is string => Boolean(entry));
       context.migration.conflicts.push(...conflictPaths.map((entry) => projectLabel(target, entry)));
+      if (opts.dryRun) {
+        return dryRunResult(context, target, "Target project is inconsistent; dry-run made no changes.");
+      }
       backupProjectPaths(target, conflictPaths, context);
       return finalize(context, target, "stopped", "Target project is in an inconsistent bootstrap state; its configuration was backed up without mutation.");
     }
@@ -258,26 +309,44 @@ export async function runBootstrap(opts: BootstrapOptions): Promise<BootstrapRes
 
     if (localScope) {
       try {
-        preflightPatchedConfig(target, effectiveSchema, context.timestamp);
+        preflightPatchedConfig(
+          target,
+          effectiveSchema,
+          context.timestamp,
+          context.integrationBranch,
+        );
       } catch (error) {
         const configPath = resolve(target, "openspec/config.yaml");
         context.migration.conflicts.push("openspec/config.yaml");
-        backupProjectPaths(target, [configPath], context);
         context.checks.push({
           name: "Managed config",
           status: "FAIL",
           detail: error instanceof Error ? error.message : String(error),
         });
+        if (opts.dryRun) {
+          return dryRunResult(context, target, "Bootstrap dry-run detected an unsafe config and made no changes.");
+        }
+        backupProjectPaths(target, [configPath], context);
         return finalize(context, target, "stopped", "Bootstrap stopped because openspec/config.yaml could not be migrated safely.");
       }
     }
     recordMigrationPlan(context, target, projectPlan, userPlan, hookPlan);
+    if (opts.dryRun) {
+      context.actions.push("would install the RFC v1 contract, mandatory memory/wiki, and Foundation RFC");
+      return dryRunResult(context, target, "Bootstrap dry-run completed without mutations.");
+    }
     preflightWritableTargets([
       ...(localScope ? expectedFiles.map((entry) => resolve(target, entry.path)) : []),
       ...(localScope ? [
         resolve(target, "openspec/config.yaml"),
         resolve(target, CANONICAL_INSTALL_MANIFEST_PATH),
         context.reportOverride ?? resolve(target, "openspec/.corgi-install-report.md"),
+        resolve(target, DEFAULT_RFC_ROOT),
+        resolve(target, "memory"),
+        resolve(target, "wiki"),
+        resolve(target, ".gitignore"),
+        resolve(target, "AGENTS.md"),
+        resolve(target, "CLAUDE.md"),
         ...hookPlan.touchedPaths,
       ] : []),
       ...userPlan.actions.map((entry) => entry.target),
@@ -310,7 +379,7 @@ export async function runBootstrap(opts: BootstrapOptions): Promise<BootstrapRes
         ...expectedFiles.map((entry) => resolve(target, entry.path)),
         ...hookPlan.touchedPaths,
       ];
-      backupProjectPaths(target, overwriteFiles, context, true);
+      backupProjectPaths(target, overwriteFiles, context, "legacy");
       if (!opts.yes) {
         context.checks.push({
           name: "Managed files",
@@ -324,6 +393,22 @@ export async function runBootstrap(opts: BootstrapOptions): Promise<BootstrapRes
           "Legacy migration requires explicit approval after backup. Re-run with yes=true to proceed."
         );
       }
+    }
+
+    if (upgradingToV4) {
+      backupProjectPaths(target, [
+        ...projectPlan.map((entry) => resolve(target, entry.path)),
+        ...hookPlan.touchedPaths,
+        resolve(target, "openspec/config.yaml"),
+        resolve(target, CANONICAL_INSTALL_MANIFEST_PATH),
+        ...state.manifestRead.legacyPaths,
+        resolve(target, DEFAULT_RFC_ROOT),
+        resolve(target, "memory"),
+        resolve(target, "wiki"),
+        resolve(target, ".gitignore"),
+        resolve(target, "AGENTS.md"),
+        resolve(target, "CLAUDE.md"),
+      ], context, "v4-migration");
     }
 
     backupUserAssets(
@@ -358,6 +443,8 @@ export async function runBootstrap(opts: BootstrapOptions): Promise<BootstrapRes
           initializeOpenSpec({
             target,
             schema: effectiveSchema,
+            trackingProvider: opts.trackingProvider,
+            taskArtifactId: opts.taskArtifactId,
             bundledSchemasDir: resolve(assetsRoot, "schemas"),
           });
           context.actions.push("initialized openspec project structure");
@@ -369,14 +456,22 @@ export async function runBootstrap(opts: BootstrapOptions): Promise<BootstrapRes
         if (hooks.written.length > 0 || hooks.removed.length > 0) {
           context.actions.push(`migrated existing hooks (${hooks.written.length} written, ${hooks.removed.length} removed)`);
         }
-        updateConfigSchema(target, effectiveSchema, context.timestamp);
-
-        if (!opts.noMemory) {
-          const memory = initializeMemoryStructure({ targetDir: target, assetsRoot });
-          if (memory.createdFiles.length > 0 || memory.injectedSessionMemoryProtocol) {
-            context.actions.push("initialized project memory files");
-          }
+        if (ensureCorgiRuntimeIgnored(target)) {
+          context.actions.push("ignored local Corgi runtime and transaction state");
         }
+        updateConfigSchema(
+          target,
+          effectiveSchema,
+          context.timestamp,
+          context.integrationBranch,
+        );
+
+        const memory = initializeMemoryStructure({ targetDir: target, assetsRoot });
+        if (memory.createdFiles.length > 0 || memory.upgradedFiles.length > 0 || memory.injectedSessionMemoryProtocol) {
+          context.actions.push("initialized or upgraded project memory files");
+        }
+        const foundation = ensureFoundationRfc({ projectDir: target });
+        context.actions.push(`ensured draft ${foundation.metadata.id}`);
 
         context.managedFiles = mergePreservedManagedFiles(target, context.managedFiles, previousManifest, expectedFiles);
         context.manifestPath = writeInstallManifest({
@@ -412,7 +507,9 @@ export async function runBootstrap(opts: BootstrapOptions): Promise<BootstrapRes
     } catch (error) {
       transaction.rollback();
       transaction.dispose();
-      throw error;
+      const detail = error instanceof Error ? error.message : String(error);
+      context.checks.push({ name: "Managed files", status: "FAIL", detail });
+      return nonMutatingResult(context, target, "failed", detail);
     }
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
@@ -429,6 +526,63 @@ function normalizeScope(scope: string | undefined): "global" | "local" | "both" 
   if (scope === undefined) return "both";
   if (scope === "global" || scope === "local" || scope === "both") return scope;
   throw new Error(`Unsupported bootstrap scope '${scope}'.`);
+}
+
+function dryRunResult(
+  context: BootstrapContext,
+  target: string,
+  message: string,
+): BootstrapResult {
+  return nonMutatingResult(context, target, "success", message);
+}
+
+function nonMutatingResult(
+  context: BootstrapContext,
+  target: string,
+  status: BootstrapResult["status"],
+  message: string,
+): BootstrapResult {
+  return {
+    status,
+    mode: context.resultMode,
+    target,
+    actions: [...context.actions],
+    reportPath: context.reportOverride ?? resolve(target, "openspec/.corgi-install-report.md"),
+    manifestPath: context.manifestPath,
+    message,
+    migration: context.migration,
+  };
+}
+
+function resolveIntegrationBranch(target: string, explicit: string | undefined): string {
+  if (explicit?.trim()) return explicit.trim();
+  const remote = spawnSync(
+    "git",
+    ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"],
+    { cwd: target, encoding: "utf8" },
+  );
+  if (remote.status === 0 && remote.stdout.trim()) return remote.stdout.trim();
+  const current = spawnSync("git", ["branch", "--show-current"], {
+    cwd: target,
+    encoding: "utf8",
+  });
+  return current.status === 0 && current.stdout.trim() ? current.stdout.trim() : "main";
+}
+
+function hasRfcContract(target: string): boolean {
+  const configPath = resolve(target, "openspec/config.yaml");
+  if (!existsSync(configPath)) return false;
+  try {
+    const parsed = yaml.load(readFileSync(configPath, "utf8"));
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return false;
+    const corgi = (parsed as Record<string, unknown>)["corgi"];
+    return corgi !== null
+      && typeof corgi === "object"
+      && !Array.isArray(corgi)
+      && (corgi as Record<string, unknown>)["contract"] === "rfc-v1";
+  } catch {
+    return false;
+  }
 }
 
 function selectedPlatforms(platforms: string[] | undefined): HookPlatform[] {
@@ -530,7 +684,12 @@ function emptyHookPlan(target: string): HookMigrationPlan {
   return planHookMigration({ root: target, platforms: [] });
 }
 
-function preflightPatchedConfig(target: string, schema: SchemaType, timestamp: string): void {
+function preflightPatchedConfig(
+  target: string,
+  schema: SchemaType,
+  timestamp: string,
+  integrationBranch: string,
+): void {
   const configPath = resolve(target, "openspec/config.yaml");
   const existing = existsSync(configPath) ? readFileSync(configPath, "utf8") : "";
   patchInstallerConfig(existing, {
@@ -538,6 +697,12 @@ function preflightPatchedConfig(target: string, schema: SchemaType, timestamp: s
     installer: { version: 2, managed_at: timestamp },
     isolation: readIsolation(target),
     trackingProvider: trackingProviderFor(target, schema),
+    rfc: {
+      contract: "rfc-v1",
+      rfcRoot: DEFAULT_RFC_ROOT,
+      foundation: DEFAULT_FOUNDATION_RFC,
+      integrationBranch,
+    },
   });
 }
 
@@ -604,7 +769,7 @@ function backupProjectPaths(
   target: string,
   paths: Array<string | undefined>,
   context: BootstrapContext,
-  legacy = false,
+  kind: "conflict" | "legacy" | "v4-migration" = "conflict",
 ): void {
   const entries: BackupEntry[] = [];
   for (const path of paths) {
@@ -622,7 +787,12 @@ function backupProjectPaths(
   );
   const written = createPersistentBackup(backupRoot, entries);
   context.migration.backups.push(...written);
-  context.actions.push(`${legacy ? "created legacy backup" : "backed up conflicting project assets"} at ${backupRoot}`);
+  const action = kind === "legacy"
+    ? "created legacy backup"
+    : kind === "v4-migration"
+      ? "created pre-v4 migration backup"
+      : "backed up conflicting project assets";
+  context.actions.push(`${action} at ${backupRoot}`);
 }
 
 function backupUserAssets(
@@ -665,6 +835,10 @@ function getTransactionPaths(input: {
       resolve(input.target, ".claude/commands/corgi"),
       resolve(input.target, "memory"),
       resolve(input.target, "wiki"),
+      resolve(input.target, ".gitignore"),
+      resolve(input.target, DEFAULT_RFC_ROOT),
+      resolve(input.target, "AGENTS.md"),
+      resolve(input.target, "CLAUDE.md"),
       ...input.hookPlan.touchedPaths,
       ...input.projectPlan
         .filter((entry) => entry.state === "obsolete")
@@ -672,6 +846,20 @@ function getTransactionPaths(input: {
     );
   }
   return paths;
+}
+
+function ensureCorgiRuntimeIgnored(target: string): boolean {
+  const path = resolve(target, ".gitignore");
+  const original = existsSync(path) ? readFileSync(path, "utf8") : "";
+  const lines = new Set(original.split(/\r?\n/u).map((line) => line.trim()));
+  const missing = [".corgi/loop/", ".corgi/transactions/"]
+    .filter((entry) => !lines.has(entry));
+  if (missing.length === 0) return false;
+  const prefix = original.length === 0
+    ? "# CorgiSpec local runtime state\n"
+    : `${original.endsWith("\n") ? original : `${original}\n`}\n# CorgiSpec local runtime state\n`;
+  writeFileSync(path, `${prefix}${missing.join("\n")}\n`);
+  return true;
 }
 
 function classifyLegacyProjectSkillTrees(target: string): ManagedProjectFileClassification[] {
@@ -814,6 +1002,7 @@ async function runPrerequisiteChecks(
     executable,
     verifyRuntime: false,
   }).listChanges();
+  context.activeChanges = capability.changes.map((change) => change.name);
   context.checks.push({
     name: "openspec CLI",
     status: "PASS",
@@ -822,7 +1011,8 @@ async function runPrerequisiteChecks(
 
   await validateOpenSpecSchema(context, target, schema, executable);
 
-  let provider = schema === "gitlab-tracked" ? "gitlab" : schema === "github-tracked" ? "github" : "none";
+  let provider = context.requestedTrackingProvider
+    ?? (schema === "gitlab-tracked" ? "gitlab" : schema === "github-tracked" ? "github" : "none");
   try {
     provider = resolveTrackingProvider(loadConfigFromDir(target)).provider;
   } catch {
@@ -1110,7 +1300,12 @@ function verifyManagedBootstrapState(
   return null;
 }
 
-function updateConfigSchema(target: string, schema: SchemaType, timestamp: string): void {
+function updateConfigSchema(
+  target: string,
+  schema: SchemaType,
+  timestamp: string,
+  integrationBranch: string,
+): void {
   const configPath = resolve(target, "openspec/config.yaml");
   const existing = existsSync(configPath) ? readFileSync(configPath, "utf-8") : "";
   const patched = patchInstallerConfig(existing, {
@@ -1121,6 +1316,12 @@ function updateConfigSchema(target: string, schema: SchemaType, timestamp: strin
     },
     isolation: readIsolation(target),
     trackingProvider: trackingProviderFor(target, schema),
+    rfc: {
+      contract: "rfc-v1",
+      rfcRoot: DEFAULT_RFC_ROOT,
+      foundation: DEFAULT_FOUNDATION_RFC,
+      integrationBranch,
+    },
   });
   writeFileSync(configPath, patched);
 }

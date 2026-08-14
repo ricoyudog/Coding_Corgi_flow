@@ -1,11 +1,10 @@
 {
   "slug": "corgispec-apply",
   "tier": "compound",
-  "version": "2.1.0",
+  "version": "4.0.0-rc1",
   "platform": "universal",
-  "description": "Unified apply executor backed by Run Contract v2 with one required commit per approved Task Group.",
+  "description": "Run Contract v3 Apply with one checked commit per Task Group, stopping at canonical Verify",
   "depends_on": [
-    "corgispec-verify",
     "corgispec-review-loop"
   ],
   "installation": {
