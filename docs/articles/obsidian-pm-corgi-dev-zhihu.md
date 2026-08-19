@@ -150,7 +150,7 @@ sequenceDiagram
     Note over A,W: ── 沉澱階段 ──
     H->>A: /corgi:archive
     A->>W: 提取 patterns → wiki/patterns/
-    A->>W: 生成 session 摘要 → wiki/sessions/
+    A->>W: 生成 RFC Slice delivery 摘要 → wiki/deliveries/
     A->>W: 更新 pitfalls → memory/pitfalls.md
     A->>I: 關閉所有 Issues
 ```
@@ -263,7 +263,7 @@ tasks.md        ← 編號的 Task Group，每個有 checkbox
 ```
 /corgi:archive
 → 從這次 change 中提取可複用的 patterns → wiki/patterns/
-→ 生成這次 session 的摘要 → wiki/sessions/
+→ 生成這次 RFC Slice 的 delivery 摘要 → wiki/deliveries/
 → 把 delta spec 同步進 canonical specs → openspec/specs/
 → 更新 pitfalls（踩過的坑）→ memory/pitfalls.md
 → 更新 project pulse → wiki/hot.md
@@ -296,7 +296,7 @@ graph TB
         direction LR
         HOT["hot.md<br/>專案脈搏 ≤600詞"]
         INDEX["index.md<br/>導航中樞 ≤80行"]
-        PAGES["architecture/ patterns/ sessions/ decisions/ research/ questions/"]
+        PAGES["architecture/ patterns/ deliveries/ decisions/ research/ questions/"]
     end
 
     subgraph L3["Layer 3 — 傳統文檔（不被記憶系統修改）"]
@@ -347,7 +347,7 @@ graph TB
 
     subgraph GROW["📚 Wiki — 集體智慧（持續成長）"]
         PAT["patterns/"]
-        SES["sessions/"]
+        SES["deliveries/"]
         PIT["pitfalls/"]
         DEC["decisions/"]
     end

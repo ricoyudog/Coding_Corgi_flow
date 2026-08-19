@@ -1,8 +1,8 @@
 {
   "slug": "corgispec-verify",
   "tier": "molecule",
-  "version": "1.0.0",
-  "description": "Standalone verification gate for apply checkpoints \u2014 runs tests, checks spec coverage, validates lint/build",
+  "version": "4.0.0-rc2",
+  "description": "Canonical whole-change Verify gate with complete RFC AC coverage",
   "depends_on": [],
   "platform": "universal",
   "tags": [

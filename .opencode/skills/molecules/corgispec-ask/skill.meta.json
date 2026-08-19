@@ -1,8 +1,8 @@
 {
   "slug": "corgispec-ask",
   "tier": "molecule",
-  "version": "1.0.0",
-  "description": "Answer human questions from Obsidian vault using early-stop retrieval with token budget enforcement",
+  "version": "4.0.0-rc2",
+  "description": "Answer vault questions with bounded retrieval and queue unverified knowledge for promotion",
   "depends_on": [
     "corgispec-memory-init"
   ],

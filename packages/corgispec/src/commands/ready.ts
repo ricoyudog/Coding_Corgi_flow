@@ -49,6 +49,7 @@ export function createReadyCommand(
           config,
           opts.strict ?? false,
           { store: opts.store },
+          cwd,
         );
 
         if (opts.json) {
@@ -69,6 +70,7 @@ export function createReadyCommand(
           schemaVersion: 1,
           changeName: change,
           status: "contract_error" as const,
+          contract: null,
           error: lifecycleError(error),
         };
         if (opts.json) console.log(JSON.stringify(failure, null, 2));

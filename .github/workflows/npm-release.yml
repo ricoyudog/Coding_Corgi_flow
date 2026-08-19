@@ -120,6 +120,11 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
+      - name: Install and verify supported OpenSpec CLI
+        run: |
+          npm install --global @fission-ai/openspec@1.6.0
+          openspec --version
+
       - name: Run full release gate
         run: npm run release:check
 

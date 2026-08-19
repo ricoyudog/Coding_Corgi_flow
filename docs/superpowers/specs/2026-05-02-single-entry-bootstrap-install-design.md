@@ -174,7 +174,6 @@ corgispec bootstrap \
   [--schema gitlab-tracked|github-tracked] \
   [--mode auto|fresh|update|legacy|verify] \
   [--yes] \
-  [--no-memory] \
   [--json]
 ```
 
@@ -213,7 +212,7 @@ Inputs:
 - `schema` when provided
 - `mode`, defaulting to `auto`
 - `--yes`
-- `--no-memory`
+- Memory/Wiki initialization is mandatory; there is no skip option.
 - `--json`
 
 ### 2. Run prerequisite checks

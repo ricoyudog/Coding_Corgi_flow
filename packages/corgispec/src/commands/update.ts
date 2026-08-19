@@ -5,19 +5,18 @@ import {
   type ArtifactResolver,
 } from "../lib/artifact-resolver.js";
 import { loadConfigFromDir } from "../lib/config.js";
-import { inspectLegacyLoop } from "../lib/legacy-loop.js";
 import { lifecycleError } from "../lib/lifecycle.js";
-import { LoopStoreV2, type LoopStoreInspectionV2 } from "../lib/loop-store-v2.js";
+import { LoopStoreV3 } from "../lib/loop-store-v3.js";
 import {
   createOpenSpecAdapter,
   type OpenSpecAdapter,
 } from "../lib/openspec-adapter.js";
-import { isActiveLoopPhaseV2 } from "../lib/run-contract-v2.js";
+import { summarizeChangeContract } from "../lib/change-contract.js";
 
 export interface UpdateCommandDependencies {
   createAdapter?: (cwd: string) => OpenSpecAdapter;
   createResolver?: (adapter: OpenSpecAdapter) => ArtifactResolver;
-  createLoopStore?: (cwd: string) => Pick<LoopStoreV2, "peek">;
+  createLoopStore?: (cwd: string) => Pick<LoopStoreV3, "inspect">;
 }
 
 export function createUpdateCommand(
@@ -26,7 +25,7 @@ export function createUpdateCommand(
   const cmd = new Command("update");
   const adapterFactory = dependencies.createAdapter ?? ((cwd) => createOpenSpecAdapter(cwd));
   const resolverFactory = dependencies.createResolver ?? ((adapter) => createArtifactResolver(adapter));
-  const loopStoreFactory = dependencies.createLoopStore ?? ((cwd) => new LoopStoreV2({ projectRoot: cwd }));
+  const loopStoreFactory = dependencies.createLoopStore ?? ((cwd) => new LoopStoreV3(cwd));
 
   cmd
     .description("Output planning-only reconciliation context for an existing change")
@@ -44,55 +43,23 @@ export function createUpdateCommand(
         const config = loadConfigFromDir(cwd);
         const adapter = adapterFactory(cwd);
         const resolved = await resolverFactory(adapter).resolve(change, { store: opts.store });
-        const legacyLoop = inspectLegacyLoop(cwd, change);
-        const canonicalLoop: LoopStoreInspectionV2 = await loopStoreFactory(cwd).peek(change);
-        const activeRuns = legacyLoop.runs.filter((run) => run.active);
-        const activeV2 = canonicalLoop.state && isActiveLoopPhaseV2(canonicalLoop.state.phase)
-          ? canonicalLoop.state
-          : null;
-        const pendingConvergence = canonicalLoop.state?.phase === "invalidated" &&
-          canonicalLoop.state.blockedReason?.details?.["operation"] === "converge"
-          ? canonicalLoop.state
-          : null;
-        const blockers = [
-          ...(pendingConvergence
-            ? [{
-                code: "PENDING_CONVERGENCE",
-                message: `Planning updates are blocked while canonical run '${pendingConvergence.runId}' has a recoverable convergence intent. Retry corgispec converge with its original confirmation token first.`,
-              }]
-            : []),
-          ...(activeV2
-            ? [{
-                code: "ACTIVE_V2_RUN",
-                message: `Planning updates are blocked while canonical run '${activeV2.runId}' is active. Finalize or invalidate it first.`,
-              }]
-            : []),
-          ...(activeRuns.length > 0
-            ? [{
-                code: "ACTIVE_V1_RUN",
-                message: "Planning updates are blocked while a legacy v1 loop is active. End or migrate the loop first.",
-              }]
-            : []),
-          ...(legacyLoop.corruptPaths.length > 0
-            ? [{
-                code: "CORRUPT_V1_STATE",
-                message: `Legacy loop state is corrupt: ${legacyLoop.corruptPaths.join(", ")}`,
-              }]
-            : []),
-          ...(legacyLoop.unsupportedPaths.length > 0
-            ? [{
-                code: "UNSUPPORTED_LOOP_STATE",
-                message: `Unsupported loop state must be migrated explicitly: ${legacyLoop.unsupportedPaths.join(", ")}`,
-              }]
-            : []),
-        ];
+        const run = loopStoreFactory(cwd).inspect(change).state;
+        const repairReconciliation = run?.phase === "repair_required";
+        const blockers = run && !repairReconciliation
+          ? [{
+              code: "ACTIVE_RUN_V3",
+              message: `Planning updates are blocked while Run Contract v3 '${run.runId}' is in phase '${run.phase}'.`,
+            }]
+          : [];
         const blocked = blockers.length > 0;
         const guardrails = [
           "Edit planning artifacts only.",
           "Read existing files only from artifactPaths.<id>.existingOutputPaths.",
           "Never write resolvedOutputPath when it contains a glob.",
           "Show and confirm one artifact-scoped diff before each write.",
-          "Never edit planning while a durable convergence intent is pending; recover it with the original confirmation token.",
+          ...(repairReconciliation
+            ? ["Preserve every prior Task Group and append exactly one Repair Task Group, then run corgispec change repair or adopt-amendment."]
+            : []),
           "Run OpenSpec strict validation and corgispec ready after reconciliation.",
         ];
         const output = {
@@ -103,6 +70,7 @@ export function createUpdateCommand(
           ...(blocked ? { reasonCode: blockers[0]!.code, message: blockers[0]!.message } : {}),
           blockers,
           planningRevision: resolved.planningRevision,
+          contract: resolved.contract ? summarizeChangeContract(resolved.contract, cwd) : null,
           planningComplete: resolved.planningComplete,
           changeRoot: resolved.changeRoot,
           planningHome: resolved.planningHome,
@@ -118,13 +86,13 @@ export function createUpdateCommand(
           actionContext: resolved.actionContext,
           projectContext: config.context ?? "",
           rules: config.rules ?? {},
-          legacyLoop,
-          canonicalLoop: canonicalLoop.state
+          runContract: run
             ? {
-                runId: canonicalLoop.state.runId,
-                phase: canonicalLoop.state.phase,
-                stateRevision: canonicalLoop.state.stateRevision,
-                nonce: canonicalLoop.state.nonce,
+                schemaVersion: run.schemaVersion,
+                runId: run.runId,
+                phase: run.phase,
+                stateRevision: run.stateRevision,
+                nonce: run.nonce,
               }
             : null,
           guardrails,
@@ -146,6 +114,7 @@ export function createUpdateCommand(
           schemaVersion: 1,
           changeName: change,
           status: "contract_error" as const,
+          contract: null,
           error: lifecycleError(error),
         };
         if (opts.json) console.log(JSON.stringify(failure, null, 2));

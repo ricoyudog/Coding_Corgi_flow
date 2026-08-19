@@ -1,9 +1,9 @@
 {
   "slug": "corgispec-gh-archive",
   "tier": "molecule",
-  "version": "1.0.0",
-  "description": "Close the change Issue, sync delta specs, and archive completed change (GitHub)",
-  "depends_on": [],
+  "version": "4.0.0-rc2",
+  "description": "Compatibility route to strong provider-neutral RFC-first Archive",
+  "depends_on": ["corgispec-memory-extract"],
   "platform": "github",
   "tags": [
     "lifecycle",

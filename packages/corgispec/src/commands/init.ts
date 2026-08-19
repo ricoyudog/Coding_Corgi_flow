@@ -82,18 +82,11 @@ export function createInitCommand(): Command {
       "--platform <platform>",
       "Create platform skill directories (claude, opencode, codex, all)"
     )
-    .action((targetPath: string | undefined, opts: InitOptions) => {
+    .action(async (targetPath: string | undefined, opts: InitOptions) => {
       const cwd = resolve(opts.path ?? ".");
       const target = targetPath ? resolve(cwd, targetPath) : cwd;
 
       try {
-        // Check if already initialized
-        const configPath = resolve(target, "openspec/config.yaml");
-        if (existsSync(configPath)) {
-          console.log("Corgi already initialized");
-          return;
-        }
-
         // Validate schema option
         const schema = opts.schema ?? "github-tracked";
         if (!/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(schema)) {
@@ -126,37 +119,40 @@ export function createInitCommand(): Command {
           explicitTaskArtifact ??
           (schema === "github-tracked" || schema === "gitlab-tracked" ? "tasks" : undefined);
 
-        initializeOpenSpec({
+        const platform = opts.platform as PlatformOption | undefined;
+        if (platform && !VALID_PLATFORMS.includes(platform)) {
+          console.error(
+            `Error: Invalid platform '${opts.platform}'. Supported: ${VALID_PLATFORMS.join(", ")}`
+          );
+          process.exitCode = 1;
+          return;
+        }
+        const schemas = findBundledSchemas();
+        if (!schemas) throw new Error("Bundled schemas were not found; run the v4 bootstrap package build first");
+        const { runBootstrap } = await import("../lib/bootstrap.js");
+        const result = await runBootstrap({
           target,
           schema,
           trackingProvider,
           taskArtifactId,
-          bundledSchemasDir: findBundledSchemas(),
+          mode: "auto",
+          yes: true,
+          json: false,
+          assetsRoot: dirname(schemas),
+          platforms: platform && platform !== "all" ? [platform] : undefined,
+          scope: "local",
+          migrateV4: false,
         });
-
-        console.log(`Initialized Corgi in ${target}`);
+        if (result.status !== "success") {
+          console.error(`Error: ${result.message}`);
+          process.exitCode = 1;
+          return;
+        }
+        console.log(`Initialized Corgi RFC-first project in ${target}`);
         console.log(`  Schema: ${schema}`);
         console.log(`  Tracking: ${trackingProvider}`);
-        console.log(`  Task artifact: ${taskArtifactId ?? "not configured"}`);
-        console.log(`  Config: openspec/config.yaml`);
-        console.log(`  Changes: openspec/changes/`);
-        console.log(`  Schemas: openspec/schemas/`);
-
-        // Handle platform option
-        if (opts.platform) {
-          const platform = opts.platform as PlatformOption;
-          if (!VALID_PLATFORMS.includes(platform)) {
-            console.error(
-              `\nWarning: Invalid platform '${opts.platform}'. Supported: ${VALID_PLATFORMS.join(", ")}`
-            );
-          } else {
-            initPlatformDirs(target, platform);
-          }
-        }
-
-        console.log(
-          `\nRun \`corgispec propose <name>\` to start your first change.`
-        );
+        console.log(`  Foundation: rfcs/RFC-0001-project-foundation/rfc.md`);
+        console.log("\nComplete and accept the Foundation RFC before proposing changes.");
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error(`Error: ${msg}`);
@@ -165,37 +161,6 @@ export function createInitCommand(): Command {
     });
 
   return cmd;
-}
-
-function initPlatformDirs(target: string, platform: PlatformOption): void {
-  const platforms: string[] =
-    platform === "all"
-      ? ["claude", "opencode", "codex"]
-      : [platform];
-
-  for (const p of platforms) {
-    let dir: string;
-    switch (p) {
-      case "claude":
-        dir = resolve(target, ".claude/skills");
-        break;
-      case "opencode":
-        dir = resolve(target, ".opencode/skills");
-        break;
-      case "codex":
-        dir = resolve(target, ".codex/skills");
-        break;
-      default:
-        continue;
-    }
-
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true });
-      console.log(`  Created: ${dir}`);
-    } else {
-      console.log(`  Exists: ${dir}`);
-    }
-  }
 }
 
 export function initializeOpenSpec(options: InitializeOpenSpecOptions): void {

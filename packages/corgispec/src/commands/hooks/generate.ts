@@ -317,7 +317,6 @@ const WRITE_COMMANDS = new Set([
   "corgi-apply",
   "corgi-propose",
   "corgi-update",
-  "corgi-converge",
   "corgi-archive",
   "corgi-human-qa",
 ]);
@@ -327,7 +326,6 @@ const WRITE_SKILLS = new Set([
   "corgispec-propose",
   "corgispec-gh-propose",
   "corgispec-update",
-  "corgispec-converge",
   "corgispec-archive-change",
   "corgispec-gh-archive",
   "corgispec-human-qa",
@@ -391,6 +389,19 @@ export const CorgiSpecDeep: Plugin = async ({ client, directory }) => {
       failure.stderr ? "stderr: " + failure.stderr.trim() : "",
       failure.stdout ? "stdout: " + failure.stdout.trim() : "",
     ].filter(Boolean).join("\\n");
+  };
+  const isSessionConflict = (error: unknown): boolean => {
+    const failure = error as { stdout?: string };
+    if (typeof failure.stdout !== "string") return false;
+    try {
+      const output = JSON.parse(failure.stdout) as {
+        status?: string;
+        error?: { code?: string };
+      };
+      return output.status === "contract_error" && output.error?.code === "SESSION_CONFLICT";
+    } catch {
+      return false;
+    }
   };
   return {
     "chat.message": async (input, _output) => {
@@ -475,11 +486,14 @@ export const CorgiSpecDeep: Plugin = async ({ client, directory }) => {
           if (loopDecision.decision === "block") {
             requestContinuation(
               sessionId,
-              "CorgiSpec Run Contract v2 is still active. Continue with the canonical action:\\n"
+              "CorgiSpec Run Contract v3 is still active. Continue with the canonical action:\\n"
                 + JSON.stringify(loopDecision),
             );
           }
         } catch (error) {
+          // An unrelated or stale session must not re-enter because a run is
+          // owned by another session. loop-check has already preserved it.
+          if (isSessionConflict(error)) return;
           requestContinuation(sessionId, hookFailureMessage("loop-check", error));
         }
       }

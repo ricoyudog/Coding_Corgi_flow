@@ -1,21 +1,21 @@
 ---
-description: Validate memory and wiki health with 11 structured checks
+description: Read-only validation of RFC-first Memory/Wiki health; --report persists an explicit report
 ---
 
-Validate memory and wiki health with 11 structured checks.
+Validate Memory/Wiki health with 14 RFC-first checks.
 
-**Input**: No arguments required. Runs against the current project's memory/ and wiki/ directories.
+**Input**: No arguments for read-only output. Pass `--report` to also write `wiki/meta/lint-report-YYYY-MM-DD.md`.
 
 **Steps**
 
-1. **Determine platform**
-
-   Read `openspec/config.yaml` and check the `schema` field.
-
-2. **Dispatch to skill**
+1. **Dispatch to skill**
 
    Follow the instructions in the **corgispec-lint** skill.
 
-3. **Pass through all input**
+2. **Pass through all input**
 
    Forward any user input to the skill as-is.
+
+3. **Enforce write mode**
+
+   Without explicit `--report`, do not create or modify any file. Lint never auto-fixes findings.

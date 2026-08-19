@@ -17,6 +17,7 @@ import {
 } from "../lib/artifact-resolver.js";
 import { loadConfigFromDir } from "../lib/config.js";
 import { lifecycleError, summarizeOptionalTaskGroups } from "../lib/lifecycle.js";
+import { summarizeChangeContract } from "../lib/change-contract.js";
 
 /**
  * List active changes from the native OpenSpec JSON contract and enrich each
@@ -55,6 +56,7 @@ async function listChanges(
       changeRoot: resolved.changeRoot,
       artifactPaths: resolved.artifactPaths,
       planningRevision: resolved.planningRevision,
+      contract: resolved.contract ? summarizeChangeContract(resolved.contract, cwd) : null,
       taskArtifactId: tasks.taskArtifactId || null,
     };
   }));

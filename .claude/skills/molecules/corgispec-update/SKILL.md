@@ -1,6 +1,6 @@
 ---
 name: corgispec-update
-description: Reconcile an existing CorgiSpec planning package after intent, requirements, scenarios, design, or task sequencing changes. Use when the user asks to update or realign an existing change while preserving implementation boundaries, task completion truth, OpenSpec 1.6 artifact paths, and strict readiness.
+description: Reconcile an existing CorgiSpec planning package after intent, requirements, scenarios, design, or task sequencing changes. Use when the user asks to update or realign an existing change while preserving implementation boundaries, stable Task Group IDs, OpenSpec 1.6 artifact paths, and strict readiness.
 hooks:
   PreToolUse:
     - matcher: "Edit|Write"
@@ -27,9 +27,9 @@ Update planning artifacts only. Coordinate the user's revised intent across the 
    - Ignore unknown fields.
    - On exit 2, stop and report the environment or OpenSpec contract error.
    - On exit 1 or `status: "blocked"`, report every blocker and make no edits.
-   - On blocker code `PENDING_CONVERGENCE`, make no edits and require retrying `corgispec converge` with the original confirmation token until its durable intent completes or reports a contract error.
-   - On blocker code `ACTIVE_V2_RUN`, require the user to finalize or explicitly invalidate that canonical run first. Never modify planning behind its recorded revision.
-   - On blocker code `ACTIVE_V1_RUN`, require the user to finish or migrate the v1 run. Never bypass, stop, or mutate that run from this workflow.
+   - On blocker code `PENDING_CONVERGENCE`, make no edits. It is legacy Run Contract v2 state and v4 has no Converge command; finish or withdraw it with CorgiSpec v3.0.1 before migration.
+   - On an active Run Contract v3, make no planning edits. Implementation repair must use `corgispec change repair`; a Goal, Boundary, Slice, AC, or public-contract change must use a human-authored accepted Amendment RFC and the dedicated adoption command.
+   - If legacy active-run data is detected, stop and require the transactional v4 migration precondition; never mutate legacy state from Update.
 5. Establish the write allowlist:
    - Allow only artifact IDs in `existingArtifactIds`.
    - Allow existing concrete files only from `artifactPaths.<id>.existingOutputPaths`.
@@ -43,7 +43,7 @@ Update planning artifacts only. Coordinate the user's revised intent across the 
    - Reconcile each path in `existingOutputPaths` independently.
    - Add or remove a concrete file only under the artifact's resolved glob root, only when the artifact ID already exists, and only after the artifact-scoped diff names the concrete path.
    - Normalize and verify every concrete path under `changeRoot`; never write a glob expression as a filename.
-10. Preserve task completion truth by stable task ID. Keep `[x]` only when semantics and acceptance evidence remain unchanged; reset a semantically changed completed task to `[ ]` and explain why in its artifact diff.
+10. Preserve stable task and Task Group IDs, but do not derive or write execution status from task checkboxes. Checkboxes are planning syntax only; Run Contract v3 records lifecycle completion and the CLI-managed Issue dashboard records tracker progress. Never mark, reset, or infer `[x]` during reconciliation.
 11. After all approved edits, request fresh context with `corgispec update "<change>" --json [--store "<id>"]` and record the new `planningRevision`.
 12. Run both gates:
 
@@ -61,6 +61,7 @@ Never modify:
 - implementation source, tests, generated code, or build configuration;
 - GitHub/GitLab issues or local tracker state;
 - QA evidence, loop evidence, review artifacts, or run state;
+- `corgi/source.yaml`, RFC content, delivery bindings, or contract identity;
 - `memory/`, `wiki/`, session records, or unrelated documentation;
 - OpenSpec schema definitions or global/store configuration.
 

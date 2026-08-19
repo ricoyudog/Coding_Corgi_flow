@@ -1,12 +1,12 @@
 {
   "slug": "corgispec-archive-change",
   "tier": "molecule",
-  "version": "1.0.0",
-  "description": "Close the change Issue, sync delta specs, and archive completed change (GitLab)",
+  "version": "4.0.0-rc2",
+  "description": "Strong provider-neutral Archive transaction with evidence and knowledge closeout",
   "depends_on": [
     "corgispec-memory-extract"
   ],
-  "platform": "gitlab",
+  "platform": "universal",
   "tags": [
     "lifecycle",
     "archive"

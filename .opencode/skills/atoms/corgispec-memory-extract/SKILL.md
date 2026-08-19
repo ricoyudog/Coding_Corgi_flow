@@ -1,210 +1,50 @@
 ---
 name: corgispec-memory-extract
-description: Extract reusable patterns and session summaries from completed changes into wiki long-term memory.
-license: MIT
-compatibility: Requires memory/ and wiki/ directories. Called by corgispec-archive before change closure.
-metadata:
-  author: corgispec
-  version: "1.0"
-  generatedBy: "1.0.0"
+description: Read-only preparation and verification for CorgiSpec v4 Archive knowledge closeout. Archive --local is the sole writer of delivery and promoted Wiki/Memory provenance.
 ---
 
-Extract long-term knowledge from a completed change into wiki.
+# Verify Archive Knowledge Closeout
 
-## Overview
+Use this atom only as a read-only preflight before `corgispec archive --local`, or to verify the CLI result afterwards. It is not a second archive state machine: never create a delivery page, update a managed Wiki region, promote knowledge, edit the Session Bridge, or create a commit.
 
-When a change completes its lifecycle (all Task Groups done, review passed), this skill extracts reusable knowledge before the change is archived. It creates:
-- Pattern files for reusable approaches (`wiki/patterns/`)
-- Session summaries for historical record (`wiki/sessions/`)
-- Updates to `wiki/hot.md` (move from Active to Recently Shipped)
-- Reset of `memory/session-bridge.md` (clear archived change state)
-- Updates to `wiki/index.md` (add new page links)
+`corgispec archive --local` is the sole writer for archive-derived `wiki/deliveries/`, `wiki/hot.md`, `wiki/architecture/`, `wiki/patterns/`, `memory/MEMORY.md`, `memory/pitfalls.md`, and the archive closeout bridge checkpoint. Never infer success from task checkboxes or prose.
 
-This is the "knowledge distillation" step — turning ephemeral session work into persistent organizational memory.
+## Required Inputs
 
-## When to Use
+Require CLI-resolved values for:
 
-- Called automatically by `corgispec-archive` before closing a change
-- Manually via direct invocation when you want to extract knowledge without full archive
+- RFC ID, accepted revision/digest, Slice ID, Change, and single Issue binding;
+- final HEAD and planning revision;
+- per-AC automated/human evidence requirements and results;
+- human review decision and Human QA result or valid skip;
+- delivery binding revision used for CAS closeout.
 
-Do not use this skill to initialize memory, answer questions, or validate health.
+For read-only preparation, also require the active Change root and the evidence inputs that `--local` will materialize. For post-`--local` verification, require the returned archived Change root and evidence manifest instead.
 
-## Preconditions
+If an input required for the selected mode is missing, the Run Contract is not in archive closeout, or source/traceability/RFC digests drifted, report the blocker and stop. Do not write a workaround.
 
-- [ ] The change is complete (all tasks marked `[x]` in tasks.md)
-- [ ] `memory/` and `wiki/` directories exist
-- [ ] The change has `proposal.md` and `tasks.md` at minimum
+## Read-Only Preparation
 
-## Steps
+Before `--local`, inspect the immutable inputs and report the candidate content that the CLI must be able to materialize:
 
-### 1. Identify the change and gather context
+1. The immutable delivery page contract: outcome, delivered boundary, AC evidence, Task Group commits/final HEAD, Review/QA result, promoted knowledge links, RFC/archived Change/evidence/Issue sources, and the delivery binding digest.
+2. Evidence-backed promotion candidates for current architecture, reusable patterns, verified pitfalls, or permanent constraints. Each candidate must cite final source and accepted evidence; uncertain items remain in Research or the bridge Promotion Queue.
+3. The required managed-region outcomes: delivery index entry, `hot.md` Active Deliveries → Recently Shipped transition, and archive bridge pointer/next action.
 
-Read the change's artifacts to understand what was accomplished:
-1. Read `proposal.md` — the "why" and "what"
-2. Read `tasks.md` — the work breakdown and what was done
-3. Read `design.md` (if exists) — key design decisions
-4. Read `memory/session-bridge.md` — recent session state related to this change
-5. Read `memory/pitfalls.md` — pitfalls discovered during this change
+This report is advisory input to the CLI, not an authorization to write files. Never create `wiki/sessions/` or append to `wiki/log.md`.
 
-### 2. Extract reusable patterns
+## Verify CLI Materialization
 
-Analyze the change history to identify reusable approaches:
+After `corgispec archive --local` succeeds, read its returned archived root, evidence manifest, delivery page, promoted knowledge, bridge result, and closeout commit. Verify that:
 
-**What qualifies as a pattern?**
-- A technical approach that solved a non-trivial problem
-- A workflow or process that could be reused in future changes
-- An integration pattern between components
-- A testing strategy that proved effective
+1. `wiki/deliveries/<RFC-ID>-<Slice-ID>.md` is immutable for the returned delivery binding and evidence digest.
+2. Managed `wiki/deliveries/_index.md` and `wiki/hot.md` regions match the returned delivery result.
+3. Any CLI-promoted architecture, pattern, pitfall, or MEMORY entry cites the final source and accepted evidence.
+4. The bridge records the archived page and final HEAD while preserving unrelated blockers and Promotion Queue items.
+5. The live lifecycle phase still comes from `.corgi/loop`, not the bridge.
 
-**What does NOT qualify?**
-- Trivial implementation details (just wrote a function)
-- One-off fixes unlikely to recur
-- Standard library usage
-- Dependency version bumps
+If a file is missing or inconsistent, fail closed and report the exact mismatch for archive recovery. Do not repair it manually after the closeout commit is sealed.
 
-**If patterns are identified**, create a file for each at `wiki/patterns/<pattern-name>.md`:
+## Result
 
-```markdown
----
-type: wiki
-created: <today's date>
-source_change: <change-name>
-tags: [pattern, <relevant-tags>]
----
-
-# <Pattern Name>
-
-## Context
-<When and why this pattern emerged — what problem it solves>
-
-## Pattern
-<The approach itself — how to apply it>
-
-## When to Use
-- <Condition 1>
-- <Condition 2>
-
-## Example
-<Brief example from the source change showing the pattern in action>
-
-## Source
-- Extracted from change: [[openspec/changes/<change-name>/proposal]]
-- Related pitfalls: [[memory/pitfalls]] (if applicable)
-```
-
-**If no patterns identified**, report: "No reusable patterns identified — change was mechanical or domain-specific." This is normal and not an error.
-
-### 3. Create session summary
-
-Create `wiki/sessions/<change-name>.md`:
-
-```markdown
----
-type: wiki
-created: <today's date>
-source_change: <change-name>
-status: archived
-tags: [session, <relevant-tags>]
----
-
-# Session Summary: <change-name>
-
-## Overview
-<1-2 sentence summary of what this change accomplished>
-
-## Timeline
-- **Proposed**: <date from proposal or git history>
-- **Completed**: <today's date>
-- **Task Groups**: <N> groups, <M> total tasks
-
-## Key Decisions
-<Bullet list of the most important decisions made during implementation, extracted from design.md and session-bridge history>
-
-## Pitfalls Encountered
-<Bullet list of pitfalls hit during this change, from pitfalls.md entries linked to this change>
-<If none: "No significant pitfalls encountered.">
-
-## Outcome
-<Brief assessment: what was delivered, any known limitations>
-
-## References
-- Proposal: [[openspec/changes/<change-name>/proposal]]
-- Design: [[openspec/changes/<change-name>/design]] (if exists)
-- Tasks: [[openspec/changes/<change-name>/tasks]]
-```
-
-**If `wiki/sessions/<change-name>.md` already exists**, report "Session summary already exists" and do not overwrite.
-
-### 4. Update wiki/hot.md lifecycle
-
-Read `wiki/hot.md` and make these changes:
-
-1. **Remove from Active Changes**: Find and remove the line referencing this change under `## Active Changes`
-2. **Add to Recently Shipped**: Add a new entry under `## Recently Shipped`:
-   ```
-   - **<change-name>** (<today's date>) — <one-line summary from proposal>
-   ```
-3. **Check size**: If hot.md exceeds 550 words after the update, trim the oldest entries from "Recently Shipped" (keep the 5 most recent)
-
-If the change is not listed under Active Changes, add it directly to Recently Shipped without error.
-
-### 5. Reset memory/session-bridge.md
-
-Update `memory/session-bridge.md`:
-
-1. Update the `updated:` frontmatter date to today
-2. Clear entries in `## Done` that relate to the archived change
-3. Clear entries in `## Waiting` that relate to the archived change
-4. Clear entries in `## New Pitfalls` that relate to the archived change (they're already in pitfalls.md)
-5. Clear entries in `## New Discoveries` that relate to the archived change
-6. Update `## Active corgi Change`:
-   - If another change is active: set to that change's info
-   - If no other change: reset to `none`/`none`/`main`
-
-**Preserve entries related to OTHER active changes.** Only clear entries linked to the change being archived.
-
-### 6. Update wiki/index.md and _index.md files
-
-Add links to newly created pages:
-
-1. If a pattern was created → add under `## Patterns`:
-   ```
-   - [[wiki/patterns/<pattern-name>|<Pattern Title>]]
-   ```
-2. Add the session summary under `## Session History`:
-   ```
-   - [[wiki/sessions/<change-name>|<Change Name>]]
-   ```
-3. **Check size**: If index.md exceeds 80 lines after updates:
-   - Remove the oldest entries from `## Session History` (keep 10 most recent)
-   - Do NOT remove pattern or architecture entries
-
-4. **Update _index.md files** (see `wiki/schema.md` for format convention):
-   - If a pattern was created → add a wikilink entry to `wiki/patterns/_index.md` following the existing format: `- [[filename|Title]] — date — brief description`
-   - If a session was created → add a wikilink entry to `wiki/sessions/_index.md` following the same format
-
-### 7. Report results
-
-```
-## Memory Extraction Complete
-
-**Change**: <change-name>
-**Patterns extracted**: N (list names)
-**Session summary**: wiki/sessions/<change-name>.md
-**Hot.md**: moved to Recently Shipped
-**Session-bridge**: cleared archived change entries
-**Index.md**: updated with N new links
-
-The change is ready for full archive closure.
-```
-
----
-
-## Common Mistakes
-
-- Overwriting an existing session summary (check first)
-- Removing other changes' entries from session-bridge (only clear THIS change)
-- Not checking hot.md size after update (may exceed cap)
-- Creating patterns for trivial work (not everything is a pattern)
-- Forgetting to update index.md after creating new wiki pages
-- Running extraction on an incomplete change (all tasks must be [x])
+Return a read-only preparation or verification report: the CLI inputs inspected, delivery page/result paths, verified promoted knowledge with evidence sources, deliberately unpromoted candidates, and any blocker. Do not leave a dirty worktree.

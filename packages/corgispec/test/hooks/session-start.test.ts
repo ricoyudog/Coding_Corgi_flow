@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import {
   installFakeOpenSpec,
   setupFakeChange,
@@ -139,6 +139,52 @@ describe("hook session-start", () => {
 
     const parsed = JSON.parse(output);
     expect(parsed.hookSpecificOutput.additionalContext).toContain("**Current branch**:");
+  });
+
+  it("reports a linked-worktree Run Contract in SessionStart and PostCompact", () => {
+    mkdirSync(resolve(tempDir, "openspec"), { recursive: true });
+    writeFileSync(resolve(tempDir, "openspec/config.yaml"), "schema: github-tracked\n");
+    execFileSync("git", ["init"], { cwd: tempDir, stdio: "ignore" });
+    execFileSync("git", ["add", "openspec/config.yaml"], { cwd: tempDir, stdio: "ignore" });
+    execFileSync(
+      "git",
+      ["-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "-m", "initial"],
+      { cwd: tempDir, stdio: "ignore" },
+    );
+    const delivery = resolve(tempDir, ".worktrees/linked-delivery");
+    mkdirSync(resolve(tempDir, ".worktrees"), { recursive: true });
+    execFileSync("git", ["worktree", "add", "-b", "linked-delivery", delivery], {
+      cwd: tempDir,
+      stdio: "ignore",
+    });
+    const runRoot = resolve(delivery, ".corgi/loop/linked-change/runs/run-linked");
+    mkdirSync(runRoot, { recursive: true });
+    writeFileSync(
+      resolve(delivery, ".corgi/loop/linked-change/current.json"),
+      JSON.stringify({ schemaVersion: 3, runId: "run-linked" }),
+    );
+    writeFileSync(
+      resolve(runRoot, "state.json"),
+      JSON.stringify({
+        schemaVersion: 3,
+        changeName: "linked-change",
+        runId: "run-linked",
+        phase: "awaiting_human_qa",
+        stateRevision: 6,
+        currentGroupId: null,
+        baselineRevision: "baseline-linked",
+      }),
+    );
+
+    for (const hook of ["session-start", "post-compact"]) {
+      const output = execSync(`node ${CLI} hook ${hook} --path ${tempDir}`, {
+        encoding: "utf-8",
+        env: openspec.env,
+      });
+      const context = JSON.parse(output).hookSpecificOutput.additionalContext as string;
+      expect(context).toContain("linked-change: awaiting_human_qa");
+      expect(context).toContain("next: run Human QA");
+    }
   });
 
   it("uses an external Store and configured custom task artifact", () => {

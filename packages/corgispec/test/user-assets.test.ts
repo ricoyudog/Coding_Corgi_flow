@@ -75,7 +75,16 @@ describe("user asset migration", () => {
       resolve(claudeSkills, "corgispec-loop/SKILL.md"),
       "---\nname: corgispec-loop\n---\n",
     );
+    write(
+      resolve(claudeSkills, "corgispec-converge/skill.meta.json"),
+      `${JSON.stringify({ slug: "corgispec-converge" })}\n`,
+    );
+    write(
+      resolve(claudeSkills, "corgispec-converge/SKILL.md"),
+      "---\nname: corgispec-converge\n---\n",
+    );
     write(resolve(claudeCommands, "loop.md"), "Old $corgispec-loop dispatcher for .corgi/loop\n");
+    write(resolve(claudeCommands, "converge.md"), "Old $corgispec-converge dispatcher\n");
     write(resolve(claudeCommands, "human-qa.md"), "Use $corgispec-human-qa\n");
 
     const options = {
@@ -115,6 +124,16 @@ describe("user asset migration", () => {
     }));
     expect(plan.actions).toContainEqual(expect.objectContaining({
       platform: "claude",
+      name: "corgispec-converge",
+      status: "obsolete",
+    }));
+    expect(plan.actions).toContainEqual(expect.objectContaining({
+      platform: "claude",
+      name: "converge.md",
+      status: "obsolete",
+    }));
+    expect(plan.actions).toContainEqual(expect.objectContaining({
+      platform: "claude",
       name: "human-qa.md",
       status: "obsolete",
     }));
@@ -130,7 +149,9 @@ describe("user asset migration", () => {
     );
     expect(existsSync(resolve(claudeSkills, "corgispec-apply-change"))).toBe(false);
     expect(existsSync(resolve(claudeSkills, "corgispec-loop"))).toBe(false);
+    expect(existsSync(resolve(claudeSkills, "corgispec-converge"))).toBe(false);
     expect(existsSync(resolve(claudeCommands, "loop.md"))).toBe(false);
+    expect(existsSync(resolve(claudeCommands, "converge.md"))).toBe(false);
     expect(existsSync(resolve(claudeCommands, "human-qa.md"))).toBe(false);
   });
 

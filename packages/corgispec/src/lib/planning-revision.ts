@@ -9,6 +9,8 @@ export interface PlanningRevisionInput {
   changeRoot: string;
   schemaName: string;
   artifactPaths: Record<string, OpenSpecArtifactPath>;
+  /** Provider-neutral Corgi contract files that participate in plan freshness. */
+  contractPaths?: string[];
 }
 
 export interface PlanningRevisionFileReader {
@@ -87,6 +89,36 @@ export async function computePlanningRevision(
       appendField(hash, relativePath);
       appendBytes(hash, content);
     }
+  }
+
+  const contractPaths = [...new Set(input.contractPaths ?? [])].sort((left, right) =>
+    compareCodeUnits(normalizePortablePath(left), normalizePortablePath(right))
+  );
+  appendField(hash, "contract-files");
+  appendField(hash, String(contractPaths.length));
+  for (const filePath of contractPaths) {
+    if (!isPathInside(input.changeRoot, filePath)) {
+      throw new PlanningRevisionError(
+        `Contract path is outside change root: ${filePath}`,
+        "path_outside_change",
+        filePath
+      );
+    }
+    let content: Uint8Array;
+    try {
+      content = await reader.read(filePath);
+    } catch (error) {
+      throw new PlanningRevisionError(
+        `Failed to read change contract '${filePath}': ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        "file_read_failed",
+        filePath,
+        error
+      );
+    }
+    appendField(hash, relativePortablePath(input.changeRoot, filePath));
+    appendBytes(hash, content);
   }
 
   return `sha256:${hash.digest("hex")}`;

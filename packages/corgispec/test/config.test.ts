@@ -154,6 +154,28 @@ corgi:
     );
   });
 
+  it("loads the RFC v1 project contract independently from custom OpenSpec schemas", () => {
+    const configPath = resolve(TEST_DIR, "openspec/config.yaml");
+    writeFileSync(
+      configPath,
+      `schema: custom-flow
+corgi:
+  contract: rfc-v1
+  rfcRoot: governance/rfcs
+  foundation: RFC-0001-project-foundation
+  governance:
+    integrationBranch: main
+`,
+    );
+
+    expect(loadConfig(configPath).corgi).toMatchObject({
+      contract: "rfc-v1",
+      rfcRoot: "governance/rfcs",
+      foundation: "RFC-0001-project-foundation",
+      governance: { integrationBranch: "main" },
+    });
+  });
+
   it.each([
     ["corgi: true", "Field 'corgi' must be a mapping"],
     ["corgi:\n  tracking: github", "Field 'corgi.tracking' must be a mapping"],
@@ -166,6 +188,14 @@ corgi:
       "Invalid corgi.tracking.provider 'jira'",
     ],
     ["corgi:\n  taskArtifactId: '  '", "Field 'corgi.taskArtifactId' must be a non-empty string"],
+    ["corgi:\n  contract: rfc-v1", "Field 'corgi.rfcRoot' is required"],
+    ["corgi:\n  rfcRoot: ../rfcs", "Field 'corgi.rfcRoot' must be a safe relative path"],
+    ["corgi:\n  foundation: foundation", "Field 'corgi.foundation' must be 'RFC-0001-project-foundation'"],
+    ["corgi:\n  foundation: RFC-0002-other", "Field 'corgi.foundation' must be 'RFC-0001-project-foundation'"],
+    [
+      "corgi:\n  governance:\n    integrationBranch: 'bad branch'",
+      "Field 'corgi.governance.integrationBranch' must be a valid non-empty branch name",
+    ],
   ])("rejects invalid Corgi configuration: %s", (body, message) => {
     const configPath = resolve(TEST_DIR, "openspec/config.yaml");
     writeFileSync(configPath, `schema: custom-flow\n${body}\n`);

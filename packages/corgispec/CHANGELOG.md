@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.0.0-rc2] - 2026-08-19
+
+### Fixed
+
+- Make `propose --finalize` resolve an existing Issue from the RFC delivery binding, Change source, or durable Propose intent before marker recovery, preventing retry paths from creating an orphaned duplicate Issue.
+- Fail before tracker mutation when persisted Issue providers, ids, or original URLs disagree, and verify the fetched Issue identity plus exact Corgi marker before using it.
+- Restore executable RC publication by aligning the v4 `-rcN` tag policy, npm `next` dist-tag, hermetic Init tests, and the OpenSpec release prerequisite.
+
+### Tests
+
+- Cover marker-search misses, interrupted tracker synchronization, idempotent repeated finalization, fetched Issue drift, and zero tracker calls for source/intent/delivery conflicts.
+
+## [4.0.0-rc1] - 2026-08-17
+
+### Breaking
+
+- Make accepted, merged RFC Slices the required source for feature delivery; tightly scoped maintenance work uses an auditable exemption contract.
+- Replace the v3 automatic apply/review finish with Run Contract v3: Apply, whole-change Verify, Human Review, Human QA, then transactional Archive.
+- Make Memory and Wiki mandatory, remove `--no-memory`, and require explicit transactional migration for v3 projects with no active changes.
+
+### Added
+
+- RFC governance worktrees, stable RFC/Slice/AC identifiers, human acceptance, amendment adoption, and Foundation RFC bootstrap.
+- Provider-neutral `source.yaml` and `traceability.yaml`, single-Issue idempotency, AC-bound evidence, and recoverable lifecycle intents.
+- First-class architecture, research, delivery, decision, guide, question, and metadata knowledge areas with durable session checkpoints.
+
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 

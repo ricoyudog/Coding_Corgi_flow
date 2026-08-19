@@ -1,6 +1,6 @@
 ---
 name: corgispec-propose
-description: Create or complete a CorgiSpec planning package and optionally synchronize one GitLab Issue. Use when proposing a new change or finishing an existing change whose normalized tracking provider is GitLab or none.
+description: Create or complete one RFC-first CorgiSpec planning package from an accepted unbound RFC Slice or a closed maintenance exemption. Use when the CLI must create/recover the single Issue, Change, source overlay, traceability, and strict-ready handoff without implementing code.
 hooks:
   PreToolUse:
     - matcher: "Edit|Write"
@@ -9,61 +9,55 @@ hooks:
           command: "corgispec hook pre-write"
 ---
 
-# Propose a change
-
-Create every artifact required for implementation through the OpenSpec-backed CLI. Never infer a planning path or artifact role from a conventional filename.
-
-## Preconditions
+# Propose an RFC-first Delivery
 
 **Context Gate**: If session context already contains ALL of: `isolation.mode`, active changes with worktree paths, current branch, reuse it; otherwise read configuration and discover worktrees.
 
-1. Resolve a kebab-case change name and the user's intent.
-2. Read only isolation settings from project configuration. If worktree isolation is enabled, create or reuse the configured worktree before creating the change, then run every command from that worktree.
-3. Run:
+Propose is planning-only and provider-neutral. The CLI owns Issue creation/recovery, tracker state, `corgi/source.yaml`, initial `corgi/traceability.yaml`, and RFC delivery binding. Never call `gh` or `glab` directly.
 
-   ```bash
-   corgispec propose "<change>" --json
-   corgispec status "<change>" --json
-   ```
+## Select One Source
 
-4. Require status JSON to expose `changeRoot`, `artifactPaths`, `contextFiles`, `taskArtifactId`, `trackingProvider`, and `trackingProviderSource`. If a field is absent, stop and request a CorgiSpec CLI upgrade.
-5. Accept `trackingProvider: "gitlab"` or `"none"`. Route `"github"` to `corgispec-gh-propose`; never derive the provider from `schemaName`.
-6. Treat `changeRoot` as authoritative even when it is outside the current working directory. Never prepend the repository path.
+For a Feature, require an exact accepted, merged, unbound reference:
 
-## Create the artifact graph
+```bash
+corgispec propose "<change>" --from "RFC-0001-slug/S-01-slug" --json
+```
 
-Before writing the first artifact, create and maintain a visible planning checklist with the host's available planning or TODO mechanism when one is available and permitted. Do not hard-code a platform-specific tool name.
+Do not turn free-form Feature prose into an RFC. If no accepted Slice exists, stop and direct the human to `corgispec rfc new`.
 
-Read [references/artifact-creation.md](references/artifact-creation.md), then repeat:
+For maintenance, require a concrete description and use:
 
-1. Read `status.artifacts` and the implementation prerequisites reported by the CLI.
-2. For each ready artifact, run:
+```bash
+corgispec propose "<change>" --maintenance --description "<bounded work>" \
+  --contract-ref "<existing RFC AC or canonical spec when required>" --json
+```
 
-   ```bash
-   corgispec instructions "<artifact-id>" --change "<change>" --json
-   ```
+The CLI may accept only docs-only, test-only, internal-refactor, dependency-maintenance, or contract-bug work. If classification is ambiguous or could change public behavior, API/CLI/config/schema, data, security, compatibility, migration, or boundaries, stop and require an RFC.
 
-3. Require the instructions response to retain the same `changeRoot` and expose its authorized `artifactPaths` and `contextFiles`.
-4. Read only returned dependency paths and context files. Use `template`, `instruction`, `context`, and `rules` as guidance; never copy constraint blocks into output.
-5. Write only the concrete target authorized by the instructions response. Do not expand a path pattern or invent an artifact filename.
-6. Re-run status after every artifact. Stop when every CLI-reported implementation prerequisite is complete.
+## Establish Context
 
-## Close out
+1. Confirm the project uses `corgi.contract: rfc-v1` and the Foundation RFC is effective.
+2. Create or reuse the configured delivery worktree before Propose when worktree isolation is enabled. Run all subsequent commands there.
+3. Keep `HEAD` unchanged throughout Propose.
+4. Run the exact CLI command once. On retry, run the same command so its durable intent and Issue marker can reconcile idempotently.
+5. If the CLI reports multiple Issue markers, a conflicting Change, an occupied Slice, or a source contract error, stop without manual repair.
 
-- When `trackingProvider` is `gitlab`, read [references/gitlab-issues.md](references/gitlab-issues.md). Locate tracker state relative to `changeRoot`, use `taskArtifactId` for Task Groups, and use returned planning paths for issue context.
-- When `trackingProvider` is `none`, skip all tracker commands and tracker-state writes.
-- If isolation is active, write `.worktree.yaml` directly under the authoritative `changeRoot` and verify the worktree with `git worktree list`.
-- Run `corgispec ready "<change>" --strict --json`. Do not claim handoff readiness unless it returns ready.
-- Report the change name, `changeRoot`, created artifact IDs and concrete paths, readiness, tracking result, worktree result, and the matching platform apply command the user may invoke later. For Codex, explicitly report `$corgispec-apply <change>`.
+## Complete Planning
 
-## Terminal handoff boundary
+1. Run `corgispec status "<change>" --json`.
+2. Require authoritative `changeRoot`, concrete `artifactPaths`, `contextFiles`, `taskArtifactId`, and `contract` containing delivery/source/traceability/tracker bindings.
+3. Read [references/artifact-creation.md](references/artifact-creation.md).
+4. For each CLI-ready artifact, run `corgispec instructions "<artifact-id>" --change "<change>" --json` and write only its returned concrete target.
+5. Re-run status after each artifact; never infer an artifact path or role from a filename.
+6. Complete `corgi/traceability.yaml` so every source AC maps to concrete planning anchors and one or more Task Groups, with no missing, unknown, or duplicate ACs. Do not edit `corgi/source.yaml`.
+7. Run `corgispec ready "<change>" --strict --json` as a diagnostic and require the same RFC/source/traceability digests.
+8. Re-run the exact same source command with `--finalize --json`, for example `corgispec propose "<change>" --from "<RFC>/<Slice>" --finalize --json` or the identical maintenance flags plus `--finalize`. Only this CLI-owned closeout may enforce strict ready, write the managed single-Issue dashboard, move the Issue from backlog to todo, and mark planning complete.
+9. If finalize is interrupted, rerun that exact finalize command so the durable intent reconciles idempotently. Do not edit the dashboard or delivery binding manually.
 
-- Do not hardcode the planning home, change directory, artifact names, or artifact layout.
-- Do not create a duplicate tracker Issue when tracker state already exists under `changeRoot`.
-- Do not write outside `changeRoot` except for the configured worktree and remote issue operations.
-- Throughout propose, keep `HEAD` unchanged. Do not install packages, create commits, push branches, open implementation pull requests, or publish at any point. Worktree setup must not commit housekeeping changes.
-- Propose is a planning-only workflow and is terminal for the current turn.
-- A strict `ready` result confirms planning integrity; it is not user approval to implement.
-- An original request phrased as "fix", "implement", or "build" supplies planning intent only and does not authorize implementation after propose.
-- After reporting, end the current turn. Do not invoke apply, implementation, review, archive, commit, push, or publish actions.
-- Implementation may begin only after a later explicit user request for the apply workflow.
+Task Groups remain sections in the authoritative task artifact and dashboard of the single Issue; never create a Task Group Issue.
+
+## Handoff
+
+Report the RFC/Slice or maintenance exemption, Change, worktree, single Issue or provider-none binding, concrete planning artifacts, traceability coverage, planning revision, strict readiness, and finalized todo handoff. Tell the user that Apply is the next separate action.
+
+Do not install packages, implement code, create commits, push, open an implementation PR/MR, invoke Apply/Verify/Review/QA/Archive, or publish. End the turn after the planning handoff.

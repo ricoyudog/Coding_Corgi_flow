@@ -5,8 +5,8 @@ updated: {{DATE}}
 
 # Research Index
 
-> Investigation results from opsx explore sessions.
+> Research evidence and unresolved findings. Research is not current architecture until verified and promoted.
 
 ## Topics
 
-(No research topics yet — these are created during opsx explore)
+(No research topics yet.)

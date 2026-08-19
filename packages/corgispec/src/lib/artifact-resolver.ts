@@ -13,6 +13,10 @@ import {
   isPathInside,
   type PlanningRevisionFileReader,
 } from "./planning-revision.js";
+import {
+  loadChangeContract,
+  type LoadedChangeContract,
+} from "./change-contract.js";
 
 export interface ArtifactStatusProvider {
   getStatus(
@@ -29,6 +33,7 @@ export interface ResolvedChangeArtifacts {
   artifactPaths: Record<string, OpenSpecArtifactPath>;
   actionContext: OpenSpecActionContext;
   planningRevision: string;
+  contract: LoadedChangeContract | null;
   planningComplete: boolean;
   status: OpenSpecStatusResponse;
 }
@@ -166,11 +171,15 @@ export class ArtifactResolver {
       };
     }
 
+    const contract = loadChangeContract(status.changeRoot);
     const planningRevision = await computePlanningRevision(
       {
         changeRoot: status.changeRoot,
         schemaName: status.schemaName,
         artifactPaths,
+        contractPaths: contract
+          ? [contract.sourcePath, contract.traceabilityPath]
+          : [],
       },
       this.fileReader
     );
@@ -183,6 +192,7 @@ export class ArtifactResolver {
       artifactPaths,
       actionContext: status.actionContext,
       planningRevision,
+      contract,
       planningComplete: status.isComplete,
       status,
     };

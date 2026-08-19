@@ -1,36 +1,22 @@
 ---
 name: corgispec-verify
-description: Verify completed CorgiSpec Task Groups against tests, builds, linting, and returned planning requirements, with optional GitHub or GitLab evidence posting. Use for standalone verification of an apply checkpoint before human review.
+description: Run the canonical whole-change verification gate for a Run Contract v3 delivery in awaiting_verify, covering integration checks and every RFC or maintenance AC. Use after Apply completes all Task Groups and before human review.
 ---
 
-# Verify completed Task Groups
+# Verify the Whole Delivery
 
 **Context Gate**: If session context already contains ALL of: `isolation.mode`, active changes with worktree paths, current branch, reuse it; otherwise read configuration and discover worktrees.
 
-Gather reproducible evidence without changing implementation, planning, or tracker state.
+Verify is read-only with respect to implementation and planning. It submits canonical evidence through the CLI; it never edits `.corgi/loop`, tracker content, source, traceability, or task artifacts directly.
 
-## Resolve context
+1. Resolve the delivery worktree and require Run Contract phase `awaiting_verify`.
+2. Require a clean final HEAD and unchanged planning revision, source digest, traceability digest, RFC accepted commit, and single Issue binding.
+3. Run the complete project test/build/lint/integration suite appropriate to the Change. Capture each command, exit code, and evidence path.
+4. For every source AC, verify exact traceability to planning anchors and completed Task Groups.
+5. Supply automated evidence for `automated` and `both` ACs. Mark human-only evidence as not applicable to this gate; never claim Human QA evidence early.
+6. Write the temporary report JSON with top-level `checks` and `acceptance`, then submit `corgispec verify "<change>" --report "<verify-report.json>" --run-id "<runId>" --session "<sessionId>" --state-revision "<revision>" --nonce "<nonce>" --json`. Copy the four token values from the final Apply JSON unchanged; use the new returned token for Review.
+7. Let the CLI update the single Issue through its tracker adapter; never call `gh` or `glab`.
 
-1. Resolve the change and isolated worktree with [references/worktree-discovery.md](references/worktree-discovery.md) when required.
-2. Run `corgispec status "<change>" --json` and the internal read-only query `corgispec apply "<change>" --json` from the selected worktree.
-3. Require matching `changeRoot` plus `artifactPaths`, `contextFiles`, `taskArtifactId`, `trackingProvider`, and `trackingProviderSource`. Stop and request a CLI upgrade when absent.
-4. Accept only normalized provider values `github`, `gitlab`, or `none`; never infer provider from `schemaName`.
-5. Treat returned planning/store paths as authoritative even outside the working directory. Never construct an artifact path.
+Any failing check, missing/extra AC, absent evidence reference, dirty worktree, or digest drift is FAIL and transitions to an implementation repair requirement. Do not implement the repair during Verify. A pass transitions only to `awaiting_human_review`.
 
-## Verify
-
-1. Select the requested completed group or all CLI-reported completed groups. Confirm completion through `taskArtifactId` and its concrete paths.
-2. Read implementation files from apply checkpoints, tracker summaries, or the actual diff. Read normative planning evidence only from returned `contextFiles` and `artifactPaths`.
-3. Follow [references/verification-steps.md](references/verification-steps.md): detect and run relevant tests, lint, type checks, builds, and requirement-by-requirement coverage checks.
-4. Capture exact commands, working directories, exit codes, salient output, requirement evidence, and concrete file references. Never fabricate or reinterpret a failed command as passing.
-5. Produce PASS, PASS WITH WARNINGS, or FAIL using the documented verdict rules.
-
-## Report
-
-- For `gitlab`, read `<changeRoot>/.gitlab.yaml`, require `issue.iid`/`issue.url`, and post `## Verify Report: Group N` to that Issue with `glab`.
-- For `github`, read `<changeRoot>/.github.yaml`, require `issue.number`/`issue.url`, and post `## Verify Report: Group N` to that Issue with `gh`.
-- If either tracker file contains legacy `parent` or `groups` keys, stop tracker posting and report the unsupported format plus the manual single-issue conversion. Do not post to or modify legacy issues.
-- For `none` or missing tracker state, report locally only.
-- Never change the Issue body, labels, close state, tasks, or implementation.
-
-Report each group, commands/evidence, requirement coverage, verdict, tracker posting, `changeRoot`, and worktree.
+Report verdict, final HEAD, planning revision, checks, per-AC evidence matrix, canonical report hash, and next action.

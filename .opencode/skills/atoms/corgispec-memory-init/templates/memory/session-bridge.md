@@ -5,27 +5,31 @@ updated: {{DATE}}
 
 # Session Bridge
 
-> AI agent reads this first at startup. Last session's handoff state.
+> Durable checkpoint mirror. Read first at startup; `.corgi/loop` remains lifecycle authority. `corgispec archive --local` alone writes archive closeout fields.
 
-## Active opsx Change
+## Delivery Pointer
+- **RFC**: none
+- **RFC Revision**: none
+- **Slice**: none
+- **Issue**: none
 - **Change**: none
-- **Phase**: none
-- **Branch**: main
+- **Worktree**: none
+- **Phase at Checkpoint**: none
+- **Task Group at Checkpoint**: none
+- **Observed Run Revision**: none
+- **Last Verified HEAD**: none
 
-## Done (last session completed)
-- (initial setup — memory structure created)
+## Next Action
+- Review and accept `RFC-0001-project-foundation` before proposing delivery work.
 
-## Waiting (next steps / blockers)
-- First change not yet created — run `/corgi-propose`
+## Blockers
+- Foundation RFC is not yet accepted and merged.
 
-## New Pitfalls
-- (none yet)
+## Uncommitted Work
+- none
 
-## New Discoveries
-- (none yet)
+## Discoveries
+- none
 
-## Next Session Start
-1. Read this file ← you are here
-2. Read [[wiki/hot]]
-3. Read [[wiki/index]]
-4. Then docs/ or specs/ as needed
+## Promotion Queue
+- Review agent-configuration constraints before promoting any item to `memory/MEMORY.md`.

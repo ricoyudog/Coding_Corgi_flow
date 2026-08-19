@@ -1,8 +1,8 @@
 {
   "slug": "corgispec-install",
   "tier": "molecule",
-  "version": "1.0.0",
-  "description": "Install, update, or verify project-local Corgi GitFlow assets in a target project",
+  "version": "4.0.0-rc2",
+  "description": "Install or verify project assets with mandatory RFC-first Memory/Wiki",
   "depends_on": [
     "corgispec-memory-init"
   ],

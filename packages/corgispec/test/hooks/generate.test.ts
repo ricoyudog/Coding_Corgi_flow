@@ -325,7 +325,6 @@ for (const name of ${JSON.stringify([
   "corgi-apply",
   "corgi-propose",
   "corgi-update",
-  "corgi-converge",
   "corgi-archive",
   "corgi-human-qa",
 ])}) {
@@ -341,7 +340,6 @@ for (const name of ${JSON.stringify([
   "corgispec-propose",
   "corgispec-gh-propose",
   "corgispec-update",
-  "corgispec-converge",
   "corgispec-archive-change",
   "corgispec-gh-archive",
   "corgispec-human-qa",
@@ -393,13 +391,13 @@ await idle("concurrent-b");
         JSON.parse(record.input).tool_input.file_path as string
       );
 
-      expect(preWrites).toHaveLength(18);
+      expect(preWrites).toHaveLength(16);
       expect(writtenPaths).not.toContain("/workspace/normal.ts");
       expect(writtenPaths).not.toContain("/workspace/reset.ts");
       expect(writtenPaths).not.toContain("/workspace/a-after-reset.ts");
       expect(writtenPaths).toContain("/workspace/b-after-reset.ts");
       expect(stopChecks).toHaveLength(0);
-      expect(loopChecks).toHaveLength(18);
+      expect(loopChecks).toHaveLength(16);
     });
 
     it("re-enters OpenCode from a fire-and-forget idle event while preserving hook output", () => {
@@ -427,6 +425,16 @@ process.stdin.on("end", () => {
       process.stdout.write("OPENCODE-OUT:" + input);
       process.stderr.write("OPENCODE-ERR:" + process.argv.slice(2).join(" "));
       process.exitCode = 7;
+      return;
+    }
+    if (process.env.FAKE_LOOP_SESSION_CONFLICT === "1") {
+      process.stdout.write(JSON.stringify({
+        schemaVersion: 3,
+        decision: "proceed",
+        status: "contract_error",
+        error: { code: "SESSION_CONFLICT", message: "Stop hook session does not own run" },
+      }));
+      process.exitCode = 2;
       return;
     }
     process.stdout.write(JSON.stringify({ decision: "proceed", received: JSON.parse(input) }));
@@ -516,6 +524,19 @@ process.stdout.write("\\nPROMPTS:" + JSON.stringify(prompts));
       });
       expect(errored.stderr).toBe("OPENCODE-ERR:hook loop-check");
 
+      const conflicted = spawnSync(process.execPath, [harnessPath], {
+        encoding: "utf8",
+        env: { ...env, FAKE_LOOP_SESSION_CONFLICT: "1" },
+      });
+      expect(conflicted.status).toBe(0);
+      const loopConflict = parseHarness(conflicted.stdout);
+      expect(JSON.parse(loopConflict.hookOutput)).toMatchObject({
+        status: "contract_error",
+        error: { code: "SESSION_CONFLICT" },
+      });
+      expect(loopConflict.prompts).toEqual([]);
+      expect(conflicted.stderr).toBe("");
+
       const blocked = spawnSync(process.execPath, [harnessPath], {
         encoding: "utf8",
         env: { ...env, FAKE_LOOP_BLOCK: "1" },
@@ -528,7 +549,7 @@ process.stdout.write("\\nPROMPTS:" + JSON.stringify(prompts));
       });
       expect(loopBlocked.prompts[0]).toMatchObject({
         path: { id: "opencode-session" },
-        body: { parts: [{ text: expect.stringContaining("Run Contract v2 is still active") }] },
+        body: { parts: [{ text: expect.stringContaining("Run Contract v3 is still active") }] },
       });
       expect(blocked.stderr).toBe("OPENCODE-ERR:hook loop-check");
     });

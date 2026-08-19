@@ -2,7 +2,7 @@ import { Command } from "commander";
 import { cpSync, existsSync, mkdirSync, rmSync, readdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { type Platform, getSkillDir } from "../lib/platform.js";
+import { type Platform } from "../lib/platform.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -108,7 +108,7 @@ export function createInstallCommand(): Command {
       "Install to specific platform only (claude, opencode, codex)"
     )
     .option("--dry-run", "Print planned operations without copying files")
-    .action((opts) => {
+    .action(async (opts) => {
       const dryRun = opts.dryRun ?? false;
       const platformFilter: Platform | undefined = opts.platform;
 
@@ -136,33 +136,20 @@ export function createInstallCommand(): Command {
         ? [platformFilter]
         : ["claude", "opencode", "codex"];
 
-      if (dryRun) {
-        console.log("DRY RUN — no files will be written\n");
-      }
-
-      let totalInstalled = 0;
-
-      for (const platform of platforms) {
-        const targetDir = getSkillDir(platform);
-        console.log(`\n${platform}: ${targetDir}`);
-
-        const installed = installSkillsTo(sourceDir, targetDir, dryRun);
-        totalInstalled += installed.length;
-
-        if (installed.length === 0) {
-          console.log("  (no skills to install)");
-        }
-      }
-
-      console.log(
-        `\n${dryRun ? "Would install" : "Installed"} ${totalInstalled} skill(s) across ${platforms.length} platform(s).`
-      );
-
-      if (!dryRun && totalInstalled > 0) {
-        console.log(
-          "\n💡 Tip: Run `corgispec hooks generate --platform opencode` to generate the TypeScript lifecycle-hook plugin."
-        );
-      }
+      const { runBootstrap } = await import("../lib/bootstrap.js");
+      const result = await runBootstrap({
+        target: process.cwd(),
+        mode: "auto",
+        yes: true,
+        json: false,
+        assetsRoot: dirname(sourceDir),
+        platforms,
+        scope: "global",
+        dryRun,
+      });
+      console.log(result.message);
+      for (const action of result.actions) console.log(`- ${action}`);
+      if (result.status !== "success") process.exitCode = 1;
     });
 
   return cmd;

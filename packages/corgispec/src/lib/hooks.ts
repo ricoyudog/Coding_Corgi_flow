@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { dirname, relative, resolve } from "node:path";
 import {
@@ -29,6 +29,22 @@ export interface SessionContext {
   activeChanges: ActiveChange[];
   currentBranch: string;
   worktreePath: string;
+  memoryStartup: readonly string[];
+  runContracts: HookRunContractContext[];
+  bridgeDrift: string[];
+}
+
+export interface HookRunContractContext {
+  changeName: string;
+  runId: string;
+  worktreePath?: string;
+  phase: string;
+  stateRevision: number;
+  currentGroupId: string | null;
+  completedGroupIds?: string[];
+  bridgeCheckpointHeads?: Record<string, string>;
+  headRevision: string | null;
+  nextAction: string;
 }
 
 export interface ActiveChange {
@@ -54,6 +70,12 @@ export interface HookPlanningDependencies {
   createResolver?: (adapter: HookOpenSpecAdapter) => ArtifactResolver;
   listWorktrees?: (cwd: string) => string[];
   currentBranch?: (cwd: string) => string;
+}
+
+export interface HookGitWorktreeLayout {
+  primaryRoot: string;
+  currentRoot: string;
+  worktrees: string[];
 }
 
 export interface HookPlanningOptions extends Pick<OpenSpecCommandOptions, "store"> {}
@@ -138,6 +160,8 @@ export async function gatherSessionContext(
   }));
   const currentBranch = (dependencies.currentBranch ?? getCurrentBranch)(cwd);
   const worktreePath = resolveCurrentWorktreePath(cwd, config);
+  const runContracts = readHookRunContractContexts(cwd, dependencies);
+  const bridgeDrift = compareSessionBridge(cwd, runContracts);
 
   return {
     schema: config.schema,
@@ -145,6 +169,13 @@ export async function gatherSessionContext(
     activeChanges,
     currentBranch,
     worktreePath,
+    memoryStartup: [
+      "memory/session-bridge.md",
+      "memory/MEMORY.md",
+      "wiki/hot.md",
+    ],
+    runContracts,
+    bridgeDrift,
   };
 }
 
@@ -158,6 +189,7 @@ export function formatContextMarkdown(ctx: SessionContext): string {
     "## CorgiSpec Project Context",
     `- **Schema**: ${ctx.schema}`,
     `- **Isolation mode**: ${ctx.isolationMode}`,
+    `- **Memory startup**: ${ctx.memoryStartup.join(" \u2192 ")} (read wiki/index.md on demand)`,
   ];
 
   if (ctx.activeChanges.length > 0) {
@@ -173,11 +205,184 @@ export function formatContextMarkdown(ctx: SessionContext): string {
 
   lines.push(`- **Current branch**: ${ctx.currentBranch}`);
   lines.push(`- **Worktree path**: ${ctx.worktreePath}`);
+  if (ctx.runContracts.length > 0) {
+    lines.push("- **Run Contract v3 (authoritative live state)**:");
+    for (const run of ctx.runContracts) {
+      lines.push(
+        `  - ${run.changeName}: ${run.phase}; group ${run.currentGroupId ?? "none"}; revision ${run.stateRevision}`
+        + `${run.worktreePath ? `; worktree ${run.worktreePath}` : ""}; next: ${run.nextAction}`,
+      );
+    }
+  } else {
+    lines.push("- **Run Contract v3**: (none active)");
+  }
+  if (ctx.bridgeDrift.length > 0) {
+    lines.push("- **Session Bridge drift**:");
+    for (const drift of ctx.bridgeDrift) lines.push(`  - ${drift}`);
+  } else {
+    lines.push("- **Session Bridge drift**: none detected");
+  }
   lines.push(
     "- **Hooks active**: SessionStart, PreToolUse, PostToolUse, Stop, PostCompact"
   );
 
   return lines.join("\n");
+}
+
+export function readHookRunContractContexts(
+  projectRoot: string,
+  dependencies: Pick<HookPlanningDependencies, "listWorktrees"> = {},
+): HookRunContractContext[] {
+  const contexts = discoverHookProjectRoots(projectRoot, dependencies)
+    .flatMap((root) => readRunContractContextsFromRoot(root).map((context) => ({
+      ...context,
+      worktreePath: root,
+    })));
+  return contexts.sort((left, right) =>
+    compareCodeUnits(left.changeName, right.changeName)
+    || compareCodeUnits(left.runId, right.runId)
+  );
+}
+
+function readRunContractContextsFromRoot(projectRoot: string): HookRunContractContext[] {
+  const loopRoot = resolve(projectRoot, ".corgi/loop");
+  if (!existsSync(loopRoot)) return [];
+  const contexts: HookRunContractContext[] = [];
+  for (const entry of readdirSync(loopRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const pointerPath = resolve(loopRoot, entry.name, "current.json");
+    if (!existsSync(pointerPath)) continue;
+    try {
+      const pointer = JSON.parse(readFileSync(pointerPath, "utf8")) as Record<string, unknown>;
+      if (pointer.schemaVersion !== 3 || typeof pointer.runId !== "string") continue;
+      const statePath = resolve(loopRoot, entry.name, "runs", pointer.runId, "state.json");
+      const state = JSON.parse(readFileSync(statePath, "utf8")) as Record<string, unknown>;
+      if (
+        state.schemaVersion !== 3
+        || typeof state.changeName !== "string"
+        || typeof state.runId !== "string"
+        || typeof state.phase !== "string"
+        || !Number.isInteger(state.stateRevision)
+      ) continue;
+      if (["archived", "invalidated", "corrupted"].includes(state.phase)) continue;
+      const groups = state.groups && typeof state.groups === "object" && !Array.isArray(state.groups)
+        ? Object.values(state.groups as Record<string, unknown>)
+          .filter((group): group is Record<string, unknown> => Boolean(group) && typeof group === "object" && !Array.isArray(group))
+          .filter((group) => group.status === "completed" && typeof group.id === "string")
+          .sort((left, right) => Number(left.ordinal ?? 0) - Number(right.ordinal ?? 0))
+        : [];
+      const bridgeCheckpointHeads: Record<string, string> = {};
+      for (const [index, group] of groups.entries()) {
+        const prior = groups[index - 1];
+        const head = typeof prior?.commitRevision === "string"
+          ? prior.commitRevision
+          : typeof state.baselineRevision === "string" ? state.baselineRevision : null;
+        if (head) bridgeCheckpointHeads[group.id as string] = head;
+      }
+      contexts.push({
+        changeName: state.changeName,
+        runId: state.runId,
+        phase: state.phase,
+        stateRevision: state.stateRevision as number,
+        currentGroupId: typeof state.currentGroupId === "string" ? state.currentGroupId : null,
+        completedGroupIds: groups.map((group) => group.id as string),
+        bridgeCheckpointHeads,
+        headRevision: runHeadRevision(state),
+        nextAction: nextRunAction(state.phase),
+      });
+    } catch {
+      contexts.push({
+        changeName: entry.name,
+        runId: "unreadable",
+        phase: "corrupted",
+        stateRevision: -1,
+        currentGroupId: null,
+        headRevision: null,
+        nextAction: "repair canonical Run Contract storage before continuing",
+      });
+    }
+  }
+  return contexts;
+}
+
+function runHeadRevision(state: Record<string, unknown>): string | null {
+  if (typeof state.finalRevision === "string" && state.finalRevision.trim()) return state.finalRevision;
+  if (state.groups && typeof state.groups === "object" && !Array.isArray(state.groups)) {
+    const completed = Object.values(state.groups as Record<string, unknown>)
+      .filter((group): group is Record<string, unknown> => Boolean(group) && typeof group === "object" && !Array.isArray(group))
+      .filter((group) => typeof group.commitRevision === "string" && group.commitRevision.trim().length > 0)
+      .sort((left, right) => Number(right.ordinal ?? 0) - Number(left.ordinal ?? 0));
+    if (completed[0] && typeof completed[0].commitRevision === "string") return completed[0].commitRevision;
+  }
+  return typeof state.baselineRevision === "string" && state.baselineRevision.trim()
+    ? state.baselineRevision
+    : null;
+}
+
+function nextRunAction(phase: string): string {
+  const actions: Record<string, string> = {
+    planning_ready: "start Apply",
+    applying: "continue the current Task Group",
+    awaiting_verify: "run canonical Verify",
+    awaiting_human_review: "request the human Review decision",
+    awaiting_human_qa: "run Human QA",
+    ready_for_archive: "run Archive",
+    archiving: "resume the durable Archive intent",
+    repair_required: "create the required implementation successor or RFC Amendment",
+  };
+  return actions[phase] ?? "inspect canonical lifecycle state";
+}
+
+function compareSessionBridge(
+  projectRoot: string,
+  runs: HookRunContractContext[],
+): string[] {
+  const path = resolve(projectRoot, "memory/session-bridge.md");
+  if (!existsSync(path)) return ["memory/session-bridge.md is missing"];
+  if (runs.length === 0) return [];
+  const bridge = readFileSync(path, "utf8");
+  const field = (label: string): string | null => {
+    const match = bridge.match(new RegExp(`^- \\*\\*${label}\\*\\*: (.+)$`, "mu"));
+    return match?.[1]?.trim() ?? null;
+  };
+  const checkpointChange = field("Change");
+  const checkpointPhase = field("Phase at Checkpoint");
+  const checkpointGroup = field("Task Group at Checkpoint");
+  const checkpointRevision = field("Observed Run Revision");
+  const checkpointHead = field("Last Verified HEAD");
+  const drift: string[] = [];
+  if (runs.length > 1) {
+    drift.push(`bridge can point to one delivery, but ${runs.length} nonterminal Run Contracts exist`);
+    return drift;
+  }
+  const live = runs[0]!;
+  if (checkpointChange === null) drift.push("checkpoint Change is missing");
+  else if (checkpointChange !== live.changeName) {
+    drift.push(`checkpoint Change ${checkpointChange}; live Change ${live.changeName}`);
+  }
+  if (checkpointPhase === null) drift.push("checkpoint phase is missing");
+  else if (checkpointPhase !== live.phase) {
+    drift.push(`checkpoint phase ${checkpointPhase}; live phase ${live.phase}`);
+  }
+  const liveGroup = live.currentGroupId ?? "none";
+  if (checkpointGroup === null) drift.push("checkpoint Task Group is missing");
+  else if (checkpointGroup !== liveGroup && !live.completedGroupIds?.includes(checkpointGroup)) {
+    drift.push(`checkpoint group ${checkpointGroup}; live group ${liveGroup}`);
+  }
+  if (checkpointRevision === null) drift.push("checkpoint revision is missing");
+  else if (checkpointRevision !== String(live.stateRevision)) {
+    drift.push(`checkpoint revision ${checkpointRevision}; live revision ${live.stateRevision}`);
+  }
+  const expectedCheckpointHead = checkpointRevision === String(live.stateRevision)
+    && checkpointGroup
+    ? live.bridgeCheckpointHeads?.[checkpointGroup] ?? live.headRevision
+    : live.headRevision;
+  const liveHead = expectedCheckpointHead ?? "none";
+  if (checkpointHead === null) drift.push("checkpoint HEAD is missing");
+  else if (checkpointHead !== liveHead) {
+    drift.push(`checkpoint HEAD ${checkpointHead}; live HEAD ${liveHead}`);
+  }
+  return drift;
 }
 
 /**
@@ -405,7 +610,8 @@ export async function readStdinJson(): Promise<HookInput> {
 export function validateWriteTarget(
   filePath: string,
   cwd: string,
-  config: OpenSpecConfig
+  config: OpenSpecConfig,
+  dependencies: Pick<HookPlanningDependencies, "listWorktrees"> = {},
 ): string | null {
   const isolation = config.isolation;
 
@@ -417,18 +623,45 @@ export function validateWriteTarget(
   // Worktree isolation: writes must be inside the active worktree
   if (isolation.mode === "worktree") {
     const root = isolation.root ?? ".worktrees";
-    const absPath = resolve(cwd, filePath);
-    const worktreeRoot = resolve(cwd, root);
+    let layout: HookGitWorktreeLayout;
+    try {
+      layout = discoverHookGitWorktrees(cwd, dependencies.listWorktrees);
+    } catch (error) {
+      return `Blocked: ${error instanceof Error ? error.message : String(error)}`;
+    }
+    const isolationRoot = resolve(layout.primaryRoot, root);
+    const deliveryWorktrees = layout.worktrees.filter((worktree) =>
+      worktree !== layout.primaryRoot && dirname(worktree) === isolationRoot
+    );
+    const currentDelivery = deliveryWorktrees.find((worktree) => worktree === layout.currentRoot);
+    if (!currentDelivery) {
+      return (
+        `Blocked: The current Git worktree "${layout.currentRoot}" is not a registered delivery `
+        + `worktree under "${root}". Enter the delivery worktree before writing.`
+      );
+    }
 
-    // Allow writes inside any worktree
-    if (absPath.startsWith(worktreeRoot + "/") || absPath.startsWith(worktreeRoot + "\\")) {
+    const portablePath = /^[A-Za-z]:[\\/]|^\\\\/u.test(filePath)
+      ? filePath
+      : filePath.replaceAll("\\", "/");
+    const absPath = isPortableAbsolute(portablePath)
+      ? portablePath
+      : resolve(cwd, portablePath);
+    if (isPathInside(currentDelivery, absPath)) {
       return null;
     }
 
-    // Block writes outside worktrees
+    const sibling = deliveryWorktrees.find((worktree) => isPathInside(worktree, absPath));
+    if (sibling) {
+      return (
+        `Blocked: Write to "${filePath}" targets sibling worktree "${sibling}". `
+        + `The active delivery worktree is "${currentDelivery}".`
+      );
+    }
+
     return (
-      `Blocked: Write to "${filePath}" is outside the worktree root "${root}". ` +
-      "When isolation.mode is worktree, all writes must go to a worktree directory."
+      `Blocked: Write to "${filePath}" is outside the active delivery worktree `
+      + `"${currentDelivery}" (primary isolation root "${root}").`
     );
   }
 
@@ -608,6 +841,57 @@ function resolveCurrentWorktreePath(cwd: string, config: OpenSpecConfig): string
     return relative(cwd, topLevel) || ".";
   } catch {
     return "N/A";
+  }
+}
+
+export function discoverHookGitWorktrees(
+  cwd: string,
+  listWorktrees: (cwd: string) => string[] = listGitWorktrees,
+): HookGitWorktreeLayout {
+  const worktrees = [...new Set(listWorktrees(cwd).map((path) => resolve(path)))];
+  if (worktrees.length === 0) {
+    throw new HookPlanningError(
+      "Failed to discover Git worktrees: Git returned no registered worktrees",
+      "worktree_discovery_failed",
+    );
+  }
+  const resolvedCwd = resolve(cwd);
+  const currentRoot = worktrees
+    .filter((worktree) => isPathInside(worktree, resolvedCwd))
+    .sort((left, right) => right.length - left.length || compareCodeUnits(left, right))[0];
+  if (!currentRoot) {
+    throw new HookPlanningError(
+      `Failed to discover the registered Git worktree containing '${resolvedCwd}'`,
+      "worktree_discovery_failed",
+    );
+  }
+  return {
+    primaryRoot: worktrees[0]!,
+    currentRoot,
+    worktrees,
+  };
+}
+
+export function discoverHookProjectRoots(
+  projectRoot: string,
+  dependencies: Pick<HookPlanningDependencies, "listWorktrees"> = {},
+): string[] {
+  if (!dependencies.listWorktrees && !isInsideGitWorktree(projectRoot)) {
+    return [resolve(projectRoot)];
+  }
+  return discoverHookGitWorktrees(projectRoot, dependencies.listWorktrees).worktrees
+    .filter((worktree) => findConfigPath(worktree) !== null);
+}
+
+function isInsideGitWorktree(cwd: string): boolean {
+  try {
+    return execFileSync("git", ["rev-parse", "--is-inside-work-tree"], {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim() === "true";
+  } catch {
+    return false;
   }
 }
 

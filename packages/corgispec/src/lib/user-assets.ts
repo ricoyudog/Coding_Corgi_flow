@@ -46,13 +46,14 @@ export interface PlanUserAssetsOptions {
 
 const ALL_PLATFORMS: Platform[] = ["claude", "opencode", "codex"];
 const RETIRED_USER_COMMANDS: Partial<Record<CommandPlatform, string[]>> = {
-  claude: ["human-qa.md", "loop.md"],
-  opencode: ["corgi-loop.md"],
+  claude: ["human-qa.md", "loop.md", "converge.md"],
+  opencode: ["corgi-loop.md", "corgi-converge.md"],
 };
 const RETIRED_USER_SKILLS = [
   "corgispec-apply-change",
   "corgispec-gh-apply",
   "corgispec-loop",
+  "corgispec-converge",
 ] as const;
 
 export function planUserAssets(options: PlanUserAssetsOptions): UserAssetPlan {

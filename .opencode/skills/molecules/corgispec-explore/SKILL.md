@@ -8,7 +8,7 @@ description: Investigate a CorgiSpec change, its planning context, implementatio
 **Context Gate**: If session context already contains ALL of: `isolation.mode`, active changes with worktree paths, current branch, reuse it; otherwise read configuration and discover worktrees.
 
 1. Resolve the change and isolated worktree with [references/worktree-discovery.md](references/worktree-discovery.md) when required.
-2. Run `corgispec status "<change>" --json` and the internal read-only query `corgispec apply "<change>" --json` from the selected worktree.
+2. Run `corgispec status "<change>" --json` and use SessionStart/loop-check context for any current Run Contract; `apply` is a mutating command and must never be used as a status query.
 3. Require matching `changeRoot` plus `artifactPaths`, `contextFiles`, `taskArtifactId`, `trackingProvider`, and `trackingProviderSource`. Stop and request a CLI upgrade when absent.
 4. Accept `trackingProvider: "gitlab"` or `"none"`. Route `"github"` to `corgispec-gh-explore`; never infer provider from `schemaName`.
 5. Read planning material only from returned concrete artifact paths and context files. Accept an external store root; never prepend the working directory or infer an artifact filename.

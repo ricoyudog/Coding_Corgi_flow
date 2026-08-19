@@ -14,12 +14,11 @@
 - Delete obsolete planning text only when the artifact-scoped diff makes the removal explicit.
 - Avoid formatting-only rewrites that obscure the semantic diff.
 
-## Preserve task completion truth
+## Preserve task identity, not checkbox completion
 
-- Keep a completed task checked when wording changes but implementation obligation and verification evidence do not.
-- Reset a completed task when behavior, acceptance criteria, affected interface, migration, or required test changes.
-- Reset dependent completed tasks when an upstream semantic change invalidates their evidence.
-- Never mark a new or changed task complete based on inference.
+- Preserve task and Task Group IDs when semantics remain stable.
+- Planning checkboxes are not execution state. Never mark, reset, or infer `[x]` during reconciliation.
+- Run Contract v3 is the lifecycle authority; the CLI-managed Issue dashboard is the tracker view. A semantic planning change invalidates the planning revision and follows the repair/adoption path, not a checkbox rewrite.
 
 ## Handle glob artifacts
 
@@ -30,7 +29,7 @@
 
 ## Confirm safely
 
-- Show semantic changes and checkbox resets before requesting approval.
+- Show semantic changes and any Task Group/evidence invalidation before requesting approval.
 - Offer approve, skip, or stop for the current artifact.
 - Preserve a skipped artifact unchanged and include the resulting inconsistency in the final readiness report.
 - Request a new confirmation when a validation failure requires a materially different diff.

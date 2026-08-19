@@ -1,0 +1,21 @@
+{
+  "slug": "corgispec-rfc",
+  "tier": "molecule",
+  "version": "4.0.0-rc2",
+  "description": "Guide human-authored RFC drafting, validation, approval, merge effectiveness, and amendments",
+  "depends_on": [],
+  "platform": "universal",
+  "tags": [
+    "lifecycle",
+    "rfc",
+    "governance"
+  ],
+  "installation": {
+    "targets": [
+      "opencode",
+      "claude",
+      "codex"
+    ],
+    "base_path": "molecules/corgispec-rfc"
+  }
+}

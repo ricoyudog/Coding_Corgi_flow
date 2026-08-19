@@ -117,6 +117,8 @@ describe.skipIf(!live)("OpenSpec 1.6 live contract", () => {
       resolved,
       loadConfigFromDir(root),
       true,
+      {},
+      root,
     );
     expect(ready.report.status).toBe("ready");
   }, 30_000);

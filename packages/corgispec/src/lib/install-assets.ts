@@ -82,6 +82,16 @@ export const LEGACY_PROJECT_ASSET_CATALOG: readonly LegacyProjectAssetCatalogEnt
     kind: "command",
     signatures: ["corgispec-loop", ".corgi/loop"],
   },
+  {
+    path: ".opencode/commands/corgi-converge.md",
+    kind: "command",
+    signatures: ["corgispec-converge", "confirmation token"],
+  },
+  {
+    path: ".claude/commands/corgi/converge.md",
+    kind: "command",
+    signatures: ["corgispec-converge", "confirmation token"],
+  },
 ] as const;
 
 /**
@@ -187,6 +197,12 @@ export interface InstallerConfigPatchInput {
   installer?: Record<string, unknown>;
   /** Adds only corgi.tracking.provider and preserves all sibling Corgi fields. */
   trackingProvider?: TrackingProvider;
+  rfc?: {
+    contract: "rfc-v1";
+    rfcRoot: string;
+    foundation: string;
+    integrationBranch: string;
+  };
 }
 
 export type ManagedProjectFileState =
@@ -562,6 +578,27 @@ export function patchInstallerConfig(
       tracking: {
         ...existingTracking,
         provider: input.trackingProvider,
+      },
+    };
+  }
+
+  if (input.rfc !== undefined) {
+    const existingCorgi = isRecord(next.corgi)
+      ? next.corgi
+      : isRecord(existing.corgi)
+        ? existing.corgi
+        : {};
+    const existingGovernance = isRecord(existingCorgi.governance)
+      ? existingCorgi.governance
+      : {};
+    next.corgi = {
+      ...existingCorgi,
+      contract: input.rfc.contract,
+      rfcRoot: input.rfc.rfcRoot,
+      foundation: input.rfc.foundation,
+      governance: {
+        ...existingGovernance,
+        integrationBranch: input.rfc.integrationBranch,
       },
     };
   }

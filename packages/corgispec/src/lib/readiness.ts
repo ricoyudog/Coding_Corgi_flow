@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { basename, dirname } from "node:path";
 import { parseTaskGroupsDocument, type ParsedTaskGroup } from "./task-groups.js";
+import type { ContractSummary } from "./change-contract.js";
 
 export type ReadyCheckStatus = "pass" | "warning" | "fail";
 export type ReadyCheckSeverity = "info" | "warning" | "error";
@@ -45,6 +46,7 @@ export interface ReadyReport {
   artifactPaths: Record<string, ReadyArtifactPath>;
   checks: ReadyCheck[];
   taskGroups: ParsedTaskGroup[];
+  contract: ContractSummary | null;
 }
 
 export interface BuildReadyReportInput {
@@ -261,5 +263,6 @@ export function buildReadyReport(input: BuildReadyReportInput): ReadyReport {
     artifactPaths: input.artifactPaths,
     checks,
     taskGroups,
+    contract: null,
   };
 }
