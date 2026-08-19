@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Exact existing RC tag to publish (for example, v3.0.0-rc.6)
+        description: Exact existing RC tag to publish (for example, v4.0.0-rc2)
         required: true
         type: string
 
@@ -53,8 +53,8 @@ jobs:
             echo "::error::Dispatch this workflow from the master branch."
             exit 1
           fi
-          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]; then
-            echo "::error::Release tag must match v<major>.<minor>.<patch>-rc.<number>."
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc(\.)?[0-9]+$ ]]; then
+            echo "::error::Release tag must match v<major>.<minor>.<patch>-rc<number> (or legacy -rc.<number>)."
             exit 1
           fi
           if ! git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
@@ -86,7 +86,7 @@ jobs:
           const pkg = require('./package.json');
 
           assert.equal(pkg.name, 'corgispec');
-          assert.match(pkg.version, /^\d+\.\d+\.\d+-rc\.\d+$/);
+          assert.match(pkg.version, /^\d+\.\d+\.\d+-rc(?:\.)?\d+$/);
           assert.deepEqual(pkg.repository, {
             type: 'git',
             url: 'git+https://github.com/ricoyudog/Coding_Corgi_flow.git',
@@ -113,6 +113,11 @@ jobs:
 
       - name: Install locked dependencies
         run: npm ci
+
+      - name: Install and verify supported OpenSpec CLI
+        run: |
+          npm install --global @fission-ai/openspec@1.6.0
+          openspec --version
 
       - name: Run full release gate
         run: npm run release:check

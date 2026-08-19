@@ -1,7 +1,7 @@
 {
   "slug": "corgispec-review-loop",
   "tier": "molecule",
-  "version": "4.0.0-rc1",
+  "version": "4.0.0-rc2",
   "description": "Collect structured Run Contract v3 Task Group review findings without writing lifecycle artifacts",
   "depends_on": [],
   "platform": "universal",

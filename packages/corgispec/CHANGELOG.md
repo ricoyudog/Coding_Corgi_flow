@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.0.0-rc2] - 2026-08-19
+
+### Fixed
+
+- Make `propose --finalize` resolve an existing Issue from the RFC delivery binding, Change source, or durable Propose intent before marker recovery, preventing retry paths from creating an orphaned duplicate Issue.
+- Fail before tracker mutation when persisted Issue providers, ids, or original URLs disagree, and verify the fetched Issue identity plus exact Corgi marker before using it.
+- Restore executable RC publication by aligning the v4 `-rcN` tag policy, npm `next` dist-tag, hermetic Init tests, and the OpenSpec release prerequisite.
+
+### Tests
+
+- Cover marker-search misses, interrupted tracker synchronization, idempotent repeated finalization, fetched Issue drift, and zero tracker calls for source/intent/delivery conflicts.
+
 ## [4.0.0-rc1] - 2026-08-17
 
 ### Breaking

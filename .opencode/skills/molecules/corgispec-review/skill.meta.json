@@ -1,7 +1,7 @@
 {
   "slug": "corgispec-review",
   "tier": "molecule",
-  "version": "4.0.0-rc1",
+  "version": "4.0.0-rc2",
   "description": "Explicit human whole-change decision after canonical Verify",
   "depends_on": [],
   "platform": "universal",

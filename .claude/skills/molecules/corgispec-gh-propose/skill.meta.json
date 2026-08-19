@@ -1,7 +1,7 @@
 {
   "slug": "corgispec-gh-propose",
   "tier": "molecule",
-  "version": "4.0.0-rc1",
+  "version": "4.0.0-rc2",
   "description": "Compatibility route to provider-neutral RFC-first Propose for GitHub",
   "depends_on": [],
   "platform": "github",

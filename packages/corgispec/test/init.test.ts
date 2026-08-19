@@ -1,20 +1,49 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { cpSync, existsSync, readFileSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
-import { resolve } from "node:path";
+import { chmodSync, cpSync, existsSync, readFileSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { delimiter, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 
 const CLI = resolve(__dirname, "../dist/corgispec.js");
 const TEST_BASE = resolve(tmpdir(), "corgispec-init-test-" + Date.now());
 
 describe("init command", () => {
   let targetDir: string;
+  let commandEnv: NodeJS.ProcessEnv;
   let counter = 0;
 
   beforeEach(() => {
     counter++;
     targetDir = resolve(TEST_BASE, `test-${counter}`);
     mkdirSync(targetDir, { recursive: true });
+    const binDir = resolve(TEST_BASE, "bin");
+    const openspec = resolve(binDir, "openspec");
+    mkdirSync(binDir, { recursive: true });
+    writeFileSync(openspec, [
+      "#!/bin/sh",
+      "if [ \"$1\" = \"--version\" ]; then printf '1.6.0\\n'; exit 0; fi",
+      "if [ \"$1\" = \"list\" ]; then printf '{\"changes\":[],\"root\":{\"path\":\"/tmp\",\"source\":\"implicit\"}}\\n'; exit 0; fi",
+      "if [ \"$1\" = \"schema\" ] && [ \"$2\" = \"validate\" ]; then printf '{\"valid\":true,\"issues\":[]}\\n'; exit 0; fi",
+      "printf '{\"error\":{\"message\":\"unsupported fake invocation\"}}\\n'; exit 1",
+    ].join("\n"));
+    chmodSync(openspec, 0o755);
+    for (const tracker of ["gh", "glab"]) {
+      const executable = resolve(binDir, tracker);
+      writeFileSync(executable, [
+        "#!/bin/sh",
+        `if [ \"$1\" = \"--version\" ]; then printf '${tracker} version 0.0.0\\n'; exit 0; fi`,
+        "if [ \"$1\" = \"auth\" ] && [ \"$2\" = \"status\" ]; then exit 0; fi",
+        "exit 0",
+      ].join("\n"));
+      chmodSync(executable, 0o755);
+    }
+    commandEnv = {
+      ...process.env,
+      CORGISPEC_OPENSPEC_BIN: openspec,
+      HOME: TEST_BASE,
+      USERPROFILE: TEST_BASE,
+      PATH: `${binDir}${delimiter}${process.env["PATH"] ?? ""}`,
+    };
   });
 
   afterEach(() => {
@@ -22,7 +51,7 @@ describe("init command", () => {
   });
 
   it("initializes in a fresh directory with default schema", () => {
-    const result = execSync(`node ${CLI} init ${targetDir}`, { encoding: "utf-8" });
+    const result = runInit();
 
     expect(result).toContain("Initialized Corgi");
     expect(existsSync(resolve(targetDir, "openspec/config.yaml"))).toBe(true);
@@ -40,7 +69,7 @@ describe("init command", () => {
   });
 
   it("initializes with explicit gitlab-tracked schema", () => {
-    const result = execSync(`node ${CLI} init ${targetDir} --schema gitlab-tracked`, { encoding: "utf-8" });
+    const result = runInit(["--schema", "gitlab-tracked"]);
 
     const config = readFileSync(resolve(targetDir, "openspec/config.yaml"), "utf-8");
     expect(config).toContain("schema: gitlab-tracked");
@@ -57,10 +86,11 @@ describe("init command", () => {
       schemaPath,
       readFileSync(schemaPath, "utf8").replace("name: github-tracked", "name: team-flow"),
     );
-    execSync(
-      `node ${CLI} init ${targetDir} --schema team-flow --tracking-provider none --task-artifact execution-plan`,
-      { encoding: "utf-8" },
-    );
+    runInit([
+      "--schema", "team-flow",
+      "--tracking-provider", "none",
+      "--task-artifact", "execution-plan",
+    ]);
 
     const config = readFileSync(resolve(targetDir, "openspec/config.yaml"), "utf-8");
     expect(config).toContain("schema: team-flow");
@@ -73,20 +103,20 @@ describe("init command", () => {
     mkdirSync(configDir, { recursive: true });
     writeFileSync(resolve(configDir, "config.yaml"), "schema: custom\n");
 
-    expect(() => execSync(`node ${CLI} init ${targetDir}`, { encoding: "utf-8" })).toThrow();
+    expect(() => runInit()).toThrow();
     const config = readFileSync(resolve(configDir, "config.yaml"), "utf-8");
     expect(config).toBe("schema: custom\n");
   });
 
   it("routes --platform claude through bootstrap-managed project commands", () => {
-    execSync(`node ${CLI} init ${targetDir} --platform claude`, { encoding: "utf-8" });
+    runInit(["--platform", "claude"]);
 
     expect(existsSync(resolve(targetDir, ".claude/commands/corgi"))).toBe(true);
     expect(existsSync(resolve(targetDir, ".opencode/commands"))).toBe(false);
   });
 
   it("routes --platform all through the same bootstrap writer", () => {
-    execSync(`node ${CLI} init ${targetDir} --platform all`, { encoding: "utf-8" });
+    runInit(["--platform", "all"]);
 
     expect(existsSync(resolve(targetDir, ".claude/commands/corgi"))).toBe(true);
     expect(existsSync(resolve(targetDir, ".opencode/commands"))).toBe(true);
@@ -94,7 +124,7 @@ describe("init command", () => {
   });
 
   it("generated config includes the complete RFC contract", () => {
-    execSync(`node ${CLI} init ${targetDir}`, { encoding: "utf-8" });
+    runInit();
 
     const config = readFileSync(resolve(targetDir, "openspec/config.yaml"), "utf-8");
     expect(config).toContain("contract: rfc-v1");
@@ -105,13 +135,18 @@ describe("init command", () => {
 
   it("exits with error for invalid --schema value", () => {
     try {
-      execSync(`node ${CLI} init ${targetDir} --schema 'Invalid Schema!'`, {
-        encoding: "utf-8",
-      });
+      runInit(["--schema", "Invalid Schema!"]);
       expect.fail("Should have thrown");
     } catch (err: any) {
       expect(err.status).not.toBe(0);
       expect(err.stdout + err.stderr).toContain("Invalid schema");
     }
   });
+
+  function runInit(args: string[] = []): string {
+    return execFileSync(process.execPath, [CLI, "init", targetDir, ...args], {
+      encoding: "utf-8",
+      env: commandEnv,
+    });
+  }
 });

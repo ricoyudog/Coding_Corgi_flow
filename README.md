@@ -78,7 +78,7 @@ npm install -g corgispec
 corgispec doctor --path /path/to/your-project
 ```
 
-The v4 cutover release candidate is `corgispec@4.0.0-rc1`. Pin `npm install -g corgispec@4.0.0-rc1` for a reproducible install.
+The v4 cutover release candidate is `corgispec@4.0.0-rc2`. Pin `npm install -g corgispec@4.0.0-rc2` for a reproducible install.
 
 Options: `--platform <platforms>` (claude, opencode, codex; default: all), `--scope <scope>` (global, local, both; default: both). When TTY is detected and flags are not provided, interactive prompts ask for platform and scope. `local` manages project commands, schema, config, manifest, and any existing hooks; `global` manages user-level skills for the selected platforms plus Claude Code and OpenCode user commands; `both` preflights and updates both surfaces as one operation. Supplying `--platform` restricts detection and repair to exactly those platforms.
 
@@ -506,7 +506,7 @@ rules:
 
 ### Migrating from CorgiSpec v3
 
-1. Finish, archive, or withdraw every active v3 Change/Run, then install `corgispec@4.0.0-rc1`.
+1. Finish, archive, or withdraw every active v3 Change/Run, then install `corgispec@4.0.0-rc2`.
 2. Run the transactional cutover:
 
    ```bash

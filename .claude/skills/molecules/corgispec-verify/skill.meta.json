@@ -1,7 +1,7 @@
 {
   "slug": "corgispec-verify",
   "tier": "molecule",
-  "version": "4.0.0-rc1",
+  "version": "4.0.0-rc2",
   "description": "Canonical whole-change Verify gate with complete RFC AC coverage",
   "depends_on": [],
   "platform": "universal",

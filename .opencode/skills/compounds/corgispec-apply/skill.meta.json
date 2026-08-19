@@ -1,7 +1,7 @@
 {
   "slug": "corgispec-apply",
   "tier": "compound",
-  "version": "4.0.0-rc1",
+  "version": "4.0.0-rc2",
   "platform": "universal",
   "description": "Run Contract v3 Apply with one checked commit per Task Group, stopping at canonical Verify",
   "depends_on": [

@@ -1,7 +1,7 @@
 {
   "slug": "corgispec-memory-migrate",
   "tier": "molecule",
-  "version": "4.0.0-rc1",
+  "version": "4.0.0-rc2",
   "description": "Migrate source-backed knowledge while preserving legacy sessions and log data",
   "depends_on": [
     "corgispec-memory-init"

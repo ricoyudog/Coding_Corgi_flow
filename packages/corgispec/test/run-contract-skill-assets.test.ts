@@ -105,7 +105,7 @@ describe("Run Contract v3 public skill chain", () => {
 
   it("ships v4 metadata and Codex discovery policy", () => {
     const metadata = JSON.parse(read(".opencode/skills/compounds/corgispec-apply/skill.meta.json"));
-    expect(metadata.version).toBe("4.0.0-rc1");
+    expect(metadata.version).toBe("4.0.0-rc2");
     expect(metadata.installation.targets).toEqual(["opencode", "claude", "codex"]);
     const openAi = read(".opencode/skills/compounds/corgispec-apply/agents/openai.yaml");
     expect(openAi).toContain("$corgispec-apply");

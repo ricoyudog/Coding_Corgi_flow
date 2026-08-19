@@ -1,7 +1,7 @@
 {
   "slug": "corgispec-memory-init",
   "tier": "atom",
-  "version": "4.0.0-rc1",
+  "version": "4.0.0-rc2",
   "description": "Define and verify mandatory RFC-first Memory/Wiki structure and startup continuity",
   "depends_on": [],
   "platform": "universal",

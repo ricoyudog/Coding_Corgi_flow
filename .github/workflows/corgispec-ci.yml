@@ -89,7 +89,7 @@ jobs:
       - run: npm run pack:smoke
 
   release-candidate-tarball:
-    name: Build 3.0.0 RC tarball
+    name: Build release candidate tarball
     runs-on: ubuntu-latest
     needs: [test, coverage, platform-path-and-lock, openspec-1-6-e2e]
     steps:
@@ -103,6 +103,6 @@ jobs:
       - run: mkdir -p release && npm pack --pack-destination release
       - uses: actions/upload-artifact@v4
         with:
-          name: corgispec-3.0.0-rc-tarball
+          name: corgispec-release-candidate-tarball
           path: packages/corgispec/release/corgispec-*.tgz
           if-no-files-found: error

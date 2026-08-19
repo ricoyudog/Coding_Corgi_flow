@@ -1,7 +1,7 @@
 {
   "slug": "corgispec-memory-extract",
   "tier": "atom",
-  "version": "4.0.0-rc1",
+  "version": "4.0.0-rc2",
   "description": "Read-only preparation and verification for RFC Slice archive knowledge closeout",
   "depends_on": [],
   "platform": "universal",

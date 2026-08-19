@@ -1,7 +1,7 @@
 {
   "slug": "corgispec-archive-change",
   "tier": "molecule",
-  "version": "4.0.0-rc1",
+  "version": "4.0.0-rc2",
   "description": "Strong provider-neutral Archive transaction with evidence and knowledge closeout",
   "depends_on": [
     "corgispec-memory-extract"

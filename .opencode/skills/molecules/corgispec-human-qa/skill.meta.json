@@ -1,7 +1,7 @@
 {
   "slug": "corgispec-human-qa",
   "tier": "molecule",
-  "version": "4.0.0-rc1",
+  "version": "4.0.0-rc2",
   "description": "Human real-user-path QA with RFC AC-bound evidence before Archive",
   "depends_on": ["corgispec-qa-smoke", "corgispec-qa-ui", "corgispec-qa-backend", "corgispec-qa-api", "corgispec-qa-cli", "corgispec-qa-exploratory"],
   "platform": "universal",

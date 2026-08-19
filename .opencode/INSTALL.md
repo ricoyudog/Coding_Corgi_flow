@@ -1,6 +1,6 @@
 Use this file only as a CorgiSpec v4 bootstrap dispatcher.
 
-1. Require Node.js >=20.19.0, OpenSpec >=1.6.0 <2.0.0, and `corgispec@4.0.0-rc1`.
+1. Require Node.js >=20.19.0, OpenSpec >=1.6.0 <2.0.0, and `corgispec@4.0.0-rc2`.
 2. Run `corgispec doctor --path <project>` before writes.
 3. For a fresh/update target, run `corgispec bootstrap --target <project> --mode auto`.
 4. For v3, first require no active Change/nonterminal run, then dry-run and execute `corgispec bootstrap --target <project> --migrate-v4`.

@@ -1,7 +1,7 @@
 {
   "slug": "corgispec-lint",
   "tier": "molecule",
-  "version": "4.0.0-rc1",
+  "version": "4.0.0-rc2",
   "description": "Read-only validation of RFC-first Memory/Wiki health across 14 checks",
   "depends_on": [
     "corgispec-memory-init"

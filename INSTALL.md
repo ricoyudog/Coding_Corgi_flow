@@ -5,13 +5,13 @@ Use this entry point to install or migrate a project to the single CorgiSpec v4 
 ## Requirements
 
 - Node.js >=20.19.0
-- `corgispec@4.0.0-rc1`
+- `corgispec@4.0.0-rc2`
 - `@fission-ai/openspec` >=1.6.0 <2.0.0
 - `gh` or `glab` only when the configured tracker provider is enabled
 
 ```bash
 npm install -g @fission-ai/openspec@^1.6.0
-npm install -g corgispec@4.0.0-rc1
+npm install -g corgispec@4.0.0-rc2
 corgispec doctor --path /path/to/project
 ```
 
@@ -95,6 +95,6 @@ npm run release:check
 npm pack
 ```
 
-The release gate must validate canonical/mirror/bundled skills, all mandatory templates, fresh and migrated package smoke, tests, coverage, typecheck, and the packed asset manifest. The RC tarball is `corgispec-4.0.0-rc1.tgz`.
+The release gate must validate canonical/mirror/bundled skills, all mandatory templates, fresh and migrated package smoke, tests, coverage, typecheck, and the packed asset manifest. The RC tarball is `corgispec-4.0.0-rc2.tgz`.
 
 Never bypass a stopped migration, contract blocker, failed evidence gate, or package check.
