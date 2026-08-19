@@ -173,19 +173,43 @@ export function createProposeCommand(
         if (tracking !== "none") {
           tracker = trackerFactory(tracking, cwd);
           const boundIssue = prepared.rfcBinding?.existingBinding?.issue;
-          if (boundIssue?.id && boundIssue.url) {
-            issue = await tracker.getIssue({
-              id: boundIssue.id,
-              url: boundIssue.url,
+          const sourceTracker = existingChange?.resolved?.contract?.source.tracker;
+          assertPersistedTrackerProviders(prepared.source.deliveryRef, tracking, [
+            { label: "delivery binding", provider: boundIssue?.provider },
+            { label: "source", provider: sourceTracker?.provider },
+          ]);
+          const persistedIssue = resolvePersistedIssueAuthority(
+            prepared.source.deliveryRef,
+            tracking,
+            [
+              persistedIssueAuthority("delivery binding", boundIssue, boundIssue?.provider),
+              persistedIssueAuthority(
+                "source",
+                sourceTracker?.issue,
+                sourceTracker?.provider,
+              ),
+              persistedIssueAuthority("intent", existingIntent?.issue),
+            ],
+          );
+          if (persistedIssue) {
+            const loadedIssue = await tracker.getIssue({
+              id: persistedIssue.issue.id,
+              url: persistedIssue.issue.url,
               title: prepared.title,
               body: prepared.body,
             });
-            if (!issue.body.includes(prepared.marker)) {
+            assertIssueAuthorityMatch(
+              prepared.source.deliveryRef,
+              persistedIssue,
+              { label: "tracker", provider: tracking, issue: loadedIssue },
+            );
+            if (!loadedIssue.body.includes(prepared.marker)) {
               throw contractError(
                 "TRACKER_MARKER_DRIFT",
-                `Bound Issue '${issue.id}' does not contain the exact RFC Slice marker.`,
+                `Persisted Issue '${loadedIssue.id}' does not contain the exact Corgi marker.`,
               );
             }
+            issue = loadedIssue;
           } else {
             const recovered = await createOrRecoverIssue(tracker, {
               title: prepared.title,
@@ -193,14 +217,6 @@ export function createProposeCommand(
               marker: prepared.marker,
             });
             issue = recovered.issue;
-          }
-          if (existingIntent?.issue && (
-            existingIntent.issue.id !== issue.id || existingIntent.issue.url !== issue.url
-          )) {
-            throw contractError(
-              "PROPOSE_ISSUE_CONFLICT",
-              `Delivery '${prepared.source.deliveryRef}' is already associated with Issue '${existingIntent.issue.id}'.`,
-            );
           }
           prepared.source.tracker.issue = { id: issue.id, url: issue.url };
           intent = checkpointIntent(cwd, intent, {
@@ -507,6 +523,25 @@ function preflightIntentAndDelivery(
   const selected = delivery.slices[prepared.rfcBinding.sliceId] ?? { status: "unbound" as const };
   if (selected.status === "unbound") return;
   if (
+    selected.status === "planned"
+    && selected.binding
+    && existingIntent
+    && ["tracker_sync_pending", "complete"].includes(existingIntent.stage)
+    && selected.binding.change === changeName
+    && selected.binding.sourceDigest === existingIntent.sourceDigest
+    && selected.binding.issue?.provider === prepared.source.tracker.provider
+  ) {
+    assertIssueAuthorityPresenceMatch(
+      prepared.source.deliveryRef,
+      persistedIssueAuthority(
+        "delivery binding",
+        selected.binding.issue,
+        selected.binding.issue?.provider,
+      ),
+      persistedIssueAuthority("intent", existingIntent.issue),
+    );
+  }
+  if (
     selected.status !== "planned"
     || !selected.binding
     || !existingIntent
@@ -557,6 +592,104 @@ function sameIssue(
     && binding.id === intent.id
     && binding.url === intent.url,
   );
+}
+
+interface IssueAuthority {
+  label: string;
+  provider?: "github" | "gitlab" | "none";
+  issue: { id: string; url: string };
+}
+
+function assertPersistedTrackerProviders(
+  deliveryRef: string,
+  tracking: "github" | "gitlab",
+  candidates: Array<{ label: string; provider: "github" | "gitlab" | "none" | undefined }>,
+): void {
+  for (const candidate of candidates) {
+    if (!candidate.provider || candidate.provider === tracking) continue;
+    throw contractError(
+      "PROPOSE_ISSUE_CONFLICT",
+      `Delivery '${deliveryRef}' uses configured tracker provider='${tracking}', but ${candidate.label} records provider='${candidate.provider}'.`,
+    );
+  }
+}
+
+function persistedIssueAuthority(
+  label: string,
+  issue: { id?: string; url?: string } | undefined,
+  provider?: "github" | "gitlab" | "none",
+): IssueAuthority | null {
+  if (!issue || (!issue.id && !issue.url)) return null;
+  if (!issue.id || !issue.url) {
+    throw contractError(
+      "PROPOSE_ISSUE_CONFLICT",
+      `Persisted ${label} Issue is incomplete: id='${issue.id ?? "<missing>"}' url='${issue.url ?? "<missing>"}'.`,
+    );
+  }
+  return {
+    label,
+    ...(provider ? { provider } : {}),
+    issue: { id: issue.id, url: issue.url },
+  };
+}
+
+function resolvePersistedIssueAuthority(
+  deliveryRef: string,
+  tracking: "github" | "gitlab",
+  candidates: Array<IssueAuthority | null>,
+): IssueAuthority | null {
+  const persisted = candidates.filter((candidate): candidate is IssueAuthority => candidate !== null);
+  for (const candidate of persisted) {
+    if (candidate.provider && candidate.provider !== tracking) {
+      throw contractError(
+        "PROPOSE_ISSUE_CONFLICT",
+        `Delivery '${deliveryRef}' uses configured tracker provider='${tracking}', but ${candidate.label} records provider='${candidate.provider}' id='${candidate.issue.id}' url='${candidate.issue.url}'.`,
+      );
+    }
+  }
+  const expected = persisted[0];
+  if (!expected) return null;
+  for (const actual of persisted.slice(1)) {
+    assertIssueAuthorityMatch(deliveryRef, expected, actual);
+  }
+  return expected;
+}
+
+function assertIssueAuthorityMatch(
+  deliveryRef: string,
+  expected: IssueAuthority,
+  actual: IssueAuthority,
+): void {
+  if (
+    (!expected.provider || !actual.provider || expected.provider === actual.provider)
+    && expected.issue.id === actual.issue.id
+    && expected.issue.url === actual.issue.url
+  ) return;
+  throw contractError(
+    "PROPOSE_ISSUE_CONFLICT",
+    `Delivery '${deliveryRef}' expected ${expected.label} Issue provider='${expected.provider ?? "<unknown>"}' id='${expected.issue.id}' url='${expected.issue.url}', but ${actual.label} records provider='${actual.provider ?? "<unknown>"}' id='${actual.issue.id}' url='${actual.issue.url}'. Issue URLs are compared exactly.`,
+  );
+}
+
+function assertIssueAuthorityPresenceMatch(
+  deliveryRef: string,
+  expected: IssueAuthority | null,
+  actual: IssueAuthority | null,
+): void {
+  if (expected && actual) {
+    assertIssueAuthorityMatch(deliveryRef, expected, actual);
+    return;
+  }
+  if (!expected && !actual) return;
+  throw contractError(
+    "PROPOSE_ISSUE_CONFLICT",
+    `Delivery '${deliveryRef}' expected ${formatIssueAuthority(expected)}, but ${formatIssueAuthority(actual)} was recorded. Issue URLs are compared exactly.`,
+  );
+}
+
+function formatIssueAuthority(authority: IssueAuthority | null): string {
+  if (!authority) return "a missing Issue binding";
+  return `${authority.label} Issue provider='${authority.provider ?? "<unknown>"}' id='${authority.issue.id}' url='${authority.issue.url}'`;
 }
 
 const INTENT_STAGE_ORDER: ProposeIntent["stage"][] = [

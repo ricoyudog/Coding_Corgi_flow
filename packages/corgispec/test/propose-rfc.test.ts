@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createProposeCommand } from "../src/commands/propose.js";
 import {
   loadChangeContract,
+  writeChangeSource,
   writeChangeTraceability,
 } from "../src/lib/change-contract.js";
 import {
@@ -22,6 +23,7 @@ import {
   acquireWorkflowLock,
   loadProposeIntent,
   releaseWorkflowLock,
+  writeProposeIntent,
 } from "../src/lib/workflow-intent.js";
 
 describe("RFC-aware Propose", () => {
@@ -132,22 +134,27 @@ describe("RFC-aware Propose", () => {
     let created = false;
     let planningReady = false;
     let trackerIssue: TrackerIssue | null = null;
+    let exposeIssueToMarkerSearch = true;
+    let nextIssueId = 42;
+    let failSetStateOnce = false;
     const trackerCalls: string[] = [];
     const tracker: TrackerClient = {
       provider: "github",
       async findByMarker(value) {
         trackerCalls.push("find");
-        return trackerIssue?.body.includes(value) ? [trackerIssue] : [];
+        return exposeIssueToMarkerSearch && trackerIssue?.body.includes(value) ? [trackerIssue] : [];
       },
-      async getIssue(value) {
+      async getIssue() {
         trackerCalls.push("get");
-        return { ...value };
+        if (!trackerIssue) throw new Error("tracker Issue is missing");
+        return { ...trackerIssue };
       },
       async createIssue(input) {
         trackerCalls.push("create");
+        const id = String(nextIssueId++);
         trackerIssue = {
-          id: "42",
-          url: "https://example.test/issues/42",
+          id,
+          url: `https://example.test/issues/${id}`,
           title: input.title,
           body: input.body,
         };
@@ -155,7 +162,13 @@ describe("RFC-aware Propose", () => {
       },
       async setState(_issue, state) {
         trackerCalls.push(`state:${state}`);
-        expect(loadRfcDelivery(root, feature.metadata.id).slices["S-01-export"]).toEqual({ status: "unbound" });
+        if (loadProposeIntent(root, marker.key)?.stage !== "complete") {
+          expect(loadRfcDelivery(root, feature.metadata.id).slices["S-01-export"]).toEqual({ status: "unbound" });
+        }
+        if (failSetStateOnce) {
+          failSetStateOnce = false;
+          throw new Error("simulated tracker synchronization interruption");
+        }
       },
       async updateBody(_issue, body) {
         trackerCalls.push("dashboard");
@@ -326,6 +339,31 @@ describe("RFC-aware Propose", () => {
       }],
     });
     planningReady = true;
+    exposeIssueToMarkerSearch = false;
+    failSetStateOnce = true;
+    const trackerCallsBeforeFinalization = trackerCalls.length;
+    await createProposeCommand({
+      createAdapter: () => adapter as never,
+      createResolver: () => resolver as never,
+      createTracker: () => tracker,
+      now: () => new Date("2026-08-14T00:00:00.000Z"),
+    }).parseAsync([
+      "export-data",
+      "--from", `${feature.metadata.id}/S-01-export`,
+      "--finalize",
+      "--json",
+      "--path", root,
+    ], { from: "user" });
+
+    expect(process.exitCode).toBe(1);
+    expect(loadRfcDelivery(root, feature.metadata.id).slices["S-01-export"]).toEqual({ status: "unbound" });
+    expect(loadProposeIntent(root, marker.key)?.stage).toBe("tracker_sync_pending");
+    expect(trackerCalls.slice(trackerCallsBeforeFinalization)).toContain("get");
+    expect(trackerCalls.slice(trackerCallsBeforeFinalization)).not.toContain("find");
+    expect(trackerCalls.slice(trackerCallsBeforeFinalization)).not.toContain("create");
+    process.exitCode = 0;
+
+    const trackerCallsBeforeFinalizationRetry = trackerCalls.length;
     await createProposeCommand({
       createAdapter: () => adapter as never,
       createResolver: () => resolver as never,
@@ -350,6 +388,137 @@ describe("RFC-aware Propose", () => {
     expect(loadProposeIntent(root, marker.key)?.stage).toBe("complete");
     expect(trackerCalls).toEqual(expect.arrayContaining(["dashboard", "state:todo"]));
     expect(trackerCalls.indexOf("dashboard")).toBeLessThan(trackerCalls.indexOf("state:todo"));
+    expect(trackerCalls.slice(trackerCallsBeforeFinalizationRetry)).toContain("get");
+    expect(trackerCalls.slice(trackerCallsBeforeFinalizationRetry)).not.toContain("find");
+    expect(trackerCalls.slice(trackerCallsBeforeFinalizationRetry)).not.toContain("create");
+
+    const trackerCallsBeforeIdempotentRetry = trackerCalls.length;
+    await createProposeCommand({
+      createAdapter: () => adapter as never,
+      createResolver: () => resolver as never,
+      createTracker: () => tracker,
+    }).parseAsync([
+      "export-data",
+      "--from", `${feature.metadata.id}/S-01-export`,
+      "--finalize",
+      "--json",
+      "--path", root,
+    ], { from: "user" });
+    expect(process.exitCode, JSON.stringify(log.mock.calls)).toBe(0);
+    expect(loadRfcDelivery(root, feature.metadata.id).slices["S-01-export"]?.status).toBe("planned");
+    expect(loadProposeIntent(root, marker.key)?.stage).toBe("complete");
+    expect(trackerCalls.slice(trackerCallsBeforeIdempotentRetry)).toContain("get");
+    expect(trackerCalls.slice(trackerCallsBeforeIdempotentRetry)).not.toContain("find");
+    expect(trackerCalls.slice(trackerCallsBeforeIdempotentRetry)).not.toContain("create");
+
+    const finalizeAgain = () => createProposeCommand({
+      createAdapter: () => adapter as never,
+      createResolver: () => resolver as never,
+      createTracker: () => tracker,
+    }).parseAsync([
+      "export-data",
+      "--from", `${feature.metadata.id}/S-01-export`,
+      "--finalize",
+      "--json",
+      "--path", root,
+    ], { from: "user" });
+
+    const persistedRemoteIssue = { ...trackerIssue! };
+    trackerIssue = {
+      ...persistedRemoteIssue,
+      url: "https://example.test/issues/42/",
+    };
+    const trackerCallsBeforeRemoteDrift = trackerCalls.length;
+    await finalizeAgain();
+    expect(process.exitCode).toBe(1);
+    const remoteDrift = JSON.parse(String(log.mock.calls.at(-1)![0])) as {
+      error: { code: string; message: string };
+    };
+    expect(remoteDrift.error.code).toBe("PROPOSE_ISSUE_CONFLICT");
+    expect(remoteDrift.error.message).toContain("https://example.test/issues/42'");
+    expect(remoteDrift.error.message).toContain("https://example.test/issues/42/'");
+    expect(trackerCalls.slice(trackerCallsBeforeRemoteDrift)).toEqual(["get"]);
+    process.exitCode = 0;
+
+    trackerIssue = {
+      ...persistedRemoteIssue,
+      body: "Issue body without the persisted Corgi marker",
+    };
+    const trackerCallsBeforeMarkerDrift = trackerCalls.length;
+    await finalizeAgain();
+    expect(process.exitCode).toBe(1);
+    const markerDrift = JSON.parse(String(log.mock.calls.at(-1)![0])) as {
+      error: { code: string; message: string };
+    };
+    expect(markerDrift.error.code).toBe("TRACKER_MARKER_DRIFT");
+    expect(trackerCalls.slice(trackerCallsBeforeMarkerDrift)).toEqual(["get"]);
+    process.exitCode = 0;
+    trackerIssue = persistedRemoteIssue;
+
+    const consistentIntent = loadProposeIntent(root, marker.key)!;
+    writeProposeIntent(root, {
+      ...consistentIntent,
+      issue: { id: "44", url: "https://example.test/issues/44" },
+    });
+    const trackerCallsBeforeIntentConflict = trackerCalls.length;
+    await finalizeAgain();
+    expect(process.exitCode).toBe(1);
+    const intentConflict = JSON.parse(String(log.mock.calls.at(-1)![0])) as {
+      error: { code: string; message: string };
+    };
+    expect(intentConflict.error.code).toBe("PROPOSE_ISSUE_CONFLICT");
+    expect(intentConflict.error.message).toContain("delivery binding");
+    expect(intentConflict.error.message).toContain("intent");
+    expect(intentConflict.error.message).toContain("https://example.test/issues/42");
+    expect(intentConflict.error.message).toContain("https://example.test/issues/44");
+    expect(trackerCalls).toHaveLength(trackerCallsBeforeIntentConflict);
+    process.exitCode = 0;
+    writeProposeIntent(root, consistentIntent);
+
+    const consistentContract = loadChangeContract(changeRoot, { required: true })!;
+    const conflictingSource = structuredClone(consistentContract.source);
+    conflictingSource.tracker.issue = {
+      id: "43",
+      url: "https://example.test/issues/43",
+    };
+    const conflictingSourceDigest = writeChangeSource(changeRoot, conflictingSource);
+    writeChangeTraceability(changeRoot, {
+      ...consistentContract.traceability,
+      sourceDigest: conflictingSourceDigest,
+    });
+    const trackerCallsBeforeConflict = trackerCalls.length;
+    await finalizeAgain();
+    expect(process.exitCode).toBe(1);
+    const conflict = JSON.parse(String(log.mock.calls.at(-1)![0])) as {
+      error: { code: string; message: string };
+    };
+    expect(conflict.error.code).toBe("PROPOSE_ISSUE_CONFLICT");
+    expect(conflict.error.message).toContain("delivery");
+    expect(conflict.error.message).toContain("source");
+    expect(conflict.error.message).toContain("https://example.test/issues/42");
+    expect(conflict.error.message).toContain("https://example.test/issues/43");
+    expect(trackerCalls).toHaveLength(trackerCallsBeforeConflict);
+    process.exitCode = 0;
+
+    const conflictingProviderSource = structuredClone(consistentContract.source);
+    conflictingProviderSource.tracker.provider = "none";
+    delete conflictingProviderSource.tracker.issue;
+    const conflictingProviderDigest = writeChangeSource(changeRoot, conflictingProviderSource);
+    writeChangeTraceability(changeRoot, {
+      ...consistentContract.traceability,
+      sourceDigest: conflictingProviderDigest,
+    });
+    const trackerCallsBeforeProviderConflict = trackerCalls.length;
+    await finalizeAgain();
+    expect(process.exitCode).toBe(1);
+    const providerConflict = JSON.parse(String(log.mock.calls.at(-1)![0])) as {
+      error: { code: string; message: string };
+    };
+    expect(providerConflict.error.code).toBe("PROPOSE_ISSUE_CONFLICT");
+    expect(providerConflict.error.message).toContain("configured tracker provider='github'");
+    expect(providerConflict.error.message).toContain("source records provider='none'");
+    expect(trackerCalls).toHaveLength(trackerCallsBeforeProviderConflict);
+    process.exitCode = 0;
 
     const occupiedAdapter = { createChange: vi.fn() };
     await createProposeCommand({ createAdapter: () => occupiedAdapter as never }).parseAsync([
